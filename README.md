@@ -2,7 +2,7 @@
 
 Employee scheduling desktop application built with Electron.
 
-ShiftAhoy helps teams:
+Shift Ahoy helps teams:
 - manage employee schedules
 - organize shifts
 - coordinate shift changes
