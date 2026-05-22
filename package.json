@@ -1,21 +1,21 @@
 {
-  "name": "minimal-repro",
+  "name": "shiftahoy",
+  "productName": "ShiftAhoy",
   "version": "1.0.0",
-  "description": "A minimal Electron application",
+  "description": "Employee scheduling desktop app",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
   },
-  "repository": "https://github.com/electron/minimal-repro",
+  "repository": "https://github.com/shiftahoy/shiftahoy",
   "keywords": [
-    "Electron",
-    "quick",
-    "start",
-    "tutorial",
-    "demo"
+    "shiftahoy",
+    "scheduling",
+    "employees",
+    "desktop-app"
   ],
-  "author": "GitHub",
-  "license": "CC0-1.0",
+  "author": "Shift Ahoy",
+  "license": "MIT",
   "devDependencies": {
     "electron": "^42.0.1"
   }
