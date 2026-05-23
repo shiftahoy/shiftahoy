@@ -3,57 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <title>Shift Ahoy</title>
-
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background: #0d1b2a;
-        color: white;
-        padding: 40px;
-      }
-
-      h1 {
-        color: #5bc0be;
-      }
-
-      button {
-        background: #5bc0be;
-        color: black;
-        border: none;
-        padding: 12px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 16px;
-      }
-
-      button:hover {
-        opacity: 0.9;
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
 
   <body>
-    <h1>Shift Ahoy</h1>
+    <main class="app">
+      <h1>Shift Ahoy</h1>
 
-    <p id="message">
-      Welcome aboard, matey!
-    </p>
+      <section class="card">
+        <h2>Create Account</h2>
 
-    <button id="startButton">
-      Start Shift Ahoy
-    </button>
+        <input id="signupEmail" type="email" placeholder="Email" />
+        <input id="signupPassword" type="password" placeholder="Password" />
 
-    <script>
-      const button =
-        document.getElementById("startButton");
+        <button id="signupButton">Sign Up</button>
+      </section>
 
-      const message =
-        document.getElementById("message");
+      <section class="card">
+        <h2>Login</h2>
 
-      button.addEventListener("click", () => {
-        message.textContent =
-          "Ahoy! Shift Ahoy is working.";
-      });
-    </script>
+        <input id="loginEmail" type="email" placeholder="Email" />
+        <input id="loginPassword" type="password" placeholder="Password" />
+
+        <button id="loginButton">Login</button>
+      </section>
+
+      <section class="card">
+        <h2>Status</h2>
+        <p id="message">Welcome aboard, matey!</p>
+        <button id="meButton">Check Current User</button>
+        <button id="logoutButton">Logout</button>
+      </section>
+    </main>
+
+    <script src="renderer.js"></script>
   </body>
 </html>
