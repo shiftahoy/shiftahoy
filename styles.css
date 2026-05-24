@@ -357,10 +357,11 @@ p {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
-/* Individual auth cards remain white */
+/* Individual auth cards remain white, with square left corners */
 #authView .card {
   background: #ffffff;
   border: 1px solid rgba(0, 93, 170, 0.12);
+  border-radius: 0 var(--radius) var(--radius) 0;
   box-shadow: 0 12px 28px rgba(0, 93, 170, 0.08);
   backdrop-filter: none;
 }
@@ -742,6 +743,10 @@ tbody tr:hover td {
     border-radius: 0;
     padding: 0;
     background: transparent;
+  }
+
+  #authView .card {
+    border-radius: var(--radius);
   }
 
   .appShell:has(#authView:not(.hidden)) .workspace {
