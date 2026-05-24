@@ -118,78 +118,80 @@
               </div>
 
               <div class="formGrid twoColumn">
-                <div class="fieldGroup" data-field="signupBusinessName">
-                  <label class="fieldLabel" for="signupBusinessName">
-                    Business
-                    <span id="signupBusinessNameStatus" class="fieldStatus">(Required)</span>
-                  </label>
-                  <input
-                    id="signupBusinessName"
-                    autocomplete="organization"
-                    placeholder="Business"
-                    aria-describedby="signupBusinessNameHelp"
-                    required
-                  />
-                  <small id="signupBusinessNameHelp" class="fieldHelp">
-                    Becomes part of your login.
-                  </small>
+                <div class="fieldColumn">
+                  <div class="fieldGroup" data-field="signupBusinessName">
+                    <label class="fieldLabel" for="signupBusinessName">
+                      Business
+                      <span id="signupBusinessNameStatus" class="fieldStatus">(Required)</span>
+                    </label>
+                    <input
+                      id="signupBusinessName"
+                      autocomplete="organization"
+                      placeholder="Business"
+                      aria-describedby="signupBusinessNameHelp"
+                      required
+                    />
+                    <small id="signupBusinessNameHelp" class="fieldHelp">
+                      Becomes part of your login.
+                    </small>
+                  </div>
+
+                  <div class="fieldGroup" data-field="signupEmail">
+                    <label class="fieldLabel" for="signupEmail">
+                      Email
+                      <span id="signupEmailStatus" class="fieldStatus">(Required)</span>
+                    </label>
+                    <input
+                      id="signupEmail"
+                      type="email"
+                      autocomplete="email"
+                      placeholder="Email"
+                      aria-describedby="signupEmailHelp"
+                      required
+                    />
+                    <small id="signupEmailHelp" class="fieldHelp">Use a valid email address.</small>
+                  </div>
                 </div>
 
-                <div class="fieldGroup" data-field="signupEmail">
-                  <label class="fieldLabel" for="signupEmail">
-                    Email
-                    <span id="signupEmailStatus" class="fieldStatus">(Required)</span>
-                  </label>
-                  <input
-                    id="signupEmail"
-                    type="email"
-                    autocomplete="email"
-                    placeholder="Email"
-                    aria-describedby="signupEmailHelp"
-                    required
-                  />
-                  <small id="signupEmailHelp" class="fieldHelp">Use a valid email address.</small>
-                </div>
-              </div>
+                <div class="fieldColumn">
+                  <div class="fieldGroup" data-field="signupUsername">
+                    <label class="fieldLabel" for="signupUsername">
+                      Username
+                      <span id="signupUsernameStatus" class="fieldStatus">(3–30)</span>
+                    </label>
+                    <input
+                      id="signupUsername"
+                      autocomplete="username"
+                      placeholder="Username"
+                      maxlength="30"
+                      pattern="[a-z0-9]{3,30}"
+                      aria-describedby="signupUsernameHelp"
+                      required
+                    />
+                    <small id="signupUsernameHelp" class="fieldHelp">
+                      Letters and numbers only.
+                    </small>
+                  </div>
 
-              <div class="formGrid twoColumn">
-                <div class="fieldGroup" data-field="signupUsername">
-                  <label class="fieldLabel" for="signupUsername">
-                    Username
-                    <span id="signupUsernameStatus" class="fieldStatus">(3–30)</span>
-                  </label>
-                  <input
-                    id="signupUsername"
-                    autocomplete="username"
-                    placeholder="Username"
-                    maxlength="30"
-                    pattern="[a-z0-9]{3,30}"
-                    aria-describedby="signupUsernameHelp"
-                    required
-                  />
-                  <small id="signupUsernameHelp" class="fieldHelp">
-                    Letters and numbers only.
-                  </small>
-                </div>
-
-                <div class="fieldGroup" data-field="signupPassword">
-                  <label class="fieldLabel" for="signupPassword">
-                    Password
-                    <span id="signupPasswordStatus" class="fieldStatus">(12–128)</span>
-                  </label>
-                  <input
-                    id="signupPassword"
-                    type="password"
-                    autocomplete="new-password"
-                    placeholder="Password"
-                    minlength="12"
-                    maxlength="128"
-                    aria-describedby="signupPasswordHelp"
-                    required
-                  />
-                  <small id="signupPasswordHelp" class="fieldHelp">
-                    Spaces and symbols allowed.
-                  </small>
+                  <div class="fieldGroup" data-field="signupPassword">
+                    <label class="fieldLabel" for="signupPassword">
+                      Password
+                      <span id="signupPasswordStatus" class="fieldStatus">(12–128)</span>
+                    </label>
+                    <input
+                      id="signupPassword"
+                      type="password"
+                      autocomplete="new-password"
+                      placeholder="Password"
+                      minlength="12"
+                      maxlength="128"
+                      aria-describedby="signupPasswordHelp"
+                      required
+                    />
+                    <small id="signupPasswordHelp" class="fieldHelp">
+                      Spaces and symbols allowed.
+                    </small>
+                  </div>
                 </div>
               </div>
 
@@ -207,22 +209,20 @@
 
               <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
-              <div class="formGrid twoColumn">
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="loginValue">Login</label>
-                  <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
-                </div>
+              <div class="fieldGroup">
+                <label class="fieldLabel" for="loginValue">Login</label>
+                <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
+              </div>
 
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="loginPassword">Password</label>
-                  <input
-                    id="loginPassword"
-                    type="password"
-                    autocomplete="current-password"
-                    placeholder="Password"
-                    maxlength="128"
-                  />
-                </div>
+              <div class="fieldGroup">
+                <label class="fieldLabel" for="loginPassword">Password</label>
+                <input
+                  id="loginPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Password"
+                  maxlength="128"
+                />
               </div>
 
               <button id="loginButton" class="button primary">Login</button>
