@@ -5,11 +5,32 @@ const { requireAuth, requireScheduleManager } = require("./middleware");
 
 const router = express.Router();
 
+const USERNAME_RULE_MESSAGE =
+  "Username must be 3 to 30 characters and can only contain lowercase letters and numbers. No spaces or symbols.";
+
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 128;
+const PASSWORD_RULE_MESSAGE =
+  `Password must be ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`;
+
 function normalizeUsername(username) {
-  return String(username || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "");
+  return String(username || "").trim().toLowerCase();
+}
+
+function isValidUsername(username) {
+  return /^[a-z0-9]{3,30}$/.test(String(username || ""));
+}
+
+function normalizePassword(password) {
+  return String(password || "").normalize("NFKC");
+}
+
+function isValidPassword(password) {
+  const normalizedPassword = normalizePassword(password);
+  return (
+    normalizedPassword.length >= PASSWORD_MIN_LENGTH &&
+    normalizedPassword.length <= PASSWORD_MAX_LENGTH
+  );
 }
 
 function buildFullLogin(username, businessSlug) {
@@ -29,7 +50,7 @@ async function verifyActorPassword(userId, password) {
 
   if (result.rows.length === 0) return false;
 
-  return argon2.verify(result.rows[0].password_hash, password);
+  return argon2.verify(result.rows[0].password_hash, normalizePassword(password));
 }
 
 async function enforceEmployeeLimit(businessId) {
@@ -119,8 +140,16 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     return res.status(400).json({ error: "Missing required employee fields." });
   }
 
-  if (password.length < 12) {
-    return res.status(400).json({ error: "Employee password must be at least 12 characters." });
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!isValidUsername(normalizedUsername)) {
+    return res.status(400).json({ error: USERNAME_RULE_MESSAGE });
+  }
+
+  const normalizedPassword = normalizePassword(password);
+
+  if (!isValidPassword(normalizedPassword)) {
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
   }
 
   const safePriority = Number(priority);
@@ -151,12 +180,6 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
 
   if (!Number.isFinite(safeDailyHours) || safeDailyHours <= 0) {
     return res.status(400).json({ error: "Daily hours must be greater than 0." });
-  }
-
-  const normalizedUsername = normalizeUsername(username);
-
-  if (!normalizedUsername) {
-    return res.status(400).json({ error: "Username must contain letters or numbers." });
   }
 
   try {
@@ -205,7 +228,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
 
   const businessSlug = businessResult.rows[0].business_slug;
   const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
-  const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+  const passwordHash = await argon2.hash(normalizedPassword, { type: argon2.argon2id });
   const managerFlag = Boolean(canManageSchedule);
   const role = managerFlag ? "manager" : "employee";
 
