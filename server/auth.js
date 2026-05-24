@@ -27,12 +27,24 @@ function normalizeBusinessSlug(businessName) {
   return String(businessName || "")
     .trim()
     .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "")
+    .slice(0, 40);
+}
+
+function normalizeBusinessSlugForSignup(businessName) {
+  return String(businessName || "")
+    .trim()
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, "")
     .slice(0, 40);
 }
 
+function buildFullLogin(username, businessSlug) {
+  return `${username}/${businessSlug}`;
+}
+
 async function createUniqueBusinessSlug(client, businessName) {
-  const baseSlug = normalizeBusinessSlug(businessName);
+  const baseSlug = normalizeBusinessSlugForSignup(businessName);
 
   if (!baseSlug) {
     return "";
@@ -55,6 +67,101 @@ async function createUniqueBusinessSlug(client, businessName) {
   }
 
   return `${baseSlug}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+async function findUserForLogin(login) {
+  const normalizedLogin = String(login || "").toLowerCase().trim();
+
+  if (!normalizedLogin) {
+    return null;
+  }
+
+  if (normalizedLogin.includes("@")) {
+    const emailResult = await pool.query(
+      `SELECT
+         id,
+         business_id,
+         first_name,
+         last_name,
+         email,
+         username,
+         full_login,
+         password_hash,
+         role,
+         can_manage_schedule,
+         email_verified
+       FROM users
+       WHERE active = true
+         AND lower(email) = $1
+       LIMIT 1`,
+      [normalizedLogin]
+    );
+
+    return emailResult.rows[0] || null;
+  }
+
+  const exactResult = await pool.query(
+    `SELECT
+       id,
+       business_id,
+       first_name,
+       last_name,
+       email,
+       username,
+       full_login,
+       password_hash,
+       role,
+       can_manage_schedule,
+       email_verified
+     FROM users
+     WHERE active = true
+       AND full_login = $1
+     LIMIT 1`,
+    [normalizedLogin]
+  );
+
+  if (exactResult.rows.length > 0) {
+    return exactResult.rows[0];
+  }
+
+  if (!normalizedLogin.includes("/")) {
+    return null;
+  }
+
+  const slashIndex = normalizedLogin.indexOf("/");
+  const usernamePart = normalizedLogin.slice(0, slashIndex);
+  const businessPart = normalizedLogin.slice(slashIndex + 1);
+
+  const normalizedUsername = normalizeUsername(usernamePart);
+  const normalizedBusinessSlug = normalizeBusinessSlug(businessPart);
+
+  if (!normalizedUsername || !normalizedBusinessSlug) {
+    return null;
+  }
+
+  const slashLogin = buildFullLogin(normalizedUsername, normalizedBusinessSlug);
+
+  const slashResult = await pool.query(
+    `SELECT
+       id,
+       business_id,
+       first_name,
+       last_name,
+       email,
+       username,
+       full_login,
+       password_hash,
+       role,
+       can_manage_schedule,
+       email_verified
+     FROM users
+     WHERE active = true
+       AND full_login = $1
+     LIMIT 1`,
+    [slashLogin]
+  );
+
+  return slashResult.rows[0] || null;
 }
 
 function createAccessToken(user) {
@@ -152,7 +259,7 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    const fullLogin = `${normalizedUsername}/${businessSlug}`;
+    const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
 
     const businessResult = await client.query(
       `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
@@ -294,33 +401,12 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Login and password are required." });
   }
 
-  const normalizedLogin = String(login).toLowerCase().trim();
+  const user = await findUserForLogin(login);
 
-  const result = await pool.query(
-    `SELECT
-       id,
-       business_id,
-       first_name,
-       last_name,
-       email,
-       username,
-       full_login,
-       password_hash,
-       role,
-       can_manage_schedule,
-       email_verified
-     FROM users
-     WHERE active = true
-       AND (full_login = $1 OR lower(email) = $1)
-     LIMIT 1`,
-    [normalizedLogin]
-  );
-
-  if (result.rows.length === 0) {
+  if (!user) {
     return res.status(401).json({ error: "Invalid login or password." });
   }
 
-  const user = result.rows[0];
   const valid = await argon2.verify(user.password_hash, password);
 
   if (!valid) {
