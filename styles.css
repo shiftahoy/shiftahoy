@@ -380,7 +380,8 @@ p {
 
 .compactCard {
   align-self: stretch;
-  align-content: start;
+  align-content: stretch;
+  grid-template-rows: auto auto auto auto 1fr auto;
   padding-bottom: 12px !important;
 }
 
@@ -390,6 +391,10 @@ p {
 
 .compactCard .cardTitle p {
   display: block;
+}
+
+.compactCard #loginButton {
+  align-self: end;
 }
 
 .cardTitle {
