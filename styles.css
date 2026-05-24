@@ -79,7 +79,7 @@ button {
   text-decoration: none;
 }
 
-/* Larger logo */
+/* Larger logo in logged-in sidebar */
 .brandLogoWrap {
   display: grid;
   place-items: center;
@@ -218,7 +218,7 @@ p {
   backdrop-filter: blur(14px);
 }
 
-/* Restored original stronger blue hero */
+/* Strong blue hero */
 .heroPanel {
   display: flex;
   flex-direction: column;
@@ -260,16 +260,36 @@ p {
   z-index: 1;
 }
 
+/* Large auth-screen logo */
+.heroLogoWrap {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 30px;
+  border-radius: 38px;
+  background: #ffffff;
+  box-shadow: 0 24px 50px rgba(0, 43, 84, 0.22);
+}
+
+.heroLogo {
+  width: 126px;
+  height: 126px;
+  object-fit: contain;
+}
+
 .heroPanel .eyebrow {
   color: rgba(255, 255, 255, 0.78);
 }
 
 .heroPanel h2 {
-  max-width: 12ch;
+  max-width: 13ch;
   margin-top: 12px;
-  font-size: clamp(2.25rem, 4vw, 4rem);
-  line-height: 1.08;
-  letter-spacing: -0.055em;
+  font-size: clamp(2.1rem, 3.6vw, 3.65rem);
+  line-height: 1.12;
+  letter-spacing: -0.045em;
 }
 
 .heroPanel p:not(.eyebrow) {
@@ -431,7 +451,6 @@ select:focus {
   align-items: start;
 }
 
-/* Restored original lighter welcome card */
 .welcomeCard {
   grid-column: 1 / -1;
   display: flex;
@@ -538,7 +557,6 @@ td {
   border-bottom: 1px solid var(--line);
 }
 
-/* Restored original blue table header */
 th {
   position: sticky;
   top: 0;
@@ -685,6 +703,17 @@ tbody tr:hover td {
   .heroPanel {
     min-height: 520px;
     padding: 24px;
+  }
+
+  .heroLogoWrap {
+    width: 132px;
+    height: 132px;
+    border-radius: 32px;
+  }
+
+  .heroLogo {
+    width: 104px;
+    height: 104px;
   }
 
   .metricGrid,
