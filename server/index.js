@@ -7,6 +7,11 @@ const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
 
 const authRoutes = require("./auth");
+const planRoutes = require("./plans");
+const locationRoutes = require("./locations");
+const employeeRoutes = require("./employees");
+const shiftRoutes = require("./shifts");
+const scheduleRoutes = require("./schedules");
 const { requireAuth, requireRole } = require("./middleware");
 
 const app = express();
