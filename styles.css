@@ -342,8 +342,8 @@ p {
 
 .authCards {
   display: grid;
-  grid-template-rows: minmax(0, auto) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: minmax(0, auto) minmax(0, 0.68fr);
+  gap: 10px;
   height: 100%;
   min-height: 0;
   align-content: stretch;
@@ -368,18 +368,41 @@ p {
 }
 
 #authView .card {
-  padding: 16px 18px;
+  padding: 14px 18px;
 }
 
 .formCard {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 
 .compactCard {
-  align-self: stretch;
+  align-self: start;
+  gap: 6px;
+}
+
+.compactCard .cardTitle {
+  margin-bottom: -1px;
+}
+
+.compactCard .cardTitle p {
+  display: none;
+}
+
+.compactCard .formNotice {
+  min-height: 26px !important;
+  max-height: 26px !important;
+  padding: 4px 9px !important;
+}
+
+.compactCard input {
+  min-height: 34px;
+}
+
+.compactCard .button {
+  min-height: 35px !important;
 }
 
 .cardTitle {
@@ -465,7 +488,7 @@ p {
 input,
 select {
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -503,18 +526,17 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12);
 }
 
-/* Reserved message area prevents the cards from jumping when messages appear */
 #authView .formNotice {
-  min-height: 34px;
-  max-height: 34px;
+  min-height: 32px;
+  max-height: 32px;
   display: flex !important;
   align-items: center;
   overflow: hidden;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 12px;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.18;
   opacity: 1;
 }
 
@@ -540,7 +562,7 @@ select:focus {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 38px;
   padding: 0 15px;
   border-radius: 12px;
   font-weight: 900;
@@ -548,7 +570,7 @@ select:focus {
 }
 
 #authView .button {
-  min-height: 39px;
+  min-height: 37px;
 }
 
 .primary {
@@ -857,11 +879,11 @@ tbody tr:hover td {
   }
 
   #authView .card {
-    padding: 13px 15px;
+    padding: 12px 15px;
   }
 
   .formCard {
-    gap: 6px;
+    gap: 5px;
   }
 
   .fieldHelp {
@@ -870,11 +892,11 @@ tbody tr:hover td {
 
   input,
   select {
-    min-height: 35px;
+    min-height: 33px;
   }
 
   #authView .button {
-    min-height: 36px;
+    min-height: 34px;
   }
 
   .cardTitle p {
@@ -891,10 +913,23 @@ tbody tr:hover td {
   }
 
   #authView .formNotice {
-    min-height: 30px;
-    max-height: 30px;
-    padding: 5px 9px;
-    font-size: 0.7rem;
+    min-height: 28px;
+    max-height: 28px;
+    padding: 4px 9px;
+    font-size: 0.68rem;
+  }
+
+  .compactCard .formNotice {
+    min-height: 24px !important;
+    max-height: 24px !important;
+  }
+
+  .compactCard input {
+    min-height: 31px;
+  }
+
+  .compactCard .button {
+    min-height: 32px !important;
   }
 }
 
