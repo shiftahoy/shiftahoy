@@ -160,7 +160,10 @@ button {
 .appShell:has(#authView:not(.hidden)) .workspace {
   max-width: 1440px;
   width: 100%;
+  height: 100vh;
+  max-height: 100vh;
   margin: 0 auto;
+  overflow: hidden;
 }
 
 .topbar,
@@ -200,11 +203,13 @@ p {
 }
 
 .authLayout {
-  min-height: calc(100vh - 60px);
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
   display: grid;
   grid-template-columns: minmax(320px, 0.85fr) minmax(360px, 1.15fr);
   gap: 22px;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .heroPanel,
@@ -222,8 +227,9 @@ p {
 .heroPanel {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  min-height: 640px;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
   padding: 34px;
   overflow: hidden;
   position: relative;
@@ -266,17 +272,17 @@ p {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 190px;
-  height: 190px;
-  margin-bottom: 30px;
+  width: 150px;
+  height: 150px;
+  margin-bottom: 22px;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
 .heroLogo {
-  width: 170px;
-  height: 170px;
+  width: 138px;
+  height: 138px;
   object-fit: contain;
 }
 
@@ -327,6 +333,8 @@ p {
 .authCards {
   display: grid;
   gap: 18px;
+  height: 100%;
+  align-content: stretch;
 }
 
 .card {
@@ -337,10 +345,11 @@ p {
   display: grid;
   align-content: start;
   gap: 13px;
+  min-height: 0;
 }
 
 .compactCard {
-  align-self: start;
+  align-self: stretch;
 }
 
 .cardTitle {
@@ -685,6 +694,18 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
+  .authLayout {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .appShell:has(#authView:not(.hidden)) .workspace {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
   #shiftsPanel,
   #employeesPanel {
     grid-column: auto;
@@ -701,18 +722,19 @@ tbody tr:hover td {
   }
 
   .heroPanel {
+    height: auto;
     min-height: 520px;
     padding: 24px;
   }
 
   .heroLogoWrap {
-    width: 152px;
-    height: 152px;
+    width: 132px;
+    height: 132px;
   }
 
   .heroLogo {
-    width: 136px;
-    height: 136px;
+    width: 116px;
+    height: 116px;
   }
 
   .metricGrid,
