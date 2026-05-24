@@ -342,11 +342,11 @@ p {
 
 .authCards {
   display: grid;
-  grid-template-rows: minmax(0, auto) minmax(0, 0.68fr);
+  grid-template-rows: auto auto;
   gap: 10px;
   height: 100%;
   min-height: 0;
-  align-content: stretch;
+  align-content: start;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -368,7 +368,7 @@ p {
 }
 
 #authView .card {
-  padding: 14px 18px;
+  padding: 14px 18px 12px;
 }
 
 .formCard {
@@ -381,28 +381,15 @@ p {
 .compactCard {
   align-self: start;
   gap: 6px;
+  padding-bottom: 12px !important;
 }
 
 .compactCard .cardTitle {
-  margin-bottom: -1px;
+  margin-bottom: 0;
 }
 
 .compactCard .cardTitle p {
-  display: none;
-}
-
-.compactCard .formNotice {
-  min-height: 26px !important;
-  max-height: 26px !important;
-  padding: 4px 9px !important;
-}
-
-.compactCard input {
-  min-height: 34px;
-}
-
-.compactCard .button {
-  min-height: 35px !important;
+  display: block;
 }
 
 .cardTitle {
@@ -879,7 +866,7 @@ tbody tr:hover td {
   }
 
   #authView .card {
-    padding: 12px 15px;
+    padding: 12px 15px 10px;
   }
 
   .formCard {
@@ -919,17 +906,8 @@ tbody tr:hover td {
     font-size: 0.68rem;
   }
 
-  .compactCard .formNotice {
-    min-height: 24px !important;
-    max-height: 24px !important;
-  }
-
-  .compactCard input {
-    min-height: 31px;
-  }
-
-  .compactCard .button {
-    min-height: 32px !important;
+  .compactCard {
+    padding-bottom: 10px !important;
   }
 }
 
