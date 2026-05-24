@@ -14,8 +14,19 @@ function toDateOnly(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function shuffle(items) {
+  return items
+    .map((item) => ({ item, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ item }) => item);
+}
+
 router.get("/", requireAuth, async (req, res) => {
   const { locationId, weekStart } = req.query;
+
+  if (!locationId || !weekStart) {
+    return res.status(400).json({ error: "Location ID and week start are required." });
+  }
 
   const result = await pool.query(
     `SELECT sc.*, e.priority, e.title, u.first_name, u.last_name, u.username
@@ -26,6 +37,8 @@ router.get("/", requireAuth, async (req, res) => {
      WHERE s.business_id = $1
        AND s.location_id = $2
        AND s.week_start = $3
+       AND e.active = true
+       AND u.active = true
      ORDER BY e.priority ASC, u.last_name ASC, u.first_name ASC, sc.work_date ASC`,
     [req.user.businessId, locationId, weekStart]
   );
@@ -36,6 +49,22 @@ router.get("/", requireAuth, async (req, res) => {
 router.post("/generate", requireAuth, requireScheduleManager, async (req, res) => {
   const { locationId, weekStart } = req.body;
 
+  if (!locationId || !weekStart) {
+    return res.status(400).json({ error: "Location ID and week start are required." });
+  }
+
+  const locationResult = await pool.query(
+    `SELECT id
+     FROM locations
+     WHERE id = $1
+       AND business_id = $2`,
+    [locationId, req.user.businessId]
+  );
+
+  if (locationResult.rows.length === 0) {
+    return res.status(404).json({ error: "Location not found." });
+  }
+
   const employeesResult = await pool.query(
     `SELECT e.*, u.first_name, u.last_name
      FROM employees e
@@ -43,6 +72,7 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
      WHERE e.business_id = $1
        AND e.location_id = $2
        AND e.active = true
+       AND u.active = true
      ORDER BY e.priority ASC, u.last_name ASC, u.first_name ASC`,
     [req.user.businessId, locationId]
   );
@@ -51,7 +81,9 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
     `SELECT ea.employee_id, ea.day_of_week, ea.available
      FROM employee_availability ea
      JOIN employees e ON e.id = ea.employee_id
-     WHERE e.business_id = $1 AND e.location_id = $2`,
+     WHERE e.business_id = $1
+       AND e.location_id = $2
+       AND e.active = true`,
     [req.user.businessId, locationId]
   );
 
@@ -66,12 +98,19 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
   );
 
   const availabilityByEmployee = new Map();
+
   for (const row of availabilityResult.rows) {
-    if (!availabilityByEmployee.has(row.employee_id)) availabilityByEmployee.set(row.employee_id, []);
-    if (row.available) availabilityByEmployee.get(row.employee_id).push(row.day_of_week);
+    if (!availabilityByEmployee.has(row.employee_id)) {
+      availabilityByEmployee.set(row.employee_id, []);
+    }
+
+    if (row.available) {
+      availabilityByEmployee.get(row.employee_id).push(row.day_of_week);
+    }
   }
 
   const shiftByShiftAndDay = new Map();
+
   for (const row of shiftDaysResult.rows) {
     shiftByShiftAndDay.set(`${row.shift_id}:${row.day_of_week}`, row);
   }
@@ -97,12 +136,18 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
     const weekStartDate = new Date(`${weekStart}T00:00:00.000Z`);
 
     for (const employee of employeesResult.rows) {
-      const availableDays = availabilityByEmployee.get(employee.id) || [];
-      const neededDays = Math.ceil(Number(employee.weekly_hours) / Number(employee.daily_hours));
+      const weeklyHours = Number(employee.weekly_hours);
+      const dailyHours = Number(employee.daily_hours);
+      const neededDays = Math.ceil(weeklyHours / dailyHours);
 
-      const chosenDays = availableDays
-        .slice()
-        .sort(() => Math.random() - 0.5)
+      const availableDays = availabilityByEmployee.get(employee.id) || [];
+
+      const validAvailableDays = availableDays.filter((day) => {
+        if (!employee.preferred_shift_id) return false;
+        return shiftByShiftAndDay.has(`${employee.preferred_shift_id}:${day}`);
+      });
+
+      const chosenDays = shuffle(validAvailableDays)
         .slice(0, neededDays)
         .sort((a, b) => a - b);
 
@@ -119,6 +164,7 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
           workDate < new Date(employee.orientation_start);
 
         const shouldWork =
+          !orientationDate &&
           !beforeOrientation &&
           chosenDays.includes(day) &&
           employee.preferred_shift_id;
