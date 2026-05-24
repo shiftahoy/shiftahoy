@@ -122,7 +122,7 @@ router.post("/signup", async (req, res) => {
   ) {
     return res.status(400).json({
       error:
-        "First name, last name, business name, email, username, and a 12+ character password are required."
+        "First name, last name, business, email, username, and a 12+ character password are required."
     });
   }
 
@@ -148,11 +148,11 @@ router.post("/signup", async (req, res) => {
     if (!businessSlug) {
       await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "Business name must contain letters or numbers."
+        error: "Business must contain letters or numbers."
       });
     }
 
-    const fullLogin = `${normalizedUsername}.${businessSlug}`;
+    const fullLogin = `${normalizedUsername}/${businessSlug}`;
 
     const businessResult = await client.query(
       `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
