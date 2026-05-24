@@ -113,7 +113,9 @@ async function signup() {
     body: JSON.stringify(body)
   });
 
-  alert(`Account created. Your login is: ${data.fullLogin}`);
+  alert(
+    `Account created.\n\nYour login is:\n${data.fullLogin}\n\nUse this exact login with your password to sign in.`
+  );
 }
 
 async function login() {
@@ -308,6 +310,8 @@ async function generateSchedule() {
   });
 
   await loadSchedule();
+
+  alert(`Schedule forecast generated for up to ${FORECAST_WEEKS} weeks.`);
 }
 
 async function loadEmployees() {
