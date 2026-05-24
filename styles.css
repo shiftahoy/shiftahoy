@@ -26,8 +26,8 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(circle at top left, rgba(0, 93, 170, 0.1), transparent 34rem),
-    linear-gradient(135deg, #ffffff 0%, #f7fbff 48%, #ffffff 100%);
+    radial-gradient(circle at top left, rgba(0, 93, 170, 0.18), transparent 34rem),
+    linear-gradient(135deg, #ffffff 0%, #f5fbff 48%, #eaf5ff 100%);
 }
 
 button,
@@ -43,11 +43,20 @@ button {
 
 .appShell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
   min-height: 100vh;
 }
 
-/* REVERSED: sidebar is now white, not blue */
+/* Hide sidebar before login/signup */
+.appShell:has(#authView:not(.hidden)) {
+  grid-template-columns: 1fr;
+}
+
+.appShell:has(#authView:not(.hidden)) .sidebar {
+  display: none;
+}
+
+/* Logged-in sidebar stays white/blue */
 .sidebar {
   position: sticky;
   top: 0;
@@ -65,38 +74,38 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   color: inherit;
   text-decoration: none;
 }
 
-/* REVERSED: logo background is now blue */
+/* Larger logo */
 .brandLogoWrap {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
   background: var(--brand);
-  box-shadow: 0 12px 24px rgba(0, 93, 170, 0.22);
+  box-shadow: 0 14px 28px rgba(0, 93, 170, 0.24);
 }
 
 .brandLogo {
-  width: 34px;
-  height: 34px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
 }
 
 .brand strong {
   display: block;
-  font-size: 1.08rem;
+  font-size: 1.16rem;
   letter-spacing: -0.02em;
   color: var(--brand);
 }
 
 .brand small {
   display: block;
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
 }
 
@@ -105,7 +114,6 @@ button {
   gap: 8px;
 }
 
-/* REVERSED: nav is blue-on-white, active item is blue */
 .navItem {
   display: flex;
   align-items: center;
@@ -149,6 +157,12 @@ button {
   padding: 30px;
 }
 
+.appShell:has(#authView:not(.hidden)) .workspace {
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 .topbar,
 .sectionHeader {
   display: flex;
@@ -159,6 +173,10 @@ button {
 
 .topbar {
   margin-bottom: 24px;
+}
+
+.appShell:has(#authView:not(.hidden)) .topbar {
+  display: none;
 }
 
 .topbar h1,
@@ -182,6 +200,7 @@ p {
 }
 
 .authLayout {
+  min-height: calc(100vh - 60px);
   display: grid;
   grid-template-columns: minmax(320px, 0.85fr) minmax(360px, 1.15fr);
   gap: 22px;
@@ -192,14 +211,14 @@ p {
 .card,
 .welcomeCard,
 .modalCard {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(0, 93, 170, 0.16);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
 
-/* REVERSED: hero is now mostly white with blue border/details */
+/* Restored original stronger blue hero */
 .heroPanel {
   display: flex;
   flex-direction: column;
@@ -208,18 +227,17 @@ p {
   padding: 34px;
   overflow: hidden;
   position: relative;
-  color: var(--ink);
+  color: #ffffff;
   background:
-    linear-gradient(160deg, #ffffff, #f3f9ff),
-    radial-gradient(circle at 80% 15%, rgba(0, 93, 170, 0.2), transparent 16rem);
-  border: 1px solid rgba(0, 93, 170, 0.22);
+    linear-gradient(160deg, rgba(0, 93, 170, 0.94), rgba(0, 74, 136, 0.94)),
+    radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.32), transparent 16rem);
 }
 
 .heroPanel::before,
 .heroPanel::after {
   content: "";
   position: absolute;
-  border: 1px solid rgba(0, 93, 170, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
 }
 
@@ -228,7 +246,6 @@ p {
   height: 360px;
   top: -80px;
   right: -120px;
-  background: rgba(0, 93, 170, 0.04);
 }
 
 .heroPanel::after {
@@ -236,7 +253,6 @@ p {
   height: 220px;
   bottom: 100px;
   left: -100px;
-  background: rgba(0, 93, 170, 0.04);
 }
 
 .heroPanel > * {
@@ -245,7 +261,7 @@ p {
 }
 
 .heroPanel .eyebrow {
-  color: var(--brand);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .heroPanel h2 {
@@ -254,13 +270,12 @@ p {
   font-size: clamp(2.25rem, 4vw, 4rem);
   line-height: 0.94;
   letter-spacing: -0.065em;
-  color: var(--brand);
 }
 
 .heroPanel p:not(.eyebrow) {
   max-width: 38rem;
   margin-top: 18px;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 1.05rem;
   line-height: 1.6;
 }
@@ -272,23 +287,20 @@ p {
   margin-top: 34px;
 }
 
-/* REVERSED: metric cards are blue */
 .metricGrid div {
   padding: 16px;
-  border: 1px solid rgba(0, 93, 170, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 18px;
-  background: var(--brand);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .metricGrid strong {
   display: block;
   font-size: 1.45rem;
-  color: #ffffff;
 }
 
 .metricGrid span {
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 0.85rem;
 }
 
@@ -328,15 +340,14 @@ p {
   color: var(--muted);
 }
 
-/* REVERSED: number badge is blue */
 .iconBadge {
   display: grid;
   place-items: center;
   width: 40px;
   height: 40px;
   border-radius: 13px;
-  background: var(--brand);
-  color: #ffffff;
+  background: var(--brand-soft);
+  color: var(--brand);
   font-weight: 900;
 }
 
@@ -387,11 +398,10 @@ select:focus {
   background: var(--brand-dark);
 }
 
-/* REVERSED: secondary buttons are blue outlines on white */
 .secondary {
   color: var(--brand);
-  background: #ffffff;
-  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
 }
 
 .secondary:hover {
@@ -421,28 +431,20 @@ select:focus {
   align-items: start;
 }
 
-/* REVERSED: welcome card is blue */
+/* Restored original lighter welcome card */
 .welcomeCard {
   grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 24px;
-  color: #ffffff;
-  background:
-    linear-gradient(135deg, var(--brand), var(--brand-dark)),
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.25), transparent 18rem);
-}
-
-.welcomeCard .eyebrow {
-  color: rgba(255, 255, 255, 0.74);
+  background: linear-gradient(135deg, #ffffff, #eef7ff);
 }
 
 .welcomeCard h2 {
   margin-top: 4px;
   font-size: 1.8rem;
   letter-spacing: -0.045em;
-  color: #ffffff;
 }
 
 .pill {
@@ -451,7 +453,7 @@ select:focus {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #ffffff;
+  background: var(--brand-soft);
   color: var(--brand);
   font-weight: 900;
 }
@@ -505,8 +507,8 @@ select:focus {
   align-items: center;
   padding: 0 14px;
   border-radius: 14px;
-  background: var(--brand);
-  color: #ffffff;
+  background: var(--surface-soft);
+  color: var(--brand);
   font-weight: 900;
 }
 
@@ -536,14 +538,13 @@ td {
   border-bottom: 1px solid var(--line);
 }
 
-/* REVERSED: table header is white with blue text */
+/* Restored original blue table header */
 th {
   position: sticky;
   top: 0;
   z-index: 2;
-  color: var(--brand);
-  background: #ffffff;
-  border-bottom: 2px solid var(--brand);
+  color: #ffffff;
+  background: var(--brand);
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -563,10 +564,9 @@ tbody tr:hover td {
   border-bottom: 2px solid rgba(0, 93, 170, 0.22);
 }
 
-/* REVERSED: orientation highlight is blue */
 .orientationCell {
-  background: var(--brand) !important;
-  color: #ffffff;
+  background: #e8f3ff !important;
+  color: var(--brand);
   font-weight: 900;
 }
 
@@ -588,7 +588,7 @@ tbody tr:hover td {
 }
 
 .listRow strong {
-  color: var(--brand);
+  color: var(--ink);
 }
 
 .listRow span {
@@ -623,20 +623,20 @@ tbody tr:hover td {
   margin-top: 18px;
 }
 
-/* REVERSED: plan buttons are blue */
 .planButton {
   min-height: 56px;
   padding: 14px 16px;
   border-radius: 16px;
-  color: #ffffff;
-  background: var(--brand);
-  border: 1px solid var(--brand);
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-border);
   text-align: left;
   font-weight: 900;
 }
 
 .planButton:hover {
-  background: var(--brand-dark);
+  color: #ffffff;
+  background: var(--brand);
 }
 
 @media (max-width: 1100px) {
