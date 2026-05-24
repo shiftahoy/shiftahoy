@@ -1,90 +1,210 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shift Ahoy</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
 
   <body>
-    <main class="app">
-      <header class="topbar">
-        <h1>Shift Ahoy</h1>
-        <button id="upgradeButton" class="hidden">Upgrade</button>
-      </header>
+    <main class="appShell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#" aria-label="Shift Ahoy home">
+          <span class="brandLogoWrap">
+            <img class="brandLogo" src="assets/ShiftAhoyColorsNoBackground.png" alt="Shift Ahoy logo" />
+          </span>
+          <span>
+            <strong>Shift Ahoy</strong>
+            <small>Scheduling Command</small>
+          </span>
+        </a>
 
-      <section id="authView" class="grid two">
-        <section class="card">
-          <h2>Create Owner Account</h2>
-          <input id="signupFirstName" autocomplete="given-name" placeholder="First Name" required />
-          <input id="signupLastName" autocomplete="family-name" placeholder="Last Name" required />
-          <input id="signupBusinessName" autocomplete="organization" placeholder="Business Name" required />
-          <input id="signupEmail" type="email" autocomplete="email" placeholder="Email" required />
-          <input id="signupUsername" autocomplete="username" placeholder="Owner Username" required />
-          <input id="signupPassword" type="password" autocomplete="new-password" placeholder="Password" required />
-          <button id="signupButton">Create Account</button>
-        </section>
+        <nav class="navList">
+          <a class="navItem active" href="#schedulePanel">Schedule</a>
+          <a class="navItem" href="#locationsPanel">Locations</a>
+          <a class="navItem managerOnly" href="#shiftsPanel">Shifts</a>
+          <a class="navItem managerOnly" href="#employeesPanel">Employees</a>
+        </nav>
 
-        <section class="card">
-          <h2>Login</h2>
-          <input id="loginValue" autocomplete="username" placeholder="username.businessname or email" />
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
-          <button id="loginButton">Login</button>
-        </section>
-      </section>
+        <div class="sidebarFooter">
+          <span class="statusDot"></span>
+          <span>Local API: localhost:3001</span>
+        </div>
+      </aside>
 
-      <section id="appView" class="hidden">
-        <p id="message">Welcome aboard, matey!</p>
-
-        <section id="locationsPanel" class="card">
-          <h2>Locations</h2>
-          <select id="locationSelect"></select>
-          <div id="ownerLocationTools">
-            <input id="newLocationName" placeholder="New Location Name" />
-            <button id="addLocationButton">Add Location</button>
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Workforce scheduling</p>
+            <h1>Shift Ahoy</h1>
           </div>
-        </section>
 
-        <section id="schedulePanel" class="card">
-          <div class="sectionHeader">
-            <h2>Schedule</h2>
-            <div>
-              <button id="prevWeekButton">←</button>
-              <span id="weekLabel"></span>
-              <button id="nextWeekButton">→</button>
-              <button id="generateScheduleButton">Generate</button>
-              <button id="printScheduleButton">Print</button>
+          <div class="topbarActions">
+            <button id="upgradeButton" class="button secondary hidden">Upgrade</button>
+          </div>
+        </header>
+
+        <section id="authView" class="authLayout">
+          <section class="heroPanel">
+            <p class="eyebrow">Blue-water clarity</p>
+            <h2>Build weekly schedules without the spreadsheet drag.</h2>
+            <p>
+              Manage locations, employees, shifts, and generated schedules from one clean desktop workspace.
+            </p>
+
+            <div class="metricGrid" aria-label="Product highlights">
+              <div>
+                <strong>7-day</strong>
+                <span>weekly view</span>
+              </div>
+              <div>
+                <strong>Role</strong>
+                <span>based tools</span>
+              </div>
+              <div>
+                <strong>Print</strong>
+                <span>ready schedules</span>
+              </div>
             </div>
-          </div>
-          <table id="scheduleTable"></table>
+          </section>
+
+          <section class="authCards">
+            <section class="card formCard">
+              <div class="cardTitle">
+                <span class="iconBadge">01</span>
+                <div>
+                  <h2>Create Owner Account</h2>
+                  <p>Start a new business workspace.</p>
+                </div>
+              </div>
+
+              <div class="formGrid twoColumn">
+                <input id="signupFirstName" autocomplete="given-name" placeholder="First Name" required />
+                <input id="signupLastName" autocomplete="family-name" placeholder="Last Name" required />
+              </div>
+
+              <input id="signupBusinessName" autocomplete="organization" placeholder="Business Name" required />
+              <input id="signupEmail" type="email" autocomplete="email" placeholder="Email" required />
+              <input id="signupUsername" autocomplete="username" placeholder="Owner Username" required />
+              <input id="signupPassword" type="password" autocomplete="new-password" placeholder="Password" required />
+
+              <button id="signupButton" class="button primary">Create Account</button>
+            </section>
+
+            <section class="card formCard compactCard">
+              <div class="cardTitle">
+                <span class="iconBadge">02</span>
+                <div>
+                  <h2>Login</h2>
+                  <p>Open your scheduling dashboard.</p>
+                </div>
+              </div>
+
+              <input id="loginValue" autocomplete="username" placeholder="username.businessname or email" />
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
+
+              <button id="loginButton" class="button primary">Login</button>
+            </section>
+          </section>
         </section>
 
-        <section id="shiftsPanel" class="card managerOnly">
-          <div class="sectionHeader">
-            <h2>Shifts</h2>
-            <input id="shiftFilter" placeholder="Filter shifts" />
-          </div>
-          <div id="shiftList"></div>
-          <button id="prevShiftPage">←</button>
-          <button id="nextShiftPage">→</button>
+        <section id="appView" class="hidden dashboardGrid">
+          <section class="welcomeCard">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h2 id="message">Welcome aboard, matey!</h2>
+            </div>
+            <span class="pill">Live workspace</span>
+          </section>
+
+          <section id="locationsPanel" class="card sideCard">
+            <div class="sectionHeader verticalHeader">
+              <div>
+                <p class="eyebrow">Location</p>
+                <h2>Locations</h2>
+              </div>
+            </div>
+
+            <select id="locationSelect"></select>
+
+            <div id="ownerLocationTools" class="inlineForm">
+              <input id="newLocationName" placeholder="New Location Name" />
+              <button id="addLocationButton" class="button secondary">Add Location</button>
+            </div>
+          </section>
+
+          <section id="schedulePanel" class="card scheduleCard">
+            <div class="sectionHeader">
+              <div>
+                <p class="eyebrow">Weekly schedule</p>
+                <h2>Schedule</h2>
+              </div>
+
+              <div class="toolbar">
+                <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
+                <span id="weekLabel" class="weekLabel"></span>
+                <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
+                <button id="generateScheduleButton" class="button primary">Generate</button>
+                <button id="printScheduleButton" class="button secondary">Print</button>
+              </div>
+            </div>
+
+            <div class="tableFrame">
+              <table id="scheduleTable"></table>
+            </div>
+          </section>
+
+          <section id="shiftsPanel" class="card managerOnly panelCard">
+            <div class="sectionHeader">
+              <div>
+                <p class="eyebrow">Templates</p>
+                <h2>Shifts</h2>
+              </div>
+
+              <input id="shiftFilter" class="searchInput" placeholder="Filter shifts" />
+            </div>
+
+            <div id="shiftList" class="listStack"></div>
+
+            <div class="pager">
+              <button id="prevShiftPage" class="button ghost">← Previous</button>
+              <button id="nextShiftPage" class="button ghost">Next →</button>
+            </div>
+          </section>
+
+          <section id="employeesPanel" class="card managerOnly panelCard">
+            <div class="sectionHeader">
+              <div>
+                <p class="eyebrow">Team roster</p>
+                <h2>Employees</h2>
+              </div>
+
+              <button id="showEmployeeFormButton" class="button secondary">Add Employee</button>
+            </div>
+
+            <div id="employeeList" class="listStack"></div>
+
+            <div class="pager">
+              <button id="prevEmployeePage" class="button ghost">← Previous</button>
+              <button id="nextEmployeePage" class="button ghost">Next →</button>
+            </div>
+          </section>
         </section>
 
-        <section id="employeesPanel" class="card managerOnly">
+        <dialog id="planDialog" class="modalCard">
           <div class="sectionHeader">
-            <h2>Employees</h2>
-            <button id="showEmployeeFormButton">Add Employee</button>
+            <div>
+              <p class="eyebrow">Billing</p>
+              <h2>Choose Plan</h2>
+            </div>
+
+            <button id="closePlanDialog" class="button ghost">Close</button>
           </div>
-          <div id="employeeList"></div>
-          <button id="prevEmployeePage">←</button>
-          <button id="nextEmployeePage">→</button>
-        </section>
+
+          <div id="planList" class="planGrid"></div>
+        </dialog>
       </section>
-
-      <dialog id="planDialog">
-        <h2>Choose Plan</h2>
-        <div id="planList"></div>
-        <button id="closePlanDialog">Close</button>
-      </dialog>
     </main>
 
     <script src="renderer.js"></script>
