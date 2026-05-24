@@ -12,6 +12,10 @@ function normalizeUsername(username) {
     .replace(/[^a-z0-9._-]+/g, "");
 }
 
+function buildFullLogin(username, businessSlug) {
+  return `${username}/${businessSlug}`;
+}
+
 async function verifyActorPassword(userId, password) {
   if (!password) return false;
 
@@ -200,7 +204,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
   }
 
   const businessSlug = businessResult.rows[0].business_slug;
-  const fullLogin = `${normalizedUsername}/${businessSlug}`;
+  const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
   const managerFlag = Boolean(canManageSchedule);
   const role = managerFlag ? "manager" : "employee";
@@ -291,6 +295,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     res.status(201).json({
       employee,
       login: user.full_login,
+      fullLogin: user.full_login,
       role: user.role,
       canManageSchedule: user.can_manage_schedule
     });
