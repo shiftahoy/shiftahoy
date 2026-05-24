@@ -5,6 +5,7 @@ const { requireAuth, requireScheduleManager } = require("./middleware");
 const router = express.Router();
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_GENERATE_WEEKS = 3;
 
 function addDays(date, days) {
   return new Date(date.getTime() + days * DAY_MS);
@@ -19,6 +20,16 @@ function shuffle(items) {
     .map((item) => ({ item, sort: Math.random() }))
     .sort((a, b) => a.sort - b.sort)
     .map(({ item }) => item);
+}
+
+function normalizeWeekCount(value) {
+  const count = Number(value ?? 1);
+
+  if (!Number.isInteger(count) || count < 1 || count > MAX_GENERATE_WEEKS) {
+    return null;
+  }
+
+  return count;
 }
 
 router.get("/", requireAuth, async (req, res) => {
@@ -48,9 +59,14 @@ router.get("/", requireAuth, async (req, res) => {
 
 router.post("/generate", requireAuth, requireScheduleManager, async (req, res) => {
   const { locationId, weekStart } = req.body;
+  const weekCount = normalizeWeekCount(req.body.weeks);
 
   if (!locationId || !weekStart) {
     return res.status(400).json({ error: "Location ID and week start are required." });
+  }
+
+  if (!weekCount) {
+    return res.status(400).json({ error: "Weeks must be a whole number from 1 to 3." });
   }
 
   const locationResult = await pool.query(
@@ -120,79 +136,95 @@ router.post("/generate", requireAuth, requireScheduleManager, async (req, res) =
   try {
     await client.query("BEGIN");
 
-    const scheduleResult = await client.query(
-      `INSERT INTO schedules (business_id, location_id, week_start, generated_by)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (location_id, week_start)
-       DO UPDATE SET generated_by = EXCLUDED.generated_by
-       RETURNING id`,
-      [req.user.businessId, locationId, weekStart, req.user.id]
-    );
+    const firstWeekStartDate = new Date(`${weekStart}T00:00:00.000Z`);
+    const generatedWeeks = [];
 
-    const scheduleId = scheduleResult.rows[0].id;
+    for (let weekOffset = 0; weekOffset < weekCount; weekOffset += 1) {
+      const targetWeekStart = toDateOnly(addDays(firstWeekStartDate, weekOffset * 7));
 
-    await client.query(`DELETE FROM schedule_cells WHERE schedule_id = $1`, [scheduleId]);
+      const scheduleResult = await client.query(
+        `INSERT INTO schedules (business_id, location_id, week_start, generated_by)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (location_id, week_start)
+         DO UPDATE SET generated_by = EXCLUDED.generated_by
+         RETURNING id`,
+        [req.user.businessId, locationId, targetWeekStart, req.user.id]
+      );
 
-    const weekStartDate = new Date(`${weekStart}T00:00:00.000Z`);
+      const scheduleId = scheduleResult.rows[0].id;
 
-    for (const employee of employeesResult.rows) {
-      const weeklyHours = Number(employee.weekly_hours);
-      const dailyHours = Number(employee.daily_hours);
-      const neededDays = Math.ceil(weeklyHours / dailyHours);
+      await client.query(`DELETE FROM schedule_cells WHERE schedule_id = $1`, [scheduleId]);
 
-      const availableDays = availabilityByEmployee.get(employee.id) || [];
+      const targetWeekStartDate = new Date(`${targetWeekStart}T00:00:00.000Z`);
 
-      const validAvailableDays = availableDays.filter((day) => {
-        if (!employee.preferred_shift_id) return false;
-        return shiftByShiftAndDay.has(`${employee.preferred_shift_id}:${day}`);
-      });
+      for (const employee of employeesResult.rows) {
+        const weeklyHours = Number(employee.weekly_hours);
+        const dailyHours = Number(employee.daily_hours);
+        const neededDays = Math.ceil(weeklyHours / dailyHours);
 
-      const chosenDays = shuffle(validAvailableDays)
-        .slice(0, neededDays)
-        .sort((a, b) => a - b);
+        const availableDays = availabilityByEmployee.get(employee.id) || [];
 
-      for (let day = 1; day <= 7; day++) {
-        const workDate = addDays(weekStartDate, day - 1);
-        const dateOnly = toDateOnly(workDate);
+        const validAvailableDays = availableDays.filter((day) => {
+          if (!employee.preferred_shift_id) return false;
+          return shiftByShiftAndDay.has(`${employee.preferred_shift_id}:${day}`);
+        });
 
-        const orientationDate =
-          employee.orientation_start &&
-          toDateOnly(new Date(employee.orientation_start)) === dateOnly;
+        const chosenDays = shuffle(validAvailableDays)
+          .slice(0, neededDays)
+          .sort((a, b) => a - b);
 
-        const beforeOrientation =
-          employee.orientation_start &&
-          workDate < new Date(employee.orientation_start);
+        for (let day = 1; day <= 7; day += 1) {
+          const workDate = addDays(targetWeekStartDate, day - 1);
+          const dateOnly = toDateOnly(workDate);
 
-        const shouldWork =
-          !orientationDate &&
-          !beforeOrientation &&
-          chosenDays.includes(day) &&
-          employee.preferred_shift_id;
+          const orientationDate =
+            employee.orientation_start &&
+            toDateOnly(new Date(employee.orientation_start)) === dateOnly;
 
-        const shiftDay = shouldWork
-          ? shiftByShiftAndDay.get(`${employee.preferred_shift_id}:${day}`)
-          : null;
+          const beforeOrientation =
+            employee.orientation_start &&
+            workDate < new Date(employee.orientation_start);
 
-        await client.query(
-          `INSERT INTO schedule_cells (
-             schedule_id, employee_id, work_date, shift_id, start_time, end_time, is_orientation
-           )
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [
-            scheduleId,
-            employee.id,
-            dateOnly,
-            shiftDay ? employee.preferred_shift_id : null,
-            shiftDay ? shiftDay.start_time : null,
-            shiftDay ? shiftDay.end_time : null,
-            !!orientationDate
-          ]
-        );
+          const shouldWork =
+            !orientationDate &&
+            !beforeOrientation &&
+            chosenDays.includes(day) &&
+            employee.preferred_shift_id;
+
+          const shiftDay = shouldWork
+            ? shiftByShiftAndDay.get(`${employee.preferred_shift_id}:${day}`)
+            : null;
+
+          await client.query(
+            `INSERT INTO schedule_cells (
+               schedule_id, employee_id, work_date, shift_id, start_time, end_time, is_orientation
+             )
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [
+              scheduleId,
+              employee.id,
+              dateOnly,
+              shiftDay ? employee.preferred_shift_id : null,
+              shiftDay ? shiftDay.start_time : null,
+              shiftDay ? shiftDay.end_time : null,
+              !!orientationDate
+            ]
+          );
+        }
       }
+
+      generatedWeeks.push(targetWeekStart);
     }
 
     await client.query("COMMIT");
-    res.json({ message: "Schedule generated." });
+
+    res.json({
+      message:
+        weekCount === 1
+          ? "Schedule generated."
+          : `${weekCount} weeks of schedules generated.`,
+      weeks: generatedWeeks
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
