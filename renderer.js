@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:3001";
+const FORECAST_WEEKS = 3;
 
 let accessToken = null;
 let currentUser = null;
@@ -301,7 +302,8 @@ async function generateSchedule() {
     method: "POST",
     body: JSON.stringify({
       locationId: selectedLocationId,
-      weekStart: dateOnly(currentWeekStart)
+      weekStart: dateOnly(currentWeekStart),
+      weeks: FORECAST_WEEKS
     })
   });
 
