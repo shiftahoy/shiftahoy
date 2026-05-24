@@ -30,6 +30,29 @@ function dateOnly(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDayNumber(dayOfWeek) {
+  const labels = {
+    1: "Mon",
+    2: "Tue",
+    3: "Wed",
+    4: "Thu",
+    5: "Fri",
+    6: "Sat",
+    7: "Sun"
+  };
+
+  return labels[dayOfWeek] || dayOfWeek;
+}
+
 async function api(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -69,6 +92,9 @@ function applyRoleUI() {
   });
 
   document.getElementById("generateScheduleButton").classList.toggle("hidden", !canManage);
+
+  const displayName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ");
+  showMessage(displayName ? `Welcome aboard, ${displayName}.` : "Welcome aboard.");
 }
 
 async function signup() {
@@ -100,6 +126,7 @@ async function login() {
 
   accessToken = data.accessToken;
   currentUser = data.user;
+
   applyRoleUI();
   await loadLocations();
 }
@@ -108,8 +135,15 @@ async function loadLocations() {
   const data = await api("/locations");
   const select = document.getElementById("locationSelect");
 
+  if (!data.locations || data.locations.length === 0) {
+    select.innerHTML = `<option value="">No locations found</option>`;
+    selectedLocationId = null;
+    renderEmptySchedule();
+    return;
+  }
+
   select.innerHTML = data.locations
-    .map((location) => `<option value="${location.id}">${location.name}</option>`)
+    .map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}</option>`)
     .join("");
 
   selectedLocationId = select.value || data.locations[0]?.id || null;
@@ -128,24 +162,53 @@ async function loadSelectedLocationData() {
 }
 
 async function addLocation() {
+  const input = document.getElementById("newLocationName");
+  const name = input.value.trim();
+
+  if (!name) {
+    alert("Location name is required.");
+    return;
+  }
+
   await api("/locations", {
     method: "POST",
-    body: JSON.stringify({
-      name: document.getElementById("newLocationName").value
-    })
+    body: JSON.stringify({ name })
   });
 
+  input.value = "";
   await loadLocations();
 }
 
 async function loadSchedule() {
+  if (!selectedLocationId) {
+    renderEmptySchedule();
+    return;
+  }
+
   document.getElementById("weekLabel").textContent = dateOnly(currentWeekStart);
 
   const data = await api(
-    `/schedules?locationId=${selectedLocationId}&weekStart=${dateOnly(currentWeekStart)}`
+    `/schedules?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`
   );
 
   renderSchedule(data.cells || []);
+}
+
+function renderEmptySchedule() {
+  const table = document.getElementById("scheduleTable");
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Schedule</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>No schedule data yet.</td>
+      </tr>
+    </tbody>
+  `;
 }
 
 function renderSchedule(cells) {
@@ -165,6 +228,25 @@ function renderSchedule(cells) {
     }
 
     grouped.get(cell.employee_id).days[cell.work_date] = cell;
+  }
+
+  if (grouped.size === 0) {
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Employee</th>
+          <th>Title</th>
+          ${days.map((day) => `<th>${day}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="10">No schedule generated for this week yet.</td>
+        </tr>
+      </tbody>
+    `;
+    return;
   }
 
   table.innerHTML = `
@@ -189,7 +271,7 @@ function renderSchedule(cells) {
             const text = cell.is_orientation
               ? "Orientation"
               : cell.start_time && cell.end_time
-                ? `${cell.start_time} - ${cell.end_time}`
+                ? `${escapeHtml(cell.start_time)} - ${escapeHtml(cell.end_time)}`
                 : "";
 
             return `<td class="${className}">${text}</td>`;
@@ -197,9 +279,9 @@ function renderSchedule(cells) {
 
           return `
             <tr class="${index % 2 === 1 ? "strongRow" : ""}">
-              <td>${row.priority}</td>
-              <td>${row.employee}</td>
-              <td>${row.title}</td>
+              <td>${escapeHtml(row.priority)}</td>
+              <td>${escapeHtml(row.employee)}</td>
+              <td>${escapeHtml(row.title)}</td>
               ${dayCells.join("")}
             </tr>
           `;
@@ -210,6 +292,11 @@ function renderSchedule(cells) {
 }
 
 async function generateSchedule() {
+  if (!selectedLocationId) {
+    alert("Choose a location first.");
+    return;
+  }
+
   await api("/schedules/generate", {
     method: "POST",
     body: JSON.stringify({
@@ -225,16 +312,30 @@ async function loadEmployees() {
   if (!selectedLocationId || !canManageSchedule()) return;
 
   const data = await api(
-    `/employees?locationId=${selectedLocationId}&page=${employeePage}&pageSize=25`
+    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=25`
   );
 
-  document.getElementById("employeeList").innerHTML = data.employees
+  const employees = data.employees || [];
+  const list = document.getElementById("employeeList");
+
+  if (employees.length === 0) {
+    list.innerHTML = `
+      <div class="listRow">
+        <strong>No employees yet</strong>
+        <span>Add your team from the employee tools.</span>
+        <span></span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = employees
     .map(
       (employee) => `
         <div class="listRow">
-          <strong>${employee.priority}. ${employee.first_name} ${employee.last_name}</strong>
-          <span>${employee.title}</span>
-          <span>${employee.full_login}</span>
+          <strong>${escapeHtml(employee.priority)}. ${escapeHtml(employee.first_name)} ${escapeHtml(employee.last_name)}</strong>
+          <span>${escapeHtml(employee.title)}</span>
+          <span>${escapeHtml(employee.full_login)}</span>
         </div>
       `
     )
@@ -247,21 +348,40 @@ async function loadShifts() {
   const filter = document.getElementById("shiftFilter").value || "";
 
   const data = await api(
-    `/shifts?locationId=${selectedLocationId}&page=${shiftPage}&pageSize=10&filter=${encodeURIComponent(filter)}`
+    `/shifts?locationId=${encodeURIComponent(selectedLocationId)}&page=${shiftPage}&pageSize=10&filter=${encodeURIComponent(filter)}`
   );
 
-  document.getElementById("shiftList").innerHTML = data.shifts
-    .map(
-      (shift) => `
-        <div class="listRow">
-          <strong>${shift.name}</strong>
-          <span>${shift.days
+  const shifts = data.shifts || [];
+  const list = document.getElementById("shiftList");
+
+  if (shifts.length === 0) {
+    list.innerHTML = `
+      <div class="listRow">
+        <strong>No shifts yet</strong>
+        <span>Create shift templates on the server or with the future shift form.</span>
+        <span></span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = shifts
+    .map((shift) => {
+      const enabledDays = Array.isArray(shift.days)
+        ? shift.days
             .filter((day) => day.enabled)
-            .map((day) => `${day.dayOfWeek}: ${day.startTime}-${day.endTime}`)
-            .join(", ")}</span>
+            .map((day) => `${formatDayNumber(day.dayOfWeek)}: ${day.startTime || "--"}-${day.endTime || "--"}`)
+            .join(", ")
+        : "";
+
+      return `
+        <div class="listRow">
+          <strong>${escapeHtml(shift.name)}</strong>
+          <span>${escapeHtml(enabledDays || "No active days")}</span>
+          <span>Sort ${escapeHtml(shift.sort_order ?? 1)}</span>
         </div>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
@@ -274,12 +394,12 @@ async function openPlanDialog() {
   const dialog = document.getElementById("planDialog");
   const data = await api("/plans");
 
-  document.getElementById("planList").innerHTML = data.plans
+  document.getElementById("planList").innerHTML = (data.plans || [])
     .map(
       (plan) => `
-        <button class="planButton" data-plan="${plan.code}">
-          ${plan.name} - $${(plan.monthly_price_cents / 100).toFixed(2)}
-          ${plan.employee_limit === null ? "Unlimited employees" : `${plan.employee_limit} employees`}
+        <button class="planButton" data-plan="${escapeHtml(plan.code)}">
+          ${escapeHtml(plan.name)} — $${(Number(plan.monthly_price_cents) / 100).toFixed(2)}
+          · ${plan.employee_limit === null ? "Unlimited employees" : `${escapeHtml(plan.employee_limit)} employees`}
         </button>
       `
     )
@@ -292,19 +412,36 @@ function printSchedule() {
   window.print();
 }
 
-document.getElementById("signupButton").addEventListener("click", () => signup().catch((err) => alert(err.message)));
-document.getElementById("loginButton").addEventListener("click", () => login().catch((err) => alert(err.message)));
+document.getElementById("signupButton").addEventListener("click", () => {
+  signup().catch((err) => alert(err.message));
+});
+
+document.getElementById("loginButton").addEventListener("click", () => {
+  login().catch((err) => alert(err.message));
+});
 
 document.getElementById("locationSelect").addEventListener("change", async (event) => {
   selectedLocationId = event.target.value;
   await loadSelectedLocationData();
 });
 
-document.getElementById("addLocationButton").addEventListener("click", () => addLocation().catch((err) => alert(err.message)));
-document.getElementById("generateScheduleButton").addEventListener("click", () => generateSchedule().catch((err) => alert(err.message)));
+document.getElementById("addLocationButton").addEventListener("click", () => {
+  addLocation().catch((err) => alert(err.message));
+});
+
+document.getElementById("generateScheduleButton").addEventListener("click", () => {
+  generateSchedule().catch((err) => alert(err.message));
+});
+
 document.getElementById("printScheduleButton").addEventListener("click", printSchedule);
-document.getElementById("upgradeButton").addEventListener("click", () => openPlanDialog().catch((err) => alert(err.message)));
-document.getElementById("closePlanDialog").addEventListener("click", () => document.getElementById("planDialog").close());
+
+document.getElementById("upgradeButton").addEventListener("click", () => {
+  openPlanDialog().catch((err) => alert(err.message));
+});
+
+document.getElementById("closePlanDialog").addEventListener("click", () => {
+  document.getElementById("planDialog").close();
+});
 
 document.getElementById("prevWeekButton").addEventListener("click", async () => {
   currentWeekStart.setDate(currentWeekStart.getDate() - 7);
@@ -352,4 +489,14 @@ document.getElementById("planList").addEventListener("click", async (event) => {
 
   document.getElementById("planDialog").close();
   alert("Plan updated immediately.");
+});
+
+document.querySelectorAll(".navItem").forEach((item) => {
+  item.addEventListener("click", () => {
+    document.querySelectorAll(".navItem").forEach((navItem) => {
+      navItem.classList.remove("active");
+    });
+
+    item.classList.add("active");
+  });
 });
