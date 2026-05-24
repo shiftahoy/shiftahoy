@@ -12,6 +12,15 @@ let shiftPage = 1;
 
 const message = document.getElementById("message");
 
+const signupFieldIds = [
+  "signupFirstName",
+  "signupLastName",
+  "signupBusinessName",
+  "signupEmail",
+  "signupUsername",
+  "signupPassword"
+];
+
 function showMessage(text) {
   if (message) message.textContent = text;
 }
@@ -76,6 +85,148 @@ function isValidPasswordInput(value) {
   );
 }
 
+function isValidEmailInput(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function setNotice(id, type, text) {
+  const notice = document.getElementById(id);
+  if (!notice) return;
+
+  if (!text) {
+    notice.className = "formNotice hidden";
+    notice.textContent = "";
+    return;
+  }
+
+  notice.className = `formNotice ${type}`;
+  notice.textContent = text;
+}
+
+function setFieldState(inputId, state, message) {
+  const input = document.getElementById(inputId);
+  const group = document.querySelector(`[data-field="${inputId}"]`);
+  const status = document.getElementById(`${inputId}Status`);
+
+  if (!input || !group) return;
+
+  group.classList.remove("is-valid", "is-invalid");
+
+  if (state === "valid") {
+    group.classList.add("is-valid");
+    input.setAttribute("aria-invalid", "false");
+    if (status) status.textContent = `✓ ${message}`;
+    return;
+  }
+
+  if (state === "invalid") {
+    group.classList.add("is-invalid");
+    input.setAttribute("aria-invalid", "true");
+    if (status) status.textContent = message;
+    return;
+  }
+
+  input.removeAttribute("aria-invalid");
+  if (status) status.textContent = message;
+}
+
+function validateSignupField(inputId, showEmptyErrors = false) {
+  const input = document.getElementById(inputId);
+  if (!input) return false;
+
+  const value = input.value.trim();
+
+  if (inputId === "signupFirstName") {
+    if (!value) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Looks good");
+    return true;
+  }
+
+  if (inputId === "signupLastName") {
+    if (!value) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Looks good");
+    return true;
+  }
+
+  if (inputId === "signupBusinessName") {
+    if (!value) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Looks good");
+    return true;
+  }
+
+  if (inputId === "signupEmail") {
+    if (!value) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
+      return false;
+    }
+
+    if (!isValidEmailInput(value)) {
+      setFieldState(inputId, "invalid", "Enter a valid email");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Valid email");
+    return true;
+  }
+
+  if (inputId === "signupUsername") {
+    const cleaned = cleanUsernameInput(input.value);
+
+    if (input.value !== cleaned) {
+      input.value = cleaned;
+    }
+
+    if (!cleaned) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "3–30 letters or numbers");
+      return false;
+    }
+
+    if (cleaned.length < 3) {
+      setFieldState(inputId, "invalid", "3–30 letters or numbers");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Username works");
+    return true;
+  }
+
+  if (inputId === "signupPassword") {
+    const normalizedPassword = normalizePasswordInput(input.value);
+
+    if (!normalizedPassword) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "12–128 characters");
+      return false;
+    }
+
+    if (!isValidPasswordInput(normalizedPassword)) {
+      setFieldState(inputId, "invalid", "12–128 characters");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Password length works");
+    return true;
+  }
+
+  return true;
+}
+
+function validateSignupForm(showEmptyErrors = false) {
+  const results = signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors));
+  return results.every(Boolean);
+}
+
 async function api(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -121,52 +272,67 @@ function applyRoleUI() {
 }
 
 async function signup() {
+  setNotice("signupFormMessage", "", "");
+
+  const valid = validateSignupForm(true);
+
+  if (!valid) {
+    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating your account.");
+
+    const firstInvalid = document.querySelector(".fieldGroup.is-invalid input");
+    if (firstInvalid) firstInvalid.focus();
+
+    return;
+  }
+
   const username = cleanUsernameInput(document.getElementById("signupUsername").value);
   const password = normalizePasswordInput(document.getElementById("signupPassword").value);
 
-  if (username.length < 3) {
-    alert("Username must be 3 to 30 characters and can only contain lowercase letters and numbers.");
-    return;
-  }
-
-  if (!isValidPasswordInput(password)) {
-    alert(`Password must be ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`);
-    return;
-  }
-
   const body = {
-    firstName: document.getElementById("signupFirstName").value,
-    lastName: document.getElementById("signupLastName").value,
-    businessName: document.getElementById("signupBusinessName").value,
-    email: document.getElementById("signupEmail").value,
+    firstName: document.getElementById("signupFirstName").value.trim(),
+    lastName: document.getElementById("signupLastName").value.trim(),
+    businessName: document.getElementById("signupBusinessName").value.trim(),
+    email: document.getElementById("signupEmail").value.trim(),
     username,
     password
   };
 
-  const data = await api("/auth/signup", {
-    method: "POST",
-    body: JSON.stringify(body)
-  });
+  try {
+    const data = await api("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
 
-  alert(
-    `Account created.\n\nYour login is:\n${data.fullLogin}\n\nUse this exact login with your password to sign in.`
-  );
+    setNotice(
+      "signupFormMessage",
+      "success",
+      `Account created. Your login is ${data.fullLogin}. Use this exact login with your password to sign in.`
+    );
+  } catch (err) {
+    setNotice("signupFormMessage", "error", err.message);
+  }
 }
 
 async function login() {
-  const data = await api("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({
-      login: document.getElementById("loginValue").value,
-      password: normalizePasswordInput(document.getElementById("loginPassword").value)
-    })
-  });
+  setNotice("loginFormMessage", "", "");
 
-  accessToken = data.accessToken;
-  currentUser = data.user;
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        login: document.getElementById("loginValue").value,
+        password: normalizePasswordInput(document.getElementById("loginPassword").value)
+      })
+    });
 
-  applyRoleUI();
-  await loadLocations();
+    accessToken = data.accessToken;
+    currentUser = data.user;
+
+    applyRoleUI();
+    await loadLocations();
+  } catch (err) {
+    setNotice("loginFormMessage", "error", err.message);
+  }
 }
 
 async function loadLocations() {
@@ -204,17 +370,23 @@ async function addLocation() {
   const name = input.value.trim();
 
   if (!name) {
-    alert("Location name is required.");
+    input.classList.add("inputInvalid");
     return;
   }
 
-  await api("/locations", {
-    method: "POST",
-    body: JSON.stringify({ name })
-  });
+  input.classList.remove("inputInvalid");
 
-  input.value = "";
-  await loadLocations();
+  try {
+    await api("/locations", {
+      method: "POST",
+      body: JSON.stringify({ name })
+    });
+
+    input.value = "";
+    await loadLocations();
+  } catch (err) {
+    showMessage(err.message);
+  }
 }
 
 async function loadSchedule() {
@@ -331,22 +503,25 @@ function renderSchedule(cells) {
 
 async function generateSchedule() {
   if (!selectedLocationId) {
-    alert("Choose a location first.");
+    showMessage("Choose a location first.");
     return;
   }
 
-  await api("/schedules/generate", {
-    method: "POST",
-    body: JSON.stringify({
-      locationId: selectedLocationId,
-      weekStart: dateOnly(currentWeekStart),
-      weeks: FORECAST_WEEKS
-    })
-  });
+  try {
+    await api("/schedules/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        locationId: selectedLocationId,
+        weekStart: dateOnly(currentWeekStart),
+        weeks: FORECAST_WEEKS
+      })
+    });
 
-  await loadSchedule();
-
-  alert(`Schedule forecast generated for up to ${FORECAST_WEEKS} weeks.`);
+    await loadSchedule();
+    showMessage(`Schedule forecast generated for up to ${FORECAST_WEEKS} weeks.`);
+  } catch (err) {
+    showMessage(err.message);
+  }
 }
 
 async function loadEmployees() {
@@ -428,7 +603,7 @@ async function loadShifts() {
 
 async function openPlanDialog() {
   if (!currentUser || currentUser.role !== "owner") {
-    alert("Only the owner can change the plan.");
+    showMessage("Only the owner can change the plan.");
     return;
   }
 
@@ -454,11 +629,26 @@ function printSchedule() {
 }
 
 document.getElementById("signupButton").addEventListener("click", () => {
-  signup().catch((err) => alert(err.message));
+  signup();
 });
 
 document.getElementById("loginButton").addEventListener("click", () => {
-  login().catch((err) => alert(err.message));
+  login();
+});
+
+signupFieldIds.forEach((id) => {
+  const input = document.getElementById(id);
+
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    validateSignupField(id, false);
+    setNotice("signupFormMessage", "", "");
+  });
+
+  input.addEventListener("blur", () => {
+    validateSignupField(id, true);
+  });
 });
 
 const signupUsernameInput = document.getElementById("signupUsername");
@@ -496,17 +686,17 @@ document.getElementById("locationSelect").addEventListener("change", async (even
 });
 
 document.getElementById("addLocationButton").addEventListener("click", () => {
-  addLocation().catch((err) => alert(err.message));
+  addLocation();
 });
 
 document.getElementById("generateScheduleButton").addEventListener("click", () => {
-  generateSchedule().catch((err) => alert(err.message));
+  generateSchedule();
 });
 
 document.getElementById("printScheduleButton").addEventListener("click", printSchedule);
 
 document.getElementById("upgradeButton").addEventListener("click", () => {
-  openPlanDialog().catch((err) => alert(err.message));
+  openPlanDialog().catch((err) => showMessage(err.message));
 });
 
 document.getElementById("closePlanDialog").addEventListener("click", () => {
@@ -545,20 +735,24 @@ document.getElementById("nextShiftPage").addEventListener("click", async () => {
 
 document.getElementById("shiftFilter").addEventListener("input", () => {
   shiftPage = 1;
-  loadShifts().catch((err) => alert(err.message));
+  loadShifts().catch((err) => showMessage(err.message));
 });
 
 document.getElementById("planList").addEventListener("click", async (event) => {
   const button = event.target.closest(".planButton");
   if (!button) return;
 
-  await api("/plans/change", {
-    method: "POST",
-    body: JSON.stringify({ planCode: button.dataset.plan })
-  });
+  try {
+    await api("/plans/change", {
+      method: "POST",
+      body: JSON.stringify({ planCode: button.dataset.plan })
+    });
 
-  document.getElementById("planDialog").close();
-  alert("Plan updated immediately.");
+    document.getElementById("planDialog").close();
+    showMessage("Plan updated immediately.");
+  } catch (err) {
+    showMessage(err.message);
+  }
 });
 
 document.querySelectorAll(".navItem").forEach((item) => {
