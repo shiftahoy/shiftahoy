@@ -8,6 +8,14 @@ const { requireAuth } = require("./middleware");
 
 const router = express.Router();
 
+const USERNAME_RULE_MESSAGE =
+  "Username must be 3 to 30 characters and can only contain lowercase letters and numbers. No spaces or symbols.";
+
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 128;
+const PASSWORD_RULE_MESSAGE =
+  `Password must be ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`;
+
 function makeToken() {
   return crypto.randomBytes(32).toString("hex");
 }
@@ -17,10 +25,23 @@ function hashToken(token) {
 }
 
 function normalizeUsername(username) {
-  return String(username || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "");
+  return String(username || "").trim().toLowerCase();
+}
+
+function isValidUsername(username) {
+  return /^[a-z0-9]{3,30}$/.test(String(username || ""));
+}
+
+function normalizePassword(password) {
+  return String(password || "").normalize("NFKC");
+}
+
+function isValidPassword(password) {
+  const normalizedPassword = normalizePassword(password);
+  return (
+    normalizedPassword.length >= PASSWORD_MIN_LENGTH &&
+    normalizedPassword.length <= PASSWORD_MAX_LENGTH
+  );
 }
 
 function normalizeBusinessSlug(businessName) {
@@ -135,7 +156,7 @@ async function findUserForLogin(login) {
   const normalizedUsername = normalizeUsername(usernamePart);
   const normalizedBusinessSlug = normalizeBusinessSlug(businessPart);
 
-  if (!normalizedUsername || !normalizedBusinessSlug) {
+  if (!isValidUsername(normalizedUsername) || !normalizedBusinessSlug) {
     return null;
   }
 
@@ -218,30 +239,27 @@ function publicUser(user) {
 router.post("/signup", async (req, res) => {
   const { firstName, lastName, businessName, email, username, password } = req.body;
 
-  if (
-    !firstName ||
-    !lastName ||
-    !businessName ||
-    !email ||
-    !username ||
-    !password ||
-    password.length < 12
-  ) {
+  if (!firstName || !lastName || !businessName || !email || !username || !password) {
     return res.status(400).json({
-      error:
-        "First name, last name, business, email, username, and a 12+ character password are required."
+      error: "First name, last name, business, email, username, and password are required."
     });
   }
 
   const normalizedUsername = normalizeUsername(username);
 
-  if (!normalizedUsername) {
-    return res.status(400).json({ error: "Username must contain letters or numbers." });
+  if (!isValidUsername(normalizedUsername)) {
+    return res.status(400).json({ error: USERNAME_RULE_MESSAGE });
+  }
+
+  const normalizedPassword = normalizePassword(password);
+
+  if (!isValidPassword(normalizedPassword)) {
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
   }
 
   const normalizedEmail = String(email).toLowerCase().trim();
 
-  const passwordHash = await argon2.hash(password, {
+  const passwordHash = await argon2.hash(normalizedPassword, {
     type: argon2.argon2id
   });
 
@@ -407,7 +425,8 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid login or password." });
   }
 
-  const valid = await argon2.verify(user.password_hash, password);
+  const normalizedPassword = normalizePassword(password);
+  const valid = await argon2.verify(user.password_hash, normalizedPassword);
 
   if (!valid) {
     return res.status(401).json({ error: "Invalid login or password." });
@@ -554,10 +573,16 @@ router.post("/forgot-password", async (req, res) => {
 router.post("/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
 
-  if (!token || !newPassword || newPassword.length < 12) {
+  if (!token || !newPassword) {
     return res.status(400).json({
-      error: "Token and a new password of at least 12 characters are required."
+      error: "Token and new password are required."
     });
+  }
+
+  const normalizedPassword = normalizePassword(newPassword);
+
+  if (!isValidPassword(normalizedPassword)) {
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
   }
 
   const tokenHash = hashToken(token);
@@ -577,7 +602,7 @@ router.post("/reset-password", async (req, res) => {
   }
 
   const row = result.rows[0];
-  const passwordHash = await argon2.hash(newPassword, {
+  const passwordHash = await argon2.hash(normalizedPassword, {
     type: argon2.argon2id
   });
 
