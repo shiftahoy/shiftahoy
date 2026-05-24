@@ -20,8 +20,12 @@ function createAccessToken(user) {
   return jwt.sign(
     {
       id: user.id,
+      businessId: user.business_id,
       email: user.email,
+      username: user.username,
+      fullLogin: user.full_login,
       role: user.role,
+      canManageSchedule: user.can_manage_schedule,
       emailVerified: user.email_verified
     },
     process.env.JWT_ACCESS_SECRET,
@@ -49,36 +53,81 @@ function setRefreshCookie(res, token) {
 }
 
 router.post("/signup", async (req, res) => {
-  const { email, password } = req.body;
+  const { firstName, lastName, businessName, email, username, password } = req.body;
 
-  if (!email || !password || password.length < 12) {
+  if (!firstName || !lastName || !businessName || !email || !username || !password || password.length < 12) {
     return res.status(400).json({
-      error: "Email is required and password must be at least 12 characters."
+      error: "First name, last name, business name, email, username, and a 12+ character password are required."
     });
   }
+
+  const businessSlug = businessName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 40);
+
+  if (!businessSlug) {
+    return res.status(400).json({ error: "Business name must contain letters or numbers." });
+  }
+
+  const normalizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "");
+  const fullLogin = `${normalizedUsername}.${businessSlug}`;
 
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id
   });
 
+  const client = await pool.connect();
+
   try {
-    const result = await pool.query(
-      `INSERT INTO users (email, password_hash)
-       VALUES ($1, $2)
-       RETURNING id, email, role, email_verified`,
-      [email.toLowerCase(), passwordHash]
+    await client.query("BEGIN");
+
+    const businessResult = await client.query(
+      `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
+       VALUES ($1, $2, 'free', 1)
+       RETURNING id, business_name, business_slug, plan_code, plan_employee_limit`,
+      [businessName.trim(), businessSlug]
     );
 
-    const user = result.rows[0];
+    const business = businessResult.rows[0];
+
+    const userResult = await client.query(
+      `INSERT INTO users (
+         business_id, first_name, last_name, email, username, full_login,
+         password_hash, role, can_manage_schedule
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', true)
+       RETURNING id, business_id, email, username, full_login, role, can_manage_schedule, email_verified`,
+      [
+        business.id,
+        firstName.trim(),
+        lastName.trim(),
+        email.toLowerCase().trim(),
+        normalizedUsername,
+        fullLogin,
+        passwordHash
+      ]
+    );
+
+    const user = userResult.rows[0];
+
+    await client.query(
+      `INSERT INTO locations (business_id, name)
+       VALUES ($1, 'Main Location')`,
+      [business.id]
+    );
 
     const rawToken = makeToken();
     const tokenHash = hashToken(rawToken);
 
-    await pool.query(
+    await client.query(
       `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
        VALUES ($1, $2, now() + interval '1 day')`,
       [user.id, tokenHash]
     );
+
+    await client.query("COMMIT");
 
     const verifyUrl = `${process.env.APP_URL}/auth/verify-email?token=${rawToken}`;
 
@@ -89,15 +138,22 @@ router.post("/signup", async (req, res) => {
     });
 
     res.status(201).json({
-      message: "Account created. Check your email for the verification link."
+      message: "Owner account created. Check your email for the verification link.",
+      fullLogin
     });
   } catch (err) {
+    await client.query("ROLLBACK");
+
     if (err.code === "23505") {
-      return res.status(409).json({ error: "Email already exists." });
+      return res.status(409).json({
+        error: "That business name, email, or username is already taken."
+      });
     }
 
     console.error(err);
     res.status(500).json({ error: "Signup failed." });
+  } finally {
+    client.release();
   }
 });
 
@@ -137,24 +193,29 @@ router.get("/verify-email", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { login, password } = req.body;
+
+  if (!login || !password) {
+    return res.status(400).json({ error: "Login and password are required." });
+  }
 
   const result = await pool.query(
-    `SELECT id, email, password_hash, role, email_verified
+    `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
      FROM users
-     WHERE email = $1`,
-    [email.toLowerCase()]
+     WHERE full_login = $1 OR email = $1
+     LIMIT 1`,
+    [login.toLowerCase().trim()]
   );
 
   if (result.rows.length === 0) {
-    return res.status(401).json({ error: "Invalid email or password." });
+    return res.status(401).json({ error: "Invalid login or password." });
   }
 
   const user = result.rows[0];
   const valid = await argon2.verify(user.password_hash, password);
 
   if (!valid) {
-    return res.status(401).json({ error: "Invalid email or password." });
+    return res.status(401).json({ error: "Invalid login or password." });
   }
 
   const accessToken = createAccessToken(user);
@@ -173,8 +234,12 @@ router.post("/login", async (req, res) => {
     accessToken,
     user: {
       id: user.id,
+      businessId: user.business_id,
       email: user.email,
+      username: user.username,
+      fullLogin: user.full_login,
       role: user.role,
+      canManageSchedule: user.can_manage_schedule,
       emailVerified: user.email_verified
     }
   });
@@ -211,7 +276,7 @@ router.post("/refresh", async (req, res) => {
   }
 
   const userResult = await pool.query(
-    `SELECT id, email, role, email_verified
+    `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
      FROM users
      WHERE id = $1`,
     [payload.id]
