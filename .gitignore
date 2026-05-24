@@ -1,1 +1,50 @@
-node_modules
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+release/
+out/
+build/
+
+# Electron builder output
+*.blockmap
+latest.yml
+latest-mac.yml
+latest-linux.yml
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database / local runtime files
+*.sqlite
+*.sqlite3
+*.db
+
+# Coverage / test output
+coverage/
+
+# Temporary files
+tmp/
+temp/
+.cache/
