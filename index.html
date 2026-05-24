@@ -89,7 +89,7 @@
                 <div class="fieldGroup" data-field="signupFirstName">
                   <label class="fieldLabel" for="signupFirstName">
                     First Name
-                    <span id="signupFirstNameStatus" class="fieldStatus">Required</span>
+                    <span id="signupFirstNameStatus" class="fieldStatus">(Required)</span>
                   </label>
                   <input
                     id="signupFirstName"
@@ -104,7 +104,7 @@
                 <div class="fieldGroup" data-field="signupLastName">
                   <label class="fieldLabel" for="signupLastName">
                     Last Name
-                    <span id="signupLastNameStatus" class="fieldStatus">Required</span>
+                    <span id="signupLastNameStatus" class="fieldStatus">(Required)</span>
                   </label>
                   <input
                     id="signupLastName"
@@ -120,7 +120,7 @@
               <div class="fieldGroup" data-field="signupBusinessName">
                 <label class="fieldLabel" for="signupBusinessName">
                   Business
-                  <span id="signupBusinessNameStatus" class="fieldStatus">Required</span>
+                  <span id="signupBusinessNameStatus" class="fieldStatus">(Required)</span>
                 </label>
                 <input
                   id="signupBusinessName"
@@ -137,7 +137,7 @@
               <div class="fieldGroup" data-field="signupEmail">
                 <label class="fieldLabel" for="signupEmail">
                   Email
-                  <span id="signupEmailStatus" class="fieldStatus">Required</span>
+                  <span id="signupEmailStatus" class="fieldStatus">(Required)</span>
                 </label>
                 <input
                   id="signupEmail"
@@ -153,7 +153,7 @@
               <div class="fieldGroup" data-field="signupUsername">
                 <label class="fieldLabel" for="signupUsername">
                   Username
-                  <span id="signupUsernameStatus" class="fieldStatus">3–30 letters or numbers</span>
+                  <span id="signupUsernameStatus" class="fieldStatus">(3–30 letters/numbers)</span>
                 </label>
                 <input
                   id="signupUsername"
@@ -172,7 +172,7 @@
               <div class="fieldGroup" data-field="signupPassword">
                 <label class="fieldLabel" for="signupPassword">
                   Password
-                  <span id="signupPasswordStatus" class="fieldStatus">12–128 characters</span>
+                  <span id="signupPasswordStatus" class="fieldStatus">(12–128 characters)</span>
                 </label>
                 <input
                   id="signupPassword"
@@ -185,7 +185,7 @@
                   required
                 />
                 <small id="signupPasswordHelp" class="fieldHelp">
-                  Use 12–128 characters. Spaces and symbols are allowed.
+                  Spaces and symbols are allowed.
                 </small>
               </div>
 
@@ -210,7 +210,13 @@
 
               <div class="fieldGroup">
                 <label class="fieldLabel" for="loginPassword">Password</label>
-                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
+                <input
+                  id="loginPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Password"
+                  maxlength="128"
+                />
               </div>
 
               <button id="loginButton" class="button primary">Login</button>
