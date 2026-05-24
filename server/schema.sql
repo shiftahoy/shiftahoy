@@ -30,7 +30,7 @@ ON CONFLICT (code) DO UPDATE SET
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   email TEXT,
@@ -40,19 +40,34 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'employee')),
   can_manage_schedule BOOLEAN NOT NULL DEFAULT false,
   email_verified BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_business_username_unique
 ON users (business_id, username);
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique
+ON users (lower(email))
+WHERE email IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   address TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS shifts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,8 +75,12 @@ CREATE TABLE IF NOT EXISTS shifts (
   location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (location_id, name)
 );
+
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS shift_days (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -88,8 +107,12 @@ CREATE TABLE IF NOT EXISTS employees (
   preferred_shift_id UUID REFERENCES shifts(id) ON DELETE SET NULL,
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (business_id, employee_code)
 );
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS employee_availability (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,8 +129,11 @@ CREATE TABLE IF NOT EXISTS schedules (
   week_start DATE NOT NULL,
   generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (location_id, week_start)
 );
+
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS schedule_cells (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,6 +156,9 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS refresh_tokens_token_hash_idx
+ON refresh_tokens (token_hash);
+
 CREATE TABLE IF NOT EXISTS email_verification_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -137,6 +166,9 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS email_verification_tokens_token_hash_idx
+ON email_verification_tokens (token_hash);
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,3 +178,74 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS password_reset_tokens_token_hash_idx
+ON password_reset_tokens (token_hash);
+
+CREATE OR REPLACE FUNCTION create_default_shift_for_location()
+RETURNS trigger AS $$
+DECLARE
+  new_shift_id UUID;
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM shifts
+    WHERE business_id = NEW.business_id
+      AND location_id = NEW.id
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO shifts (business_id, location_id, name, sort_order)
+  VALUES (NEW.business_id, NEW.id, 'Standard Day', 1)
+  RETURNING id INTO new_shift_id;
+
+  INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
+  SELECT
+    new_shift_id,
+    day_number,
+    day_number BETWEEN 1 AND 5,
+    CASE WHEN day_number BETWEEN 1 AND 5 THEN '09:00'::time ELSE NULL END,
+    CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END
+  FROM generate_series(1, 7) AS day_number;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS locations_create_default_shift ON locations;
+
+CREATE TRIGGER locations_create_default_shift
+AFTER INSERT ON locations
+FOR EACH ROW
+EXECUTE FUNCTION create_default_shift_for_location();
+
+DO $$
+DECLARE
+  location_row RECORD;
+  new_shift_id UUID;
+BEGIN
+  FOR location_row IN
+    SELECT l.id, l.business_id
+    FROM locations l
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM shifts s
+      WHERE s.location_id = l.id
+        AND s.business_id = l.business_id
+    )
+  LOOP
+    INSERT INTO shifts (business_id, location_id, name, sort_order)
+    VALUES (location_row.business_id, location_row.id, 'Standard Day', 1)
+    RETURNING id INTO new_shift_id;
+
+    INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
+    SELECT
+      new_shift_id,
+      day_number,
+      day_number BETWEEN 1 AND 5,
+      CASE WHEN day_number BETWEEN 1 AND 5 THEN '09:00'::time ELSE NULL END,
+      CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END
+    FROM generate_series(1, 7) AS day_number;
+  END LOOP;
+END $$;
