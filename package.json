@@ -1,11 +1,13 @@
 {
   "name": "shiftahoy",
-  "productName": "ShiftAhoy",
+  "productName": "Shift Ahoy",
   "version": "1.0.0",
   "description": "Employee scheduling desktop app",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish never"
   },
   "repository": "https://github.com/shiftahoy/shiftahoy",
   "keywords": [
@@ -16,7 +18,28 @@
   ],
   "author": "Shift Ahoy",
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
   "devDependencies": {
-    "electron": "^42.0.1"
+    "electron": "^42.0.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.shiftahoy.app",
+    "productName": "Shift Ahoy",
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "styles.css"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.shiftahoy.com/releases/"
+      }
+    ]
   }
 }
