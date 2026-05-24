@@ -337,16 +337,23 @@ p {
   font-size: 0.85rem;
 }
 
-/* Transparent form side behind the individual white auth cards */
+/*
+  Right auth side:
+  - transparent background
+  - first card top aligns with blue panel top
+  - login card top remains below first card
+  - login card stretches so bottom aligns with blue panel bottom
+*/
 .authCards {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   height: 100%;
   align-content: stretch;
   background: transparent;
   border: 0;
   box-shadow: none;
-  padding: 22px;
+  padding: 0 0 0 22px;
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
@@ -731,6 +738,7 @@ tbody tr:hover td {
   }
 
   .authCards {
+    grid-template-rows: auto auto;
     border-radius: 0;
     padding: 0;
     background: transparent;
