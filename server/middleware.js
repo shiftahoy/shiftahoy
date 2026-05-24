@@ -17,6 +17,26 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireScheduleManager(req, res, next) {
+  if (
+    !req.user ||
+    !["owner", "manager"].includes(req.user.role) ||
+    !req.user.canManageSchedule
+  ) {
+    return res.status(403).json({ error: "Manage Schedule permission required." });
+  }
+
+  next();
+}
+
+function requireOwner(req, res, next) {
+  if (!req.user || req.user.role !== "owner") {
+    return res.status(403).json({ error: "Owner permission required." });
+  }
+
+  next();
+}
+
 function requireRole(...roles) {
   return function (req, res, next) {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -29,5 +49,7 @@ function requireRole(...roles) {
 
 module.exports = {
   requireAuth,
-  requireRole
+  requireRole,
+  requireScheduleManager,
+  requireOwner
 };
