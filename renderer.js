@@ -1,5 +1,7 @@
 const API_URL = "http://localhost:3001";
 const FORECAST_WEEKS = 3;
+const PASSWORD_MIN_LENGTH = 12;
+const PASSWORD_MAX_LENGTH = 128;
 
 let accessToken = null;
 let currentUser = null;
@@ -54,6 +56,26 @@ function formatDayNumber(dayOfWeek) {
   return labels[dayOfWeek] || dayOfWeek;
 }
 
+function cleanUsernameInput(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 30);
+}
+
+function normalizePasswordInput(value) {
+  return String(value || "").normalize("NFKC");
+}
+
+function isValidPasswordInput(value) {
+  const normalizedPassword = normalizePasswordInput(value);
+
+  return (
+    normalizedPassword.length >= PASSWORD_MIN_LENGTH &&
+    normalizedPassword.length <= PASSWORD_MAX_LENGTH
+  );
+}
+
 async function api(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -99,13 +121,26 @@ function applyRoleUI() {
 }
 
 async function signup() {
+  const username = cleanUsernameInput(document.getElementById("signupUsername").value);
+  const password = normalizePasswordInput(document.getElementById("signupPassword").value);
+
+  if (username.length < 3) {
+    alert("Username must be 3 to 30 characters and can only contain lowercase letters and numbers.");
+    return;
+  }
+
+  if (!isValidPasswordInput(password)) {
+    alert(`Password must be ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`);
+    return;
+  }
+
   const body = {
     firstName: document.getElementById("signupFirstName").value,
     lastName: document.getElementById("signupLastName").value,
     businessName: document.getElementById("signupBusinessName").value,
     email: document.getElementById("signupEmail").value,
-    username: document.getElementById("signupUsername").value,
-    password: document.getElementById("signupPassword").value
+    username,
+    password
   };
 
   const data = await api("/auth/signup", {
@@ -123,7 +158,7 @@ async function login() {
     method: "POST",
     body: JSON.stringify({
       login: document.getElementById("loginValue").value,
-      password: document.getElementById("loginPassword").value
+      password: normalizePasswordInput(document.getElementById("loginPassword").value)
     })
   });
 
@@ -425,6 +460,35 @@ document.getElementById("signupButton").addEventListener("click", () => {
 document.getElementById("loginButton").addEventListener("click", () => {
   login().catch((err) => alert(err.message));
 });
+
+const signupUsernameInput = document.getElementById("signupUsername");
+
+if (signupUsernameInput) {
+  signupUsernameInput.setAttribute("maxlength", "30");
+  signupUsernameInput.setAttribute("pattern", "[a-z0-9]{3,30}");
+  signupUsernameInput.setAttribute("title", "Use 3 to 30 lowercase letters and numbers only.");
+
+  signupUsernameInput.addEventListener("input", () => {
+    signupUsernameInput.value = cleanUsernameInput(signupUsernameInput.value);
+  });
+}
+
+const signupPasswordInput = document.getElementById("signupPassword");
+
+if (signupPasswordInput) {
+  signupPasswordInput.setAttribute("minlength", String(PASSWORD_MIN_LENGTH));
+  signupPasswordInput.setAttribute("maxlength", String(PASSWORD_MAX_LENGTH));
+  signupPasswordInput.setAttribute(
+    "title",
+    `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`
+  );
+}
+
+const loginPasswordInput = document.getElementById("loginPassword");
+
+if (loginPasswordInput) {
+  loginPasswordInput.setAttribute("maxlength", String(PASSWORD_MAX_LENGTH));
+}
 
 document.getElementById("locationSelect").addEventListener("change", async (event) => {
   selectedLocationId = event.target.value;
