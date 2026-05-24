@@ -83,16 +83,16 @@ button {
 .brandLogoWrap {
   display: grid;
   place-items: center;
-  width: 76px;
-  height: 76px;
+  width: 104px;
+  height: 104px;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
 .brandLogo {
-  width: 66px;
-  height: 66px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
 }
 
@@ -279,8 +279,8 @@ p {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 150px;
-  height: 150px;
+  width: 190px;
+  height: 190px;
   margin-bottom: 22px;
   border-radius: 0;
   background: transparent;
@@ -288,8 +288,8 @@ p {
 }
 
 .heroLogo {
-  width: 138px;
-  height: 138px;
+  width: 180px;
+  height: 180px;
   object-fit: contain;
 }
 
@@ -777,13 +777,13 @@ tbody tr:hover td {
   }
 
   .heroLogoWrap {
-    width: 132px;
-    height: 132px;
+    width: 150px;
+    height: 150px;
   }
 
   .heroLogo {
-    width: 116px;
-    height: 116px;
+    width: 140px;
+    height: 140px;
   }
 
   .metricGrid,
