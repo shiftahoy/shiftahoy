@@ -211,9 +211,9 @@ p {
   gap: 0;
   align-items: stretch;
   overflow: hidden;
-  background: #ffffff;
+  background: transparent;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 .heroPanel,
@@ -337,20 +337,20 @@ p {
   font-size: 0.85rem;
 }
 
-/* White form side connected directly to the blue hero */
+/* Transparent form side behind the individual white auth cards */
 .authCards {
   display: grid;
   gap: 18px;
   height: 100%;
   align-content: stretch;
-  background: #ffffff;
+  background: transparent;
   border: 0;
   box-shadow: none;
   padding: 22px;
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
-/* Individual auth cards remain white, without translucent glass effects */
+/* Individual auth cards remain white */
 #authView .card {
   background: #ffffff;
   border: 1px solid rgba(0, 93, 170, 0.12);
