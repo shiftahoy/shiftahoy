@@ -503,12 +503,24 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12);
 }
 
-.formNotice {
-  padding: 8px 11px;
+/* Reserved message area prevents the cards from jumping when messages appear */
+#authView .formNotice {
+  min-height: 34px;
+  max-height: 34px;
+  display: flex !important;
+  align-items: center;
+  overflow: hidden;
+  padding: 6px 10px;
   border-radius: 12px;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+#authView .formNotice.hidden {
+  visibility: hidden;
+  opacity: 0;
 }
 
 .formNotice.error {
@@ -573,6 +585,10 @@ select:focus {
 
 .hidden {
   display: none !important;
+}
+
+#authView .formNotice.hidden {
+  display: flex !important;
 }
 
 .dashboardGrid {
@@ -874,9 +890,11 @@ tbody tr:hover td {
     font-size: 1rem;
   }
 
-  .formNotice {
-    padding: 7px 10px;
-    font-size: 0.74rem;
+  #authView .formNotice {
+    min-height: 30px;
+    max-height: 30px;
+    padding: 5px 9px;
+    font-size: 0.7rem;
   }
 }
 
