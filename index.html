@@ -8,32 +8,83 @@
 
   <body>
     <main class="app">
-      <h1>Shift Ahoy</h1>
+      <header class="topbar">
+        <h1>Shift Ahoy</h1>
+        <button id="upgradeButton" class="hidden">Upgrade</button>
+      </header>
 
-      <section class="card">
-        <h2>Create Account</h2>
+      <section id="authView" class="grid two">
+        <section class="card">
+          <h2>Create Owner Account</h2>
+          <input id="signupFirstName" autocomplete="given-name" placeholder="First Name" required />
+          <input id="signupLastName" autocomplete="family-name" placeholder="Last Name" required />
+          <input id="signupBusinessName" autocomplete="organization" placeholder="Business Name" required />
+          <input id="signupEmail" type="email" autocomplete="email" placeholder="Email" required />
+          <input id="signupUsername" autocomplete="username" placeholder="Owner Username" required />
+          <input id="signupPassword" type="password" autocomplete="new-password" placeholder="Password" required />
+          <button id="signupButton">Create Account</button>
+        </section>
 
-        <input id="signupEmail" type="email" placeholder="Email" />
-        <input id="signupPassword" type="password" placeholder="Password" />
-
-        <button id="signupButton">Sign Up</button>
+        <section class="card">
+          <h2>Login</h2>
+          <input id="loginValue" autocomplete="username" placeholder="username.businessname or email" />
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
+          <button id="loginButton">Login</button>
+        </section>
       </section>
 
-      <section class="card">
-        <h2>Login</h2>
-
-        <input id="loginEmail" type="email" placeholder="Email" />
-        <input id="loginPassword" type="password" placeholder="Password" />
-
-        <button id="loginButton">Login</button>
-      </section>
-
-      <section class="card">
-        <h2>Status</h2>
+      <section id="appView" class="hidden">
         <p id="message">Welcome aboard, matey!</p>
-        <button id="meButton">Check Current User</button>
-        <button id="logoutButton">Logout</button>
+
+        <section id="locationsPanel" class="card">
+          <h2>Locations</h2>
+          <select id="locationSelect"></select>
+          <div id="ownerLocationTools">
+            <input id="newLocationName" placeholder="New Location Name" />
+            <button id="addLocationButton">Add Location</button>
+          </div>
+        </section>
+
+        <section id="schedulePanel" class="card">
+          <div class="sectionHeader">
+            <h2>Schedule</h2>
+            <div>
+              <button id="prevWeekButton">←</button>
+              <span id="weekLabel"></span>
+              <button id="nextWeekButton">→</button>
+              <button id="generateScheduleButton">Generate</button>
+              <button id="printScheduleButton">Print</button>
+            </div>
+          </div>
+          <table id="scheduleTable"></table>
+        </section>
+
+        <section id="shiftsPanel" class="card managerOnly">
+          <div class="sectionHeader">
+            <h2>Shifts</h2>
+            <input id="shiftFilter" placeholder="Filter shifts" />
+          </div>
+          <div id="shiftList"></div>
+          <button id="prevShiftPage">←</button>
+          <button id="nextShiftPage">→</button>
+        </section>
+
+        <section id="employeesPanel" class="card managerOnly">
+          <div class="sectionHeader">
+            <h2>Employees</h2>
+            <button id="showEmployeeFormButton">Add Employee</button>
+          </div>
+          <div id="employeeList"></div>
+          <button id="prevEmployeePage">←</button>
+          <button id="nextEmployeePage">→</button>
+        </section>
       </section>
+
+      <dialog id="planDialog">
+        <h2>Choose Plan</h2>
+        <div id="planList"></div>
+        <button id="closePlanDialog">Close</button>
+      </dialog>
     </main>
 
     <script src="renderer.js"></script>
