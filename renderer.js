@@ -13,6 +13,10 @@ function showMessage(text) {
   if (message) message.textContent = text;
 }
 
+function canManageSchedule() {
+  return !!currentUser && (currentUser.role === "owner" || currentUser.canManageSchedule);
+}
+
 function startOfWeek(date) {
   const copy = new Date(date);
   const day = copy.getDay();
@@ -40,7 +44,10 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 402) openPlanDialog();
+    if (res.status === 402 && currentUser?.role === "owner") {
+      openPlanDialog().catch(() => {});
+    }
+
     throw new Error(data.error || "Request failed");
   }
 
@@ -52,7 +59,7 @@ function applyRoleUI() {
   document.getElementById("appView").classList.remove("hidden");
 
   const isOwner = currentUser.role === "owner";
-  const canManage = currentUser.role === "owner" || currentUser.canManageSchedule;
+  const canManage = canManageSchedule();
 
   document.getElementById("upgradeButton").classList.toggle("hidden", !isOwner);
   document.getElementById("ownerLocationTools").classList.toggle("hidden", !isOwner);
@@ -108,7 +115,15 @@ async function loadLocations() {
   selectedLocationId = select.value || data.locations[0]?.id || null;
 
   if (selectedLocationId) {
-    await Promise.all([loadSchedule(), loadEmployees(), loadShifts()]);
+    await loadSelectedLocationData();
+  }
+}
+
+async function loadSelectedLocationData() {
+  await loadSchedule();
+
+  if (canManageSchedule()) {
+    await Promise.all([loadEmployees(), loadShifts()]);
   }
 }
 
@@ -207,7 +222,7 @@ async function generateSchedule() {
 }
 
 async function loadEmployees() {
-  if (!selectedLocationId) return;
+  if (!selectedLocationId || !canManageSchedule()) return;
 
   const data = await api(
     `/employees?locationId=${selectedLocationId}&page=${employeePage}&pageSize=25`
@@ -227,7 +242,7 @@ async function loadEmployees() {
 }
 
 async function loadShifts() {
-  if (!selectedLocationId) return;
+  if (!selectedLocationId || !canManageSchedule()) return;
 
   const filter = document.getElementById("shiftFilter").value || "";
 
@@ -251,6 +266,11 @@ async function loadShifts() {
 }
 
 async function openPlanDialog() {
+  if (!currentUser || currentUser.role !== "owner") {
+    alert("Only the owner can change the plan.");
+    return;
+  }
+
   const dialog = document.getElementById("planDialog");
   const data = await api("/plans");
 
@@ -274,10 +294,12 @@ function printSchedule() {
 
 document.getElementById("signupButton").addEventListener("click", () => signup().catch((err) => alert(err.message)));
 document.getElementById("loginButton").addEventListener("click", () => login().catch((err) => alert(err.message)));
+
 document.getElementById("locationSelect").addEventListener("change", async (event) => {
   selectedLocationId = event.target.value;
-  await Promise.all([loadSchedule(), loadEmployees(), loadShifts()]);
+  await loadSelectedLocationData();
 });
+
 document.getElementById("addLocationButton").addEventListener("click", () => addLocation().catch((err) => alert(err.message)));
 document.getElementById("generateScheduleButton").addEventListener("click", () => generateSchedule().catch((err) => alert(err.message)));
 document.getElementById("printScheduleButton").addEventListener("click", printSchedule);
