@@ -1,11 +1,29 @@
 const API_URL = "http://localhost:3001";
 
 let accessToken = null;
+let currentUser = null;
+let selectedLocationId = null;
+let currentWeekStart = startOfWeek(new Date());
+let employeePage = 1;
+let shiftPage = 1;
 
 const message = document.getElementById("message");
 
 function showMessage(text) {
-  message.textContent = text;
+  if (message) message.textContent = text;
+}
+
+function startOfWeek(date) {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = copy.getDate() - day + (day === 0 ? -6 : 1);
+  copy.setDate(diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function dateOnly(date) {
+  return date.toISOString().slice(0, 10);
 }
 
 async function api(path, options = {}) {
@@ -22,60 +40,294 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 402) openPlanDialog();
     throw new Error(data.error || "Request failed");
   }
 
   return data;
 }
 
-document.getElementById("signupButton").addEventListener("click", async () => {
-  try {
-    const email = document.getElementById("signupEmail").value;
-    const password = document.getElementById("signupPassword").value;
+function applyRoleUI() {
+  document.getElementById("authView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
 
-    const data = await api("/auth/signup", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
+  const isOwner = currentUser.role === "owner";
+  const canManage = currentUser.role === "owner" || currentUser.canManageSchedule;
 
-    showMessage(data.message);
-  } catch (err) {
-    showMessage(err.message);
+  document.getElementById("upgradeButton").classList.toggle("hidden", !isOwner);
+  document.getElementById("ownerLocationTools").classList.toggle("hidden", !isOwner);
+
+  document.querySelectorAll(".managerOnly").forEach((el) => {
+    el.classList.toggle("hidden", !canManage);
+  });
+
+  document.getElementById("generateScheduleButton").classList.toggle("hidden", !canManage);
+}
+
+async function signup() {
+  const body = {
+    firstName: document.getElementById("signupFirstName").value,
+    lastName: document.getElementById("signupLastName").value,
+    businessName: document.getElementById("signupBusinessName").value,
+    email: document.getElementById("signupEmail").value,
+    username: document.getElementById("signupUsername").value,
+    password: document.getElementById("signupPassword").value
+  };
+
+  const data = await api("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+
+  alert(`Account created. Your login is: ${data.fullLogin}`);
+}
+
+async function login() {
+  const data = await api("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      login: document.getElementById("loginValue").value,
+      password: document.getElementById("loginPassword").value
+    })
+  });
+
+  accessToken = data.accessToken;
+  currentUser = data.user;
+  applyRoleUI();
+  await loadLocations();
+}
+
+async function loadLocations() {
+  const data = await api("/locations");
+  const select = document.getElementById("locationSelect");
+
+  select.innerHTML = data.locations
+    .map((location) => `<option value="${location.id}">${location.name}</option>`)
+    .join("");
+
+  selectedLocationId = select.value || data.locations[0]?.id || null;
+
+  if (selectedLocationId) {
+    await Promise.all([loadSchedule(), loadEmployees(), loadShifts()]);
   }
+}
+
+async function addLocation() {
+  await api("/locations", {
+    method: "POST",
+    body: JSON.stringify({
+      name: document.getElementById("newLocationName").value
+    })
+  });
+
+  await loadLocations();
+}
+
+async function loadSchedule() {
+  document.getElementById("weekLabel").textContent = dateOnly(currentWeekStart);
+
+  const data = await api(
+    `/schedules?locationId=${selectedLocationId}&weekStart=${dateOnly(currentWeekStart)}`
+  );
+
+  renderSchedule(data.cells || []);
+}
+
+function renderSchedule(cells) {
+  const table = document.getElementById("scheduleTable");
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  const grouped = new Map();
+
+  for (const cell of cells) {
+    if (!grouped.has(cell.employee_id)) {
+      grouped.set(cell.employee_id, {
+        priority: cell.priority,
+        employee: `${cell.first_name} ${cell.last_name}`,
+        title: cell.title,
+        days: {}
+      });
+    }
+
+    grouped.get(cell.employee_id).days[cell.work_date] = cell;
+  }
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Priority</th>
+        <th>Employee</th>
+        <th>Title</th>
+        ${days.map((day) => `<th>${day}</th>`).join("")}
+      </tr>
+    </thead>
+    <tbody>
+      ${Array.from(grouped.values())
+        .map((row, index) => {
+          const dayCells = days.map((_, dayIndex) => {
+            const workDate = dateOnly(new Date(currentWeekStart.getTime() + dayIndex * 86400000));
+            const cell = row.days[workDate];
+
+            if (!cell) return "<td></td>";
+
+            const className = cell.is_orientation ? "orientationCell" : "";
+            const text = cell.is_orientation
+              ? "Orientation"
+              : cell.start_time && cell.end_time
+                ? `${cell.start_time} - ${cell.end_time}`
+                : "";
+
+            return `<td class="${className}">${text}</td>`;
+          });
+
+          return `
+            <tr class="${index % 2 === 1 ? "strongRow" : ""}">
+              <td>${row.priority}</td>
+              <td>${row.employee}</td>
+              <td>${row.title}</td>
+              ${dayCells.join("")}
+            </tr>
+          `;
+        })
+        .join("")}
+    </tbody>
+  `;
+}
+
+async function generateSchedule() {
+  await api("/schedules/generate", {
+    method: "POST",
+    body: JSON.stringify({
+      locationId: selectedLocationId,
+      weekStart: dateOnly(currentWeekStart)
+    })
+  });
+
+  await loadSchedule();
+}
+
+async function loadEmployees() {
+  if (!selectedLocationId) return;
+
+  const data = await api(
+    `/employees?locationId=${selectedLocationId}&page=${employeePage}&pageSize=25`
+  );
+
+  document.getElementById("employeeList").innerHTML = data.employees
+    .map(
+      (employee) => `
+        <div class="listRow">
+          <strong>${employee.priority}. ${employee.first_name} ${employee.last_name}</strong>
+          <span>${employee.title}</span>
+          <span>${employee.full_login}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+async function loadShifts() {
+  if (!selectedLocationId) return;
+
+  const filter = document.getElementById("shiftFilter").value || "";
+
+  const data = await api(
+    `/shifts?locationId=${selectedLocationId}&page=${shiftPage}&pageSize=10&filter=${encodeURIComponent(filter)}`
+  );
+
+  document.getElementById("shiftList").innerHTML = data.shifts
+    .map(
+      (shift) => `
+        <div class="listRow">
+          <strong>${shift.name}</strong>
+          <span>${shift.days
+            .filter((day) => day.enabled)
+            .map((day) => `${day.dayOfWeek}: ${day.startTime}-${day.endTime}`)
+            .join(", ")}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+async function openPlanDialog() {
+  const dialog = document.getElementById("planDialog");
+  const data = await api("/plans");
+
+  document.getElementById("planList").innerHTML = data.plans
+    .map(
+      (plan) => `
+        <button class="planButton" data-plan="${plan.code}">
+          ${plan.name} - $${(plan.monthly_price_cents / 100).toFixed(2)}
+          ${plan.employee_limit === null ? "Unlimited employees" : `${plan.employee_limit} employees`}
+        </button>
+      `
+    )
+    .join("");
+
+  dialog.showModal();
+}
+
+function printSchedule() {
+  window.print();
+}
+
+document.getElementById("signupButton").addEventListener("click", () => signup().catch((err) => alert(err.message)));
+document.getElementById("loginButton").addEventListener("click", () => login().catch((err) => alert(err.message)));
+document.getElementById("locationSelect").addEventListener("change", async (event) => {
+  selectedLocationId = event.target.value;
+  await Promise.all([loadSchedule(), loadEmployees(), loadShifts()]);
+});
+document.getElementById("addLocationButton").addEventListener("click", () => addLocation().catch((err) => alert(err.message)));
+document.getElementById("generateScheduleButton").addEventListener("click", () => generateSchedule().catch((err) => alert(err.message)));
+document.getElementById("printScheduleButton").addEventListener("click", printSchedule);
+document.getElementById("upgradeButton").addEventListener("click", () => openPlanDialog().catch((err) => alert(err.message)));
+document.getElementById("closePlanDialog").addEventListener("click", () => document.getElementById("planDialog").close());
+
+document.getElementById("prevWeekButton").addEventListener("click", async () => {
+  currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+  await loadSchedule();
 });
 
-document.getElementById("loginButton").addEventListener("click", async () => {
-  try {
-    const email = document.getElementById("loginEmail").value;
-    const password = document.getElementById("loginPassword").value;
-
-    const data = await api("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-
-    accessToken = data.accessToken;
-    showMessage("Logged in successfully.");
-  } catch (err) {
-    showMessage(err.message);
-  }
+document.getElementById("nextWeekButton").addEventListener("click", async () => {
+  currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  await loadSchedule();
 });
 
-document.getElementById("meButton").addEventListener("click", async () => {
-  try {
-    const data = await api("/auth/me");
-    showMessage(`Logged in as ${data.user.email} with role ${data.user.role}`);
-  } catch (err) {
-    showMessage(err.message);
-  }
+document.getElementById("prevEmployeePage").addEventListener("click", async () => {
+  employeePage = Math.max(1, employeePage - 1);
+  await loadEmployees();
 });
 
-document.getElementById("logoutButton").addEventListener("click", async () => {
-  try {
-    await api("/auth/logout", { method: "POST" });
-    accessToken = null;
-    showMessage("Logged out.");
-  } catch (err) {
-    showMessage(err.message);
-  }
+document.getElementById("nextEmployeePage").addEventListener("click", async () => {
+  employeePage += 1;
+  await loadEmployees();
+});
+
+document.getElementById("prevShiftPage").addEventListener("click", async () => {
+  shiftPage = Math.max(1, shiftPage - 1);
+  await loadShifts();
+});
+
+document.getElementById("nextShiftPage").addEventListener("click", async () => {
+  shiftPage += 1;
+  await loadShifts();
+});
+
+document.getElementById("shiftFilter").addEventListener("input", () => {
+  shiftPage = 1;
+  loadShifts().catch((err) => alert(err.message));
+});
+
+document.getElementById("planList").addEventListener("click", async (event) => {
+  const button = event.target.closest(".planButton");
+  if (!button) return;
+
+  await api("/plans/change", {
+    method: "POST",
+    body: JSON.stringify({ planCode: button.dataset.plan })
+  });
+
+  document.getElementById("planDialog").close();
+  alert("Plan updated immediately.");
 });
