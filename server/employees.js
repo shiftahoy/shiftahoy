@@ -200,7 +200,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
   }
 
   const businessSlug = businessResult.rows[0].business_slug;
-  const fullLogin = `${normalizedUsername}.${businessSlug}`;
+  const fullLogin = `${normalizedUsername}/${businessSlug}`;
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
   const managerFlag = Boolean(canManageSchedule);
   const role = managerFlag ? "manager" : "employee";
