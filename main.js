@@ -4,8 +4,12 @@ const path = require("node:path");
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1280,
+    height: 820,
+    minWidth: 980,
+    minHeight: 680,
+    backgroundColor: "#ffffff",
+    title: "Shift Ahoy",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -20,7 +24,7 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-    if (app.isPackaged) {
+  if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
   }
 
