@@ -27,17 +27,22 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "250kb" }));
 app.use(cookieParser());
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 20,
   standardHeaders: "draft-8",
   legacyHeaders: false
 });
 
 app.use("/auth", authLimiter, authRoutes);
+app.use("/plans", planRoutes);
+app.use("/locations", locationRoutes);
+app.use("/employees", employeeRoutes);
+app.use("/shifts", shiftRoutes);
+app.use("/schedules", scheduleRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
@@ -51,6 +56,11 @@ app.get(
     res.json({ message: "You have manager/owner permission." });
   }
 );
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: "Server error." });
+});
 
 const port = Number(process.env.PORT || 3001);
 
