@@ -330,11 +330,16 @@ p {
   font-size: 0.85rem;
 }
 
+/* No wrapper background behind the individual auth cards */
 .authCards {
   display: grid;
   gap: 18px;
   height: 100%;
   align-content: stretch;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 .card {
