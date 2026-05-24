@@ -342,11 +342,11 @@ p {
 
 .authCards {
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto 1fr;
   gap: 10px;
   height: 100%;
   min-height: 0;
-  align-content: start;
+  align-content: stretch;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -379,8 +379,8 @@ p {
 }
 
 .compactCard {
-  align-self: start;
-  gap: 6px;
+  align-self: stretch;
+  align-content: start;
   padding-bottom: 12px !important;
 }
 
