@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS businesses (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+CREATE UNIQUE INDEX IF NOT EXISTS businesses_business_slug_unique
+ON businesses (business_slug);
+
 CREATE TABLE IF NOT EXISTS plans (
   code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -56,6 +61,9 @@ ON users (business_id, username);
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique
 ON users (lower(email))
 WHERE email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_full_login_unique
+ON users (full_login);
 
 CREATE TABLE IF NOT EXISTS locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
