@@ -52,9 +52,9 @@
             </div>
 
             <p class="eyebrow">Blue-water clarity</p>
-            <h2>Build schedules without the spreadsheet hassle.</h2>
+            <h2>Build weekly schedules without the spreadsheet hassle.</h2>
             <p>
-              Navigate schedules from one clean experience.
+              Manage locations, employees, shifts, and generated schedules from one clean desktop workspace.
             </p>
 
             <div class="metricGrid" aria-label="Product highlights">
@@ -68,7 +68,7 @@
               </div>
               <div>
                 <strong>PRINT</strong>
-                <span>ready-to-print schedules</span>
+                <span>completed schedules</span>
               </div>
             </div>
           </section>
@@ -83,15 +83,111 @@
                 </div>
               </div>
 
+              <div id="signupFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+
               <div class="formGrid twoColumn">
-                <input id="signupFirstName" autocomplete="given-name" placeholder="First Name" required />
-                <input id="signupLastName" autocomplete="family-name" placeholder="Last Name" required />
+                <div class="fieldGroup" data-field="signupFirstName">
+                  <label class="fieldLabel" for="signupFirstName">
+                    First Name
+                    <span id="signupFirstNameStatus" class="fieldStatus">Required</span>
+                  </label>
+                  <input
+                    id="signupFirstName"
+                    autocomplete="given-name"
+                    placeholder="First Name"
+                    aria-describedby="signupFirstNameHelp"
+                    required
+                  />
+                  <small id="signupFirstNameHelp" class="fieldHelp">Enter your first name.</small>
+                </div>
+
+                <div class="fieldGroup" data-field="signupLastName">
+                  <label class="fieldLabel" for="signupLastName">
+                    Last Name
+                    <span id="signupLastNameStatus" class="fieldStatus">Required</span>
+                  </label>
+                  <input
+                    id="signupLastName"
+                    autocomplete="family-name"
+                    placeholder="Last Name"
+                    aria-describedby="signupLastNameHelp"
+                    required
+                  />
+                  <small id="signupLastNameHelp" class="fieldHelp">Enter your last name.</small>
+                </div>
               </div>
 
-              <input id="signupBusinessName" autocomplete="organization" placeholder="Business" required />
-              <input id="signupEmail" type="email" autocomplete="email" placeholder="Email" required />
-              <input id="signupUsername" autocomplete="username" placeholder="Username" required />
-              <input id="signupPassword" type="password" autocomplete="new-password" placeholder="Password" required />
+              <div class="fieldGroup" data-field="signupBusinessName">
+                <label class="fieldLabel" for="signupBusinessName">
+                  Business
+                  <span id="signupBusinessNameStatus" class="fieldStatus">Required</span>
+                </label>
+                <input
+                  id="signupBusinessName"
+                  autocomplete="organization"
+                  placeholder="Business"
+                  aria-describedby="signupBusinessNameHelp"
+                  required
+                />
+                <small id="signupBusinessNameHelp" class="fieldHelp">
+                  This becomes the business part of your login.
+                </small>
+              </div>
+
+              <div class="fieldGroup" data-field="signupEmail">
+                <label class="fieldLabel" for="signupEmail">
+                  Email
+                  <span id="signupEmailStatus" class="fieldStatus">Required</span>
+                </label>
+                <input
+                  id="signupEmail"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="Email"
+                  aria-describedby="signupEmailHelp"
+                  required
+                />
+                <small id="signupEmailHelp" class="fieldHelp">Use a valid email address.</small>
+              </div>
+
+              <div class="fieldGroup" data-field="signupUsername">
+                <label class="fieldLabel" for="signupUsername">
+                  Username
+                  <span id="signupUsernameStatus" class="fieldStatus">3–30 letters or numbers</span>
+                </label>
+                <input
+                  id="signupUsername"
+                  autocomplete="username"
+                  placeholder="Username"
+                  maxlength="30"
+                  pattern="[a-z0-9]{3,30}"
+                  aria-describedby="signupUsernameHelp"
+                  required
+                />
+                <small id="signupUsernameHelp" class="fieldHelp">
+                  Lowercase letters and numbers only. No spaces or symbols.
+                </small>
+              </div>
+
+              <div class="fieldGroup" data-field="signupPassword">
+                <label class="fieldLabel" for="signupPassword">
+                  Password
+                  <span id="signupPasswordStatus" class="fieldStatus">12–128 characters</span>
+                </label>
+                <input
+                  id="signupPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="Password"
+                  minlength="12"
+                  maxlength="128"
+                  aria-describedby="signupPasswordHelp"
+                  required
+                />
+                <small id="signupPasswordHelp" class="fieldHelp">
+                  Use 12–128 characters. Spaces and symbols are allowed.
+                </small>
+              </div>
 
               <button id="signupButton" class="button primary">Create Account</button>
             </section>
@@ -105,8 +201,17 @@
                 </div>
               </div>
 
-              <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
-              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
+              <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+
+              <div class="fieldGroup">
+                <label class="fieldLabel" for="loginValue">Login</label>
+                <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
+              </div>
+
+              <div class="fieldGroup">
+                <label class="fieldLabel" for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
+              </div>
 
               <button id="loginButton" class="button primary">Login</button>
             </section>
