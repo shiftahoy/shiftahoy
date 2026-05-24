@@ -1,3 +1,117 @@
-/* styles.css */
+* {
+  box-sizing: border-box;
+}
 
-/* Add styles here to customize the appearance of your app */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #17202a;
+}
+
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar,
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.grid.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: white;
+  border: 1px solid #d8dee4;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+input,
+select,
+button {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.hidden {
+  display: none !important;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+th,
+td {
+  border: 1px solid #cfd7df;
+  padding: 8px;
+  text-align: left;
+}
+
+.strongRow td {
+  border-bottom: 3px solid #17202a;
+}
+
+.orientationCell {
+  background: #ffe8a3;
+  font-weight: 700;
+}
+
+.listRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  border-bottom: 1px solid #d8dee4;
+  padding: 10px 0;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .topbar,
+  #authView,
+  #locationsPanel,
+  #shiftsPanel,
+  #employeesPanel,
+  button,
+  input,
+  select,
+  dialog {
+    display: none !important;
+  }
+
+  .card {
+    box-shadow: none;
+    border: none;
+  }
+
+  #schedulePanel {
+    display: block !important;
+  }
+
+  table {
+    font-size: 11px;
+  }
+}
