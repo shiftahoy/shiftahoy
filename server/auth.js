@@ -31,6 +31,32 @@ function normalizeBusinessSlug(businessName) {
     .slice(0, 40);
 }
 
+async function createUniqueBusinessSlug(client, businessName) {
+  const baseSlug = normalizeBusinessSlug(businessName);
+
+  if (!baseSlug) {
+    return "";
+  }
+
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const candidate = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+
+    const existing = await client.query(
+      `SELECT id
+       FROM businesses
+       WHERE business_slug = $1
+       LIMIT 1`,
+      [candidate]
+    );
+
+    if (existing.rows.length === 0) {
+      return candidate;
+    }
+  }
+
+  return `${baseSlug}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
 function createAccessToken(user) {
   return jwt.sign(
     {
@@ -67,28 +93,46 @@ function setRefreshCookie(res, token) {
   });
 }
 
+function publicUser(user) {
+  return {
+    id: user.id,
+    businessId: user.business_id,
+    email: user.email,
+    username: user.username,
+    fullLogin: user.full_login,
+    role: user.role,
+    canManageSchedule: user.can_manage_schedule,
+    emailVerified: user.email_verified,
+    firstName: user.first_name,
+    lastName: user.last_name
+  };
+}
+
 router.post("/signup", async (req, res) => {
   const { firstName, lastName, businessName, email, username, password } = req.body;
 
-  if (!firstName || !lastName || !businessName || !email || !username || !password || password.length < 12) {
+  if (
+    !firstName ||
+    !lastName ||
+    !businessName ||
+    !email ||
+    !username ||
+    !password ||
+    password.length < 12
+  ) {
     return res.status(400).json({
-      error: "First name, last name, business name, email, username, and a 12+ character password are required."
+      error:
+        "First name, last name, business name, email, username, and a 12+ character password are required."
     });
   }
 
-  const businessSlug = normalizeBusinessSlug(businessName);
   const normalizedUsername = normalizeUsername(username);
-
-  if (!businessSlug) {
-    return res.status(400).json({ error: "Business name must contain letters or numbers." });
-  }
 
   if (!normalizedUsername) {
     return res.status(400).json({ error: "Username must contain letters or numbers." });
   }
 
-  const normalizedEmail = email.toLowerCase().trim();
-  const fullLogin = `${normalizedUsername}.${businessSlug}`;
+  const normalizedEmail = String(email).toLowerCase().trim();
 
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id
@@ -98,6 +142,17 @@ router.post("/signup", async (req, res) => {
 
   try {
     await client.query("BEGIN");
+
+    const businessSlug = await createUniqueBusinessSlug(client, businessName);
+
+    if (!businessSlug) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: "Business name must contain letters or numbers."
+      });
+    }
+
+    const fullLogin = `${normalizedUsername}.${businessSlug}`;
 
     const businessResult = await client.query(
       `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
@@ -110,11 +165,28 @@ router.post("/signup", async (req, res) => {
 
     const userResult = await client.query(
       `INSERT INTO users (
-         business_id, first_name, last_name, email, username, full_login,
-         password_hash, role, can_manage_schedule
+         business_id,
+         first_name,
+         last_name,
+         email,
+         username,
+         full_login,
+         password_hash,
+         role,
+         can_manage_schedule
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', true)
-       RETURNING id, business_id, email, username, full_login, role, can_manage_schedule, email_verified`,
+       RETURNING
+         id,
+         business_id,
+         first_name,
+         last_name,
+         email,
+         username,
+         full_login,
+         role,
+         can_manage_schedule,
+         email_verified`,
       [
         business.id,
         firstName.trim(),
@@ -155,14 +227,17 @@ router.post("/signup", async (req, res) => {
 
     res.status(201).json({
       message: "Owner account created. Check your email for the verification link.",
-      fullLogin
+      fullLogin,
+      businessName: business.business_name,
+      businessSlug: business.business_slug
     });
   } catch (err) {
     await client.query("ROLLBACK");
 
     if (err.code === "23505") {
       return res.status(409).json({
-        error: "That business name, email, or username is already taken."
+        error:
+          "That email, login, or business login slug was just taken. Please try signing up again."
       });
     }
 
@@ -197,9 +272,13 @@ router.get("/verify-email", async (req, res) => {
 
   const row = result.rows[0];
 
-  await pool.query(`UPDATE users SET email_verified = true WHERE id = $1`, [
-    row.user_id
-  ]);
+  await pool.query(
+    `UPDATE users
+     SET email_verified = true,
+         updated_at = now()
+     WHERE id = $1`,
+    [row.user_id]
+  );
 
   await pool.query(`DELETE FROM email_verification_tokens WHERE id = $1`, [
     row.id
@@ -215,10 +294,21 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Login and password are required." });
   }
 
-  const normalizedLogin = login.toLowerCase().trim();
+  const normalizedLogin = String(login).toLowerCase().trim();
 
   const result = await pool.query(
-    `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
+    `SELECT
+       id,
+       business_id,
+       first_name,
+       last_name,
+       email,
+       username,
+       full_login,
+       password_hash,
+       role,
+       can_manage_schedule,
+       email_verified
      FROM users
      WHERE active = true
        AND (full_login = $1 OR lower(email) = $1)
@@ -251,16 +341,7 @@ router.post("/login", async (req, res) => {
 
   res.json({
     accessToken,
-    user: {
-      id: user.id,
-      businessId: user.business_id,
-      email: user.email,
-      username: user.username,
-      fullLogin: user.full_login,
-      role: user.role,
-      canManageSchedule: user.can_manage_schedule,
-      emailVerified: user.email_verified
-    }
+    user: publicUser(user)
   });
 });
 
@@ -295,7 +376,18 @@ router.post("/refresh", async (req, res) => {
   }
 
   const userResult = await pool.query(
-    `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
+    `SELECT
+       id,
+       business_id,
+       first_name,
+       last_name,
+       email,
+       username,
+       full_login,
+       password_hash,
+       role,
+       can_manage_schedule,
+       email_verified
      FROM users
      WHERE id = $1
        AND active = true`,
@@ -325,16 +417,7 @@ router.post("/refresh", async (req, res) => {
 
   res.json({
     accessToken: createAccessToken(user),
-    user: {
-      id: user.id,
-      businessId: user.business_id,
-      email: user.email,
-      username: user.username,
-      fullLogin: user.full_login,
-      role: user.role,
-      canManageSchedule: user.can_manage_schedule,
-      emailVerified: user.email_verified
-    }
+    user: publicUser(user)
   });
 });
 
@@ -354,7 +437,7 @@ router.post("/forgot-password", async (req, res) => {
      WHERE lower(email) = $1
        AND active = true
      LIMIT 1`,
-    [email.toLowerCase().trim()]
+    [String(email).toLowerCase().trim()]
   );
 
   if (result.rows.length === 0) {
@@ -412,14 +495,20 @@ router.post("/reset-password", async (req, res) => {
     type: argon2.argon2id
   });
 
-  await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
-    passwordHash,
-    row.user_id
-  ]);
+  await pool.query(
+    `UPDATE users
+     SET password_hash = $1,
+         updated_at = now()
+     WHERE id = $2`,
+    [passwordHash, row.user_id]
+  );
 
-  await pool.query(`UPDATE password_reset_tokens SET used_at = now() WHERE id = $1`, [
-    row.id
-  ]);
+  await pool.query(
+    `UPDATE password_reset_tokens
+     SET used_at = now()
+     WHERE id = $1`,
+    [row.id]
+  );
 
   await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [
     row.user_id
