@@ -33,7 +33,8 @@
       "main.js",
       "preload.js",
       "renderer.js",
-      "styles.css"
+      "styles.css",
+      "assets/**/*"
     ],
     "publish": [
       {
