@@ -281,8 +281,8 @@ p {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 142px;
-  height: 142px;
+  width: 284px;
+  height: 284px;
   margin-bottom: 14px;
   border-radius: 0;
   background: transparent;
@@ -290,8 +290,8 @@ p {
 }
 
 .heroLogo {
-  width: 134px;
-  height: 134px;
+  width: 268px;
+  height: 268px;
   object-fit: contain;
 }
 
@@ -834,14 +834,14 @@ tbody tr:hover td {
   }
 
   .heroLogoWrap {
-    width: 112px;
-    height: 112px;
+    width: 224px;
+    height: 224px;
     margin-bottom: 10px;
   }
 
   .heroLogo {
-    width: 106px;
-    height: 106px;
+    width: 212px;
+    height: 212px;
   }
 
   .heroPanel h2 {
