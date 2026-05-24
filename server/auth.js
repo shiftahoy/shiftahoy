@@ -16,6 +16,21 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function normalizeUsername(username) {
+  return String(username || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "");
+}
+
+function normalizeBusinessSlug(businessName) {
+  return String(businessName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 40);
+}
+
 function createAccessToken(user) {
   return jwt.sign(
     {
@@ -61,17 +76,18 @@ router.post("/signup", async (req, res) => {
     });
   }
 
-  const businessSlug = businessName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "")
-    .slice(0, 40);
+  const businessSlug = normalizeBusinessSlug(businessName);
+  const normalizedUsername = normalizeUsername(username);
 
   if (!businessSlug) {
     return res.status(400).json({ error: "Business name must contain letters or numbers." });
   }
 
-  const normalizedUsername = username.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "");
+  if (!normalizedUsername) {
+    return res.status(400).json({ error: "Username must contain letters or numbers." });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
   const fullLogin = `${normalizedUsername}.${businessSlug}`;
 
   const passwordHash = await argon2.hash(password, {
@@ -103,7 +119,7 @@ router.post("/signup", async (req, res) => {
         business.id,
         firstName.trim(),
         lastName.trim(),
-        email.toLowerCase().trim(),
+        normalizedEmail,
         normalizedUsername,
         fullLogin,
         passwordHash
@@ -199,12 +215,15 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Login and password are required." });
   }
 
+  const normalizedLogin = login.toLowerCase().trim();
+
   const result = await pool.query(
     `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
      FROM users
-     WHERE full_login = $1 OR email = $1
+     WHERE active = true
+       AND (full_login = $1 OR lower(email) = $1)
      LIMIT 1`,
-    [login.toLowerCase().trim()]
+    [normalizedLogin]
   );
 
   if (result.rows.length === 0) {
@@ -278,7 +297,8 @@ router.post("/refresh", async (req, res) => {
   const userResult = await pool.query(
     `SELECT id, business_id, email, username, full_login, password_hash, role, can_manage_schedule, email_verified
      FROM users
-     WHERE id = $1`,
+     WHERE id = $1
+       AND active = true`,
     [payload.id]
   );
 
@@ -304,7 +324,17 @@ router.post("/refresh", async (req, res) => {
   setRefreshCookie(res, newRefreshToken);
 
   res.json({
-    accessToken: createAccessToken(user)
+    accessToken: createAccessToken(user),
+    user: {
+      id: user.id,
+      businessId: user.business_id,
+      email: user.email,
+      username: user.username,
+      fullLogin: user.full_login,
+      role: user.role,
+      canManageSchedule: user.can_manage_schedule,
+      emailVerified: user.email_verified
+    }
   });
 });
 
@@ -314,9 +344,17 @@ router.post("/forgot-password", async (req, res) => {
   const genericMessage =
     "If that email exists, a password reset link has been sent.";
 
+  if (!email) {
+    return res.json({ message: genericMessage });
+  }
+
   const result = await pool.query(
-    `SELECT id, email FROM users WHERE email = $1`,
-    [email.toLowerCase()]
+    `SELECT id, email
+     FROM users
+     WHERE lower(email) = $1
+       AND active = true
+     LIMIT 1`,
+    [email.toLowerCase().trim()]
   );
 
   if (result.rows.length === 0) {
