@@ -9,6 +9,12 @@
   --surface: #ffffff;
   --surface-soft: #f7fbff;
   --page-bg: #e0edf9;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-border: #fecaca;
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --success-border: #bbf7d0;
   --shadow: 0 18px 45px rgba(0, 93, 170, 0.12);
   --radius: 22px;
 }
@@ -47,7 +53,6 @@ button {
   background: var(--page-bg);
 }
 
-/* Hide sidebar before login/signup */
 .appShell:has(#authView:not(.hidden)) {
   grid-template-columns: 1fr;
 }
@@ -56,7 +61,6 @@ button {
   display: none;
 }
 
-/* Logged-in sidebar stays white/blue */
 .sidebar {
   position: sticky;
   top: 0;
@@ -79,7 +83,6 @@ button {
   text-decoration: none;
 }
 
-/* Transparent logo area in logged-in sidebar */
 .brandLogoWrap {
   display: grid;
   place-items: center;
@@ -227,7 +230,6 @@ p {
   backdrop-filter: none;
 }
 
-/* Strong blue hero */
 .heroPanel {
   display: flex;
   flex-direction: column;
@@ -273,7 +275,6 @@ p {
   z-index: 1;
 }
 
-/* Large auth-screen logo with transparent background */
 .heroLogoWrap {
   position: relative;
   z-index: 1;
@@ -337,13 +338,6 @@ p {
   font-size: 0.85rem;
 }
 
-/*
-  Right auth side:
-  - transparent background
-  - first card top aligns with blue panel top
-  - login card top remains below first card
-  - login card stretches so bottom aligns with blue panel bottom
-*/
 .authCards {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -357,7 +351,6 @@ p {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
-/* Individual auth cards remain white, with square left corners */
 #authView .card {
   background: #ffffff;
   border: 1px solid rgba(0, 93, 170, 0.12);
@@ -415,6 +408,47 @@ p {
   gap: 12px;
 }
 
+.fieldGroup {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.fieldStatus {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.fieldHelp {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.fieldGroup.is-invalid .fieldStatus,
+.fieldGroup.is-invalid .fieldHelp {
+  color: var(--danger);
+}
+
+.fieldGroup.is-valid .fieldStatus {
+  color: var(--success);
+}
+
+.fieldGroup.is-valid .fieldHelp {
+  color: var(--muted);
+}
+
 input,
 select {
   width: 100%;
@@ -432,6 +466,48 @@ input:focus,
 select:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 4px rgba(0, 93, 170, 0.13);
+}
+
+.fieldGroup.is-invalid input,
+.inputInvalid {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.fieldGroup.is-invalid input:focus,
+.inputInvalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+}
+
+.fieldGroup.is-valid input {
+  border-color: var(--success);
+  background: #ffffff;
+}
+
+.fieldGroup.is-valid input:focus {
+  border-color: var(--success);
+  box-shadow: 0 0 0 4px rgba(21, 128, 61, 0.12);
+}
+
+.formNotice {
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.formNotice.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+}
+
+.formNotice.success {
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid var(--success-border);
 }
 
 .button {
@@ -804,6 +880,12 @@ tbody tr:hover td {
 
   .listRow {
     grid-template-columns: 1fr;
+  }
+
+  .fieldLabel {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 }
 
