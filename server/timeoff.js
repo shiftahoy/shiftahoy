@@ -69,11 +69,21 @@ async function loadSettings(businessId) {
     [businessId]
   );
 
+  const holidayResult = await pool.query(
+    `SELECT id, holiday_date, name
+     FROM time_off_holiday_dates
+     WHERE business_id = $1
+       AND holiday_date >= CURRENT_DATE
+     ORDER BY holiday_date ASC`,
+    [businessId]
+  );
+
   return {
     settings: {
       requestsEnabled: settingsResult.rows[0]?.requests_enabled !== false
     },
-    blockedDates: blockedResult.rows
+    blockedDates: blockedResult.rows,
+    holidayDates: holidayResult.rows
   };
 }
 
@@ -265,6 +275,84 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to remove blocked date." });
+  }
+});
+
+
+router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
+  const holidayDate = normalizeDate(req.body.holidayDate);
+  const name = cleanText(req.body.name);
+  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
+
+  if (!holidayDate) {
+    return res.status(400).json({ error: "Holiday date is required." });
+  }
+
+  if (!name) {
+    return res.status(400).json({ error: "Holiday name is required." });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO time_off_holiday_dates (business_id, holiday_date, name)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (business_id, holiday_date)
+       DO UPDATE SET name = EXCLUDED.name
+       RETURNING id, holiday_date, name`,
+      [req.user.businessId, holidayDate, name]
+    );
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: auditLocationId,
+      action: "Holiday date saved",
+      entityType: "time_off_holiday_date",
+      entityId: result.rows[0]?.id,
+      details: `${holidayDate} — ${name}`
+    });
+
+    res.status(201).json(await loadSettings(req.user.businessId));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to add holiday date." });
+  }
+});
+
+router.post("/holidays/:id/delete", requireAuth, requireOwner, async (req, res) => {
+  const { id } = req.params;
+  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
+
+  try {
+    const existing = await pool.query(
+      `SELECT holiday_date, name
+       FROM time_off_holiday_dates
+       WHERE id = $1
+         AND business_id = $2`,
+      [id, req.user.businessId]
+    );
+
+    await pool.query(
+      `DELETE FROM time_off_holiday_dates
+       WHERE id = $1
+         AND business_id = $2`,
+      [id, req.user.businessId]
+    );
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: auditLocationId,
+      action: "Holiday date removed",
+      entityType: "time_off_holiday_date",
+      entityId: id,
+      details: existing.rows[0] ? `${String(existing.rows[0].holiday_date).slice(0, 10)} — ${existing.rows[0].name || "Holiday"}` : "Holiday date removed."
+    });
+
+    res.json(await loadSettings(req.user.businessId));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to remove holiday date." });
   }
 });
 
