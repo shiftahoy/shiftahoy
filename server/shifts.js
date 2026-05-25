@@ -132,14 +132,29 @@ async function loadShiftWithDays(clientOrPool, shiftId, businessId) {
 }
 
 router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
-  const { locationId, page = 1, pageSize = 100, filter = "" } = req.query;
+  const { locationId, page = 1, pageSize = 5, filter = "" } = req.query;
 
   try {
     await assertLocationAccess(req.user, locationId);
 
     const safePage = Math.max(1, Number(page) || 1);
-    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 100));
+    const safePageSize = Math.min(25, Math.max(1, Number(pageSize) || 5));
     const offset = (safePage - 1) * safePageSize;
+    const search = `%${filter}%`;
+
+    const countResult = await pool.query(
+      `SELECT count(*)::int AS total
+       FROM shifts s
+       WHERE s.business_id = $1
+         AND s.location_id = $2
+         AND s.name ILIKE $3`,
+      [req.user.businessId, locationId, search]
+    );
+
+    const total = countResult.rows[0]?.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const currentPage = Math.min(safePage, totalPages);
+    const currentOffset = (currentPage - 1) * safePageSize;
 
     const result = await pool.query(
       `SELECT
@@ -167,10 +182,16 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
        GROUP BY s.id
        ORDER BY s.sort_order, s.name
        LIMIT $4 OFFSET $5`,
-      [req.user.businessId, locationId, `%${filter}%`, safePageSize, offset]
+      [req.user.businessId, locationId, search, safePageSize, currentOffset]
     );
 
-    res.json({ shifts: result.rows });
+    res.json({
+      shifts: result.rows,
+      page: currentPage,
+      pageSize: safePageSize,
+      total,
+      totalPages
+    });
   } catch (err) {
     console.error(err);
     res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to load shifts." });
