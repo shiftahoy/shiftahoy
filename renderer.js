@@ -2611,6 +2611,10 @@ function setupEvents() {
   $("showBlockedDateFormButton")?.addEventListener("click", showBlockedDateForm);
   $("cancelBlockedDateButton")?.addEventListener("click", hideBlockedDateForm);
   $("blockedDateForm")?.addEventListener("submit", addBlockedDate);
+  $("holidayDateList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action='remove-holiday-date']");
+    if (button) await removeHolidayDate(button.dataset.id);
+  });
   $("blockedDateList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action='remove-blocked-date']");
     if (button) await removeBlockedDate(button.dataset.id);
