@@ -200,6 +200,19 @@ CREATE TABLE IF NOT EXISTS time_off_blocked_dates (
 CREATE INDEX IF NOT EXISTS time_off_blocked_dates_business_date_idx
 ON time_off_blocked_dates (business_id, blocked_date);
 
+
+CREATE TABLE IF NOT EXISTS time_off_holiday_dates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  holiday_date DATE NOT NULL,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (business_id, holiday_date)
+);
+
+CREATE INDEX IF NOT EXISTS time_off_holiday_dates_business_date_idx
+ON time_off_holiday_dates (business_id, holiday_date);
+
 CREATE TABLE IF NOT EXISTS schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
