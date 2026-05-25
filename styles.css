@@ -1153,3 +1153,302 @@ tbody tr:hover td {
     font-size: 11px;
   }
 }
+
+
+/* Shift Ahoy role-aware management updates */
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.currentPlanText {
+  color: #000000;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.currentPlanText strong {
+  color: #000000;
+}
+
+.panelHint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.locationList {
+  display: grid;
+  gap: 10px;
+}
+
+.locationItem,
+.listItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.locationItem {
+  cursor: pointer;
+}
+
+.locationItem.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: 0 0 0 3px rgba(0, 93, 170, 0.12);
+}
+
+.locationItem strong,
+.listItem strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.locationItem span,
+.listItem span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.rowActions,
+.formActions,
+.compoundField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+.editorForm {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.dayEditor {
+  display: grid;
+  gap: 8px;
+}
+
+.dayTimeRow {
+  display: grid;
+  grid-template-columns: 90px minmax(110px, 1fr) minmax(110px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.checkboxLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.dotDayRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dotDay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.dotDay .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.dotDay.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.dotDay.active .dot {
+  background: var(--brand);
+  box-shadow: 0 0 0 4px rgba(0, 93, 170, 0.13);
+}
+
+.pillList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+.pill {
+  padding: 7px 10px;
+  border: 1px solid var(--brand-border);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 900;
+}
+
+.optionalText {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.dateSub {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.mutedCell {
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.emptyState {
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  color: var(--muted);
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.planCard {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+.planCard.active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(0, 93, 170, 0.12), 0 18px 45px rgba(0, 93, 170, 0.12);
+}
+
+.planCard h3 {
+  margin: 0;
+  font-size: 1.45rem;
+  letter-spacing: -0.04em;
+}
+
+.planPrice {
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 2.2rem;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.planPrice span {
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+.planCard ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.planCard button {
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .planGrid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dayTimeRow,
+  .planGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .locationItem,
+  .listItem {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rowActions {
+    width: 100%;
+  }
+}
+
+@media print {
+  .sidebar,
+  .topbar,
+  .toolbar,
+  #locationsPanel,
+  #shiftsPanel,
+  #employeesPanel {
+    display: none !important;
+  }
+
+  .appShell,
+  .workspace,
+  .dashboardGrid {
+    display: block;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .scheduleCard {
+    box-shadow: none;
+    border: 0;
+  }
+}
