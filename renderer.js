@@ -1,14 +1,27 @@
 const API_URL = "http://localhost:3001";
-const FORECAST_WEEKS = 3;
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
+const DAYS = [
+  { value: 1, short: "Mon", long: "Monday" },
+  { value: 2, short: "Tue", long: "Tuesday" },
+  { value: 3, short: "Wed", long: "Wednesday" },
+  { value: 4, short: "Thu", long: "Thursday" },
+  { value: 5, short: "Fri", long: "Friday" },
+  { value: 6, short: "Sat", long: "Saturday" },
+  { value: 7, short: "Sun", long: "Sunday" }
+];
 
 let accessToken = null;
 let currentUser = null;
 let selectedLocationId = null;
+let locations = [];
+let shifts = [];
+let employees = [];
 let currentWeekStart = startOfWeek(new Date());
 let employeePage = 1;
 let shiftPage = 1;
+let currentPlanCode = "free";
+let employeeDaysOff = new Set();
 
 const message = document.getElementById("message");
 
@@ -21,13 +34,17 @@ const signupFieldIds = [
   "signupPassword"
 ];
 
+function $(id) {
+  return document.getElementById(id);
+}
+
 function dashboardWelcomeText() {
   const login = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "";
   return login ? `Welcome aboard, ${login}` : "Welcome aboard";
 }
 
 function showMessage(text) {
-  const loginText = document.getElementById("dashboardLoginText");
+  const loginText = $("dashboardLoginText");
 
   if (loginText && text.startsWith("Welcome aboard,")) {
     loginText.textContent = text.replace("Welcome aboard,", "").trim();
@@ -35,6 +52,10 @@ function showMessage(text) {
   }
 
   if (message) message.textContent = text;
+}
+
+function isOwner() {
+  return currentUser?.role === "owner";
 }
 
 function canManageSchedule() {
@@ -50,8 +71,18 @@ function startOfWeek(date) {
   return copy;
 }
 
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
 function dateOnly(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatDateForLabel(date) {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function escapeHtml(value) {
@@ -61,20 +92,6 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function formatDayNumber(dayOfWeek) {
-  const labels = {
-    1: "Mon",
-    2: "Tue",
-    3: "Wed",
-    4: "Thu",
-    5: "Fri",
-    6: "Sat",
-    7: "Sun"
-  };
-
-  return labels[dayOfWeek] || dayOfWeek;
 }
 
 function cleanUsernameInput(value) {
@@ -102,7 +119,7 @@ function isValidEmailInput(value) {
 }
 
 function setNotice(id, type, text) {
-  const notice = document.getElementById(id);
+  const notice = $(id);
   if (!notice) return;
 
   if (!text) {
@@ -116,9 +133,9 @@ function setNotice(id, type, text) {
 }
 
 function setFieldState(inputId, state, message) {
-  const input = document.getElementById(inputId);
+  const input = $(inputId);
   const group = document.querySelector(`[data-field="${inputId}"]`);
-  const status = document.getElementById(`${inputId}Status`);
+  const status = $(`${inputId}Status`);
 
   if (!input || !group) return;
 
@@ -143,32 +160,12 @@ function setFieldState(inputId, state, message) {
 }
 
 function validateSignupField(inputId, showEmptyErrors = false) {
-  const input = document.getElementById(inputId);
+  const input = $(inputId);
   if (!input) return false;
 
   const value = input.value.trim();
 
-  if (inputId === "signupFirstName") {
-    if (!value) {
-      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
-      return false;
-    }
-
-    setFieldState(inputId, "valid", "Looks good");
-    return true;
-  }
-
-  if (inputId === "signupLastName") {
-    if (!value) {
-      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
-      return false;
-    }
-
-    setFieldState(inputId, "valid", "Looks good");
-    return true;
-  }
-
-  if (inputId === "signupBusinessName") {
+  if (["signupFirstName", "signupLastName", "signupBusinessName"].includes(inputId)) {
     if (!value) {
       setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required");
       return false;
@@ -196,17 +193,10 @@ function validateSignupField(inputId, showEmptyErrors = false) {
   if (inputId === "signupUsername") {
     const cleaned = cleanUsernameInput(input.value);
 
-    if (input.value !== cleaned) {
-      input.value = cleaned;
-    }
+    if (input.value !== cleaned) input.value = cleaned;
 
-    if (!cleaned) {
+    if (!cleaned || cleaned.length < 3) {
       setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "3–30 letters or numbers");
-      return false;
-    }
-
-    if (cleaned.length < 3) {
-      setFieldState(inputId, "invalid", "3–30 letters or numbers");
       return false;
     }
 
@@ -217,13 +207,8 @@ function validateSignupField(inputId, showEmptyErrors = false) {
   if (inputId === "signupPassword") {
     const normalizedPassword = normalizePasswordInput(input.value);
 
-    if (!normalizedPassword) {
+    if (!normalizedPassword || !isValidPasswordInput(normalizedPassword)) {
       setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "12–128 characters");
-      return false;
-    }
-
-    if (!isValidPasswordInput(normalizedPassword)) {
-      setFieldState(inputId, "invalid", "12–128 characters");
       return false;
     }
 
@@ -235,8 +220,7 @@ function validateSignupField(inputId, showEmptyErrors = false) {
 }
 
 function validateSignupForm(showEmptyErrors = false) {
-  const results = signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors));
-  return results.every(Boolean);
+  return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
 async function api(path, options = {}) {
@@ -253,7 +237,7 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 402 && currentUser?.role === "owner") {
+    if (res.status === 402 && isOwner()) {
       openPlanDialog().catch(() => {});
     }
 
@@ -264,20 +248,32 @@ async function api(path, options = {}) {
 }
 
 function applyRoleUI() {
-  document.getElementById("authView").classList.add("hidden");
-  document.getElementById("appView").classList.remove("hidden");
+  $("authView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
 
-  const isOwner = currentUser.role === "owner";
+  const owner = isOwner();
   const canManage = canManageSchedule();
 
-  document.getElementById("upgradeButton").classList.toggle("hidden", !isOwner);
-  document.getElementById("ownerLocationTools").classList.toggle("hidden", !isOwner);
+  $("upgradeButton").classList.toggle("hidden", !owner);
+  $("currentPlanText").classList.toggle("hidden", !owner);
+  $("ownerLocationTools").classList.toggle("hidden", !owner);
+  $("shiftForm").classList.toggle("hidden", !owner);
+
+  document.querySelectorAll(".ownerOnly").forEach((el) => {
+    el.classList.toggle("hidden", !owner);
+  });
+
+  document.querySelectorAll(".nonOwnerOnly").forEach((el) => {
+    el.classList.toggle("hidden", owner);
+  });
 
   document.querySelectorAll(".managerOnly").forEach((el) => {
     el.classList.toggle("hidden", !canManage);
   });
 
-  document.getElementById("generateScheduleButton").classList.toggle("hidden", !canManage);
+  document.querySelectorAll(".employeeOnlyHidden").forEach((el) => {
+    el.classList.toggle("hidden", currentUser?.role === "employee");
+  });
 
   showMessage(dashboardWelcomeText());
 }
@@ -285,27 +281,20 @@ function applyRoleUI() {
 async function signup() {
   setNotice("signupFormMessage", "", "");
 
-  const valid = validateSignupForm(true);
-
-  if (!valid) {
+  if (!validateSignupForm(true)) {
     setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating your account.");
-
     const firstInvalid = document.querySelector(".fieldGroup.is-invalid input");
     if (firstInvalid) firstInvalid.focus();
-
     return;
   }
 
-  const username = cleanUsernameInput(document.getElementById("signupUsername").value);
-  const password = normalizePasswordInput(document.getElementById("signupPassword").value);
-
   const body = {
-    firstName: document.getElementById("signupFirstName").value.trim(),
-    lastName: document.getElementById("signupLastName").value.trim(),
-    businessName: document.getElementById("signupBusinessName").value.trim(),
-    email: document.getElementById("signupEmail").value.trim(),
-    username,
-    password
+    firstName: $("signupFirstName").value.trim(),
+    lastName: $("signupLastName").value.trim(),
+    businessName: $("signupBusinessName").value.trim(),
+    email: $("signupEmail").value.trim(),
+    username: cleanUsernameInput($("signupUsername").value),
+    password: normalizePasswordInput($("signupPassword").value)
   };
 
   try {
@@ -331,8 +320,8 @@ async function login() {
     const data = await api("/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        login: document.getElementById("loginValue").value,
-        password: normalizePasswordInput(document.getElementById("loginPassword").value)
+        login: $("loginValue").value,
+        password: normalizePasswordInput($("loginPassword").value)
       })
     });
 
@@ -340,6 +329,7 @@ async function login() {
     currentUser = data.user;
 
     applyRoleUI();
+    await loadPlans(false);
     await loadLocations();
   } catch (err) {
     setNotice("loginFormMessage", "error", err.message);
@@ -348,52 +338,130 @@ async function login() {
 
 async function loadLocations() {
   const data = await api("/locations");
-  const select = document.getElementById("locationSelect");
+  locations = data.locations || [];
 
-  if (!data.locations || data.locations.length === 0) {
-    select.innerHTML = `<option value="">No locations found</option>`;
+  if (locations.length === 0) {
     selectedLocationId = null;
+    renderLocations();
     renderEmptySchedule();
     return;
   }
 
-  select.innerHTML = data.locations
-    .map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}</option>`)
-    .join("");
-
-  selectedLocationId = select.value || data.locations[0]?.id || null;
-
-  if (selectedLocationId) {
-    await loadSelectedLocationData();
+  if (!selectedLocationId || !locations.some((location) => location.id === selectedLocationId)) {
+    selectedLocationId = locations[0].id;
   }
+
+  renderLocations();
+  await loadSelectedLocationData();
+}
+
+function renderLocations() {
+  const list = $("locationList");
+
+  if (!locations.length) {
+    list.innerHTML = `<div class="emptyState">No locations found.</div>`;
+    return;
+  }
+
+  list.innerHTML = locations.map((location) => {
+    const active = location.id === selectedLocationId;
+    const ownerControls = isOwner()
+      ? `
+        <div class="rowActions">
+          <button class="button ghost" data-action="edit-location" data-id="${escapeHtml(location.id)}">Edit</button>
+          <button class="button danger" data-action="delete-location" data-id="${escapeHtml(location.id)}">Delete</button>
+        </div>
+      `
+      : "";
+
+    return `
+      <article class="locationItem ${active ? "active" : ""}" data-action="select-location" data-id="${escapeHtml(location.id)}">
+        <div>
+          <strong>${escapeHtml(location.name)}</strong>
+          <span>${escapeHtml(location.address || "No address")}</span>
+        </div>
+        ${ownerControls}
+      </article>
+    `;
+  }).join("");
 }
 
 async function loadSelectedLocationData() {
   await loadSchedule();
 
   if (canManageSchedule()) {
-    await Promise.all([loadEmployees(), loadShifts()]);
+    await Promise.all([loadShifts(), loadEmployees()]);
   }
 }
 
 async function addLocation() {
-  const input = document.getElementById("newLocationName");
-  const name = input.value.trim();
+  const nameInput = $("newLocationName");
+  const addressInput = $("newLocationAddress");
+  const name = nameInput.value.trim();
 
   if (!name) {
-    input.classList.add("inputInvalid");
+    nameInput.classList.add("inputInvalid");
     return;
   }
 
-  input.classList.remove("inputInvalid");
+  nameInput.classList.remove("inputInvalid");
 
   try {
     await api("/locations", {
       method: "POST",
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, address: addressInput.value.trim() || null })
     });
 
-    input.value = "";
+    nameInput.value = "";
+    addressInput.value = "";
+    await loadLocations();
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function editLocation(locationId) {
+  const location = locations.find((item) => item.id === locationId);
+  if (!location) return;
+
+  const name = prompt("Location name:", location.name);
+  if (name === null) return;
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    showMessage("Location name is required.");
+    return;
+  }
+
+  const address = prompt("Location address optional:", location.address || "");
+  if (address === null) return;
+
+  try {
+    await api(`/locations/${encodeURIComponent(locationId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ name: trimmedName, address: address.trim() || null })
+    });
+
+    await loadLocations();
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function deleteLocation(locationId) {
+  const location = locations.find((item) => item.id === locationId);
+  if (!location) return;
+
+  const actorPassword = prompt(`Enter your owner password to delete ${location.name}. This also removes its shifts and employees.`);
+  if (!actorPassword) return;
+
+  try {
+    await api(`/locations/${encodeURIComponent(locationId)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ actorPassword })
+    });
+
+    selectedLocationId = null;
     await loadLocations();
   } catch (err) {
     showMessage(err.message);
@@ -406,7 +474,8 @@ async function loadSchedule() {
     return;
   }
 
-  document.getElementById("weekLabel").textContent = dateOnly(currentWeekStart);
+  const weekEnd = addDays(currentWeekStart, 6);
+  $("weekLabel").textContent = `${formatDateForLabel(currentWeekStart)} – ${formatDateForLabel(weekEnd)}`;
 
   const data = await api(
     `/schedules?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`
@@ -416,7 +485,7 @@ async function loadSchedule() {
 }
 
 function renderEmptySchedule() {
-  const table = document.getElementById("scheduleTable");
+  const table = $("scheduleTable");
 
   table.innerHTML = `
     <thead>
@@ -433,16 +502,15 @@ function renderEmptySchedule() {
 }
 
 function renderSchedule(cells) {
-  const table = document.getElementById("scheduleTable");
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
+  const table = $("scheduleTable");
   const grouped = new Map();
 
   for (const cell of cells) {
     if (!grouped.has(cell.employee_id)) {
       grouped.set(cell.employee_id, {
         priority: cell.priority,
-        employee: `${cell.first_name} ${cell.last_name}`,
+        employeeCode: cell.employee_code,
+        employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.username,
         title: cell.title,
         days: {}
       });
@@ -451,327 +519,668 @@ function renderSchedule(cells) {
     grouped.get(cell.employee_id).days[cell.work_date] = cell;
   }
 
-  if (grouped.size === 0) {
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Priority</th>
-          <th>Employee</th>
-          <th>Title</th>
-          ${days.map((day) => `<th>${day}</th>`).join("")}
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td colspan="10">No schedule generated for this week yet.</td>
-        </tr>
-      </tbody>
-    `;
-    return;
-  }
-
   table.innerHTML = `
     <thead>
       <tr>
         <th>Priority</th>
+        <th>Employee #</th>
         <th>Employee</th>
         <th>Title</th>
-        ${days.map((day) => `<th>${day}</th>`).join("")}
+        ${DAYS.map((day, index) => {
+          const current = addDays(currentWeekStart, index);
+          return `<th>${day.long}<span class="dateSub">${dateOnly(current)}</span></th>`;
+        }).join("")}
       </tr>
     </thead>
     <tbody>
-      ${Array.from(grouped.values())
-        .map((row, index) => {
-          const dayCells = days.map((_, dayIndex) => {
-            const workDate = dateOnly(new Date(currentWeekStart.getTime() + dayIndex * 86400000));
-            const cell = row.days[workDate];
-
-            if (!cell) return "<td></td>";
-
-            const className = cell.is_orientation ? "orientationCell" : "";
-            const text = cell.is_orientation
-              ? "Orientation"
-              : cell.start_time && cell.end_time
-                ? `${escapeHtml(cell.start_time)} - ${escapeHtml(cell.end_time)}`
-                : "";
-
-            return `<td class="${className}">${text}</td>`;
-          });
-
-          return `
-            <tr class="${index % 2 === 1 ? "strongRow" : ""}">
+      ${
+        grouped.size === 0
+          ? `<tr><td colspan="11">No forecasted schedule for this week. Add a location, shifts, and employees with available days.</td></tr>`
+          : [...grouped.values()].map((row) => `
+            <tr>
               <td>${escapeHtml(row.priority)}</td>
+              <td>${escapeHtml(row.employeeCode)}</td>
               <td>${escapeHtml(row.employee)}</td>
               <td>${escapeHtml(row.title)}</td>
-              ${dayCells.join("")}
+              ${DAYS.map((day, index) => {
+                const current = dateOnly(addDays(currentWeekStart, index));
+                const cell = row.days[current];
+
+                if (!cell) return `<td class="mutedCell">Off</td>`;
+
+                return `
+                  <td>
+                    <strong>${escapeHtml(cell.shift_name || "Shift")}</strong>
+                    <span>${escapeHtml((cell.start_time || "").slice(0, 5))}–${escapeHtml((cell.end_time || "").slice(0, 5))}</span>
+                  </td>
+                `;
+              }).join("")}
             </tr>
-          `;
-        })
-        .join("")}
+          `).join("")
+      }
     </tbody>
   `;
 }
 
-async function generateSchedule() {
+function defaultShiftDays() {
+  return DAYS.map((day) => ({
+    dayOfWeek: day.value,
+    enabled: day.value <= 5,
+    startTime: day.value <= 5 ? "08:00" : "",
+    endTime: day.value <= 5 ? "17:00" : ""
+  }));
+}
+
+function renderShiftDayEditor(days = defaultShiftDays()) {
+  const map = new Map(days.map((day) => [Number(day.dayOfWeek), day]));
+
+  $("shiftDayEditor").innerHTML = DAYS.map((day) => {
+    const value = map.get(day.value) || {
+      dayOfWeek: day.value,
+      enabled: false,
+      startTime: "",
+      endTime: ""
+    };
+
+    return `
+      <div class="dayTimeRow" data-day="${day.value}">
+        <label class="checkboxLine">
+          <input type="checkbox" class="shiftDayEnabled" ${value.enabled ? "checked" : ""} />
+          ${day.short}
+        </label>
+        <input type="time" class="shiftStart" value="${escapeHtml(value.startTime || "")}" />
+        <input type="time" class="shiftEnd" value="${escapeHtml(value.endTime || "")}" />
+      </div>
+    `;
+  }).join("");
+}
+
+function collectShiftDays() {
+  return [...document.querySelectorAll("#shiftDayEditor .dayTimeRow")].map((row) => {
+    const enabled = row.querySelector(".shiftDayEnabled").checked;
+
+    return {
+      dayOfWeek: Number(row.dataset.day),
+      enabled,
+      startTime: enabled ? row.querySelector(".shiftStart").value : null,
+      endTime: enabled ? row.querySelector(".shiftEnd").value : null
+    };
+  });
+}
+
+function resetShiftForm() {
+  $("shiftId").value = "";
+  $("shiftName").value = "Standard";
+  $("shiftSortOrder").value = "1";
+  renderShiftDayEditor(defaultShiftDays());
+}
+
+async function saveShift(event) {
+  event.preventDefault();
+
   if (!selectedLocationId) {
-    showMessage("Choose a location first.");
+    showMessage("Select a location first.");
+    return;
+  }
+
+  const shiftId = $("shiftId").value;
+  const body = {
+    locationId: selectedLocationId,
+    name: $("shiftName").value.trim(),
+    sortOrder: Number($("shiftSortOrder").value || 1),
+    days: collectShiftDays()
+  };
+
+  if (!body.name) {
+    showMessage("Shift name is required.");
     return;
   }
 
   try {
-    await api("/schedules/generate", {
-      method: "POST",
-      body: JSON.stringify({
-        locationId: selectedLocationId,
-        weekStart: dateOnly(currentWeekStart),
-        weeks: FORECAST_WEEKS
-      })
+    await api(shiftId ? `/shifts/${encodeURIComponent(shiftId)}` : "/shifts", {
+      method: shiftId ? "PUT" : "POST",
+      body: JSON.stringify(body)
     });
 
-    await loadSchedule();
-    showMessage(`Schedule forecast generated for up to ${FORECAST_WEEKS} weeks.`);
+    resetShiftForm();
+    await Promise.all([loadShifts(), loadSchedule()]);
   } catch (err) {
     showMessage(err.message);
   }
+}
+
+async function loadShifts() {
+  if (!selectedLocationId || !canManageSchedule()) return;
+
+  const filter = $("shiftFilter").value.trim();
+
+  const data = await api(
+    `/shifts?locationId=${encodeURIComponent(selectedLocationId)}&page=${shiftPage}&pageSize=100&filter=${encodeURIComponent(filter)}`
+  );
+
+  shifts = data.shifts || [];
+  renderShifts();
+  populatePreferredShiftSelect();
+}
+
+function renderShifts() {
+  const list = $("shiftList");
+
+  if (!shifts.length) {
+    list.innerHTML = `<div class="emptyState">No shifts found for this location.</div>`;
+    return;
+  }
+
+  list.innerHTML = shifts.map((shift) => {
+    const days = Array.isArray(shift.days) ? shift.days : [];
+    const summary = days
+      .filter((day) => day.enabled)
+      .map((day) => {
+        const label = DAYS.find((item) => item.value === Number(day.dayOfWeek))?.short || day.dayOfWeek;
+        return `${label} ${day.startTime || ""}–${day.endTime || ""}`;
+      })
+      .join(", ") || "No active days";
+
+    const ownerButtons = isOwner()
+      ? `
+        <div class="rowActions">
+          <button class="button ghost" data-action="edit-shift" data-id="${escapeHtml(shift.id)}">Edit</button>
+          <button class="button danger" data-action="delete-shift" data-id="${escapeHtml(shift.id)}">Delete</button>
+        </div>
+      `
+      : "";
+
+    return `
+      <article class="listItem">
+        <div>
+          <strong>${escapeHtml(shift.name)}</strong>
+          <span>${escapeHtml(summary)}</span>
+        </div>
+        ${ownerButtons}
+      </article>
+    `;
+  }).join("");
+}
+
+function editShift(shiftId) {
+  const shift = shifts.find((item) => item.id === shiftId);
+  if (!shift) return;
+
+  $("shiftId").value = shift.id;
+  $("shiftName").value = shift.name;
+  $("shiftSortOrder").value = shift.sort_order || 1;
+  renderShiftDayEditor(shift.days || defaultShiftDays());
+  $("shiftName").focus();
+}
+
+async function deleteShift(shiftId) {
+  const shift = shifts.find((item) => item.id === shiftId);
+  if (!shift) return;
+
+  const actorPassword = prompt(`Enter your owner password to delete shift ${shift.name}.`);
+  if (!actorPassword) return;
+
+  try {
+    await api(`/shifts/${encodeURIComponent(shiftId)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ actorPassword })
+    });
+
+    await Promise.all([loadShifts(), loadSchedule()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+function defaultAvailability() {
+  return DAYS.map((day) => ({ dayOfWeek: day.value, available: true }));
+}
+
+function renderAvailabilityEditor(availability = defaultAvailability()) {
+  const map = new Map(availability.map((item) => [Number(item.dayOfWeek), Boolean(item.available)]));
+
+  $("availabilityEditor").innerHTML = DAYS.map((day) => {
+    const available = map.has(day.value) ? map.get(day.value) : true;
+
+    return `
+      <button type="button" class="dotDay ${available ? "active" : ""}" data-day="${day.value}" aria-pressed="${available}">
+        <span class="dot"></span>
+        ${day.short}
+      </button>
+    `;
+  }).join("");
+}
+
+function collectAvailability() {
+  return [...document.querySelectorAll("#availabilityEditor .dotDay")].map((button) => ({
+    dayOfWeek: Number(button.dataset.day),
+    available: button.classList.contains("active")
+  }));
+}
+
+function normalizeDaysOffArray(values) {
+  return [...new Set((values || []).map((value) => String(value).slice(0, 10)).filter(Boolean))].sort();
+}
+
+function renderDaysOffList() {
+  const values = [...employeeDaysOff].sort();
+
+  $("daysOffList").innerHTML = values.length
+    ? values.map((value) => `
+      <button type="button" class="pill" data-action="remove-day-off" data-date="${escapeHtml(value)}">
+        ${escapeHtml(value)} ×
+      </button>
+    `).join("")
+    : `<span class="fieldHelp">No requested days off.</span>`;
+}
+
+function addDayOff() {
+  const value = $("daysOffInput").value;
+  if (!value) return;
+
+  employeeDaysOff.add(value);
+  $("daysOffInput").value = "";
+  renderDaysOffList();
+}
+
+function removeDayOff(value) {
+  employeeDaysOff.delete(value);
+  renderDaysOffList();
+}
+
+function populatePreferredShiftSelect(selected = "") {
+  const select = $("preferredShiftId");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">No preference</option>` + shifts.map((shift) => `
+    <option value="${escapeHtml(shift.id)}" ${shift.id === selected ? "selected" : ""}>${escapeHtml(shift.name)}</option>
+  `).join("");
+}
+
+function resetEmployeeForm() {
+  $("employeeId").value = "";
+  $("employeeCode").value = "";
+  $("employeeTitle").value = "";
+  $("employeeFirstName").value = "";
+  $("employeeLastName").value = "";
+  $("employeeUsername").value = "";
+  $("employeePassword").value = "";
+  $("employmentType").value = "full_time";
+  $("weeklyHours").value = "40";
+  $("dailyHours").value = "8";
+  $("employeePriority").value = "1";
+  $("orientationStart").value = "";
+  $("canManageSchedule").checked = false;
+  employeeDaysOff = new Set();
+  renderAvailabilityEditor(defaultAvailability());
+  renderDaysOffList();
+  populatePreferredShiftSelect();
 }
 
 async function loadEmployees() {
   if (!selectedLocationId || !canManageSchedule()) return;
 
   const data = await api(
-    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=25`
+    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=100`
   );
 
-  const employees = data.employees || [];
-  const list = document.getElementById("employeeList");
-
-  if (employees.length === 0) {
-    list.innerHTML = `
-      <div class="listRow">
-        <strong>No employees yet</strong>
-        <span>Add your team from the employee tools.</span>
-        <span></span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = employees
-    .map(
-      (employee) => `
-        <div class="listRow">
-          <strong>${escapeHtml(employee.priority)}. ${escapeHtml(employee.first_name)} ${escapeHtml(employee.last_name)}</strong>
-          <span>${escapeHtml(employee.title)}</span>
-          <span>${escapeHtml(employee.full_login)}</span>
-        </div>
-      `
-    )
-    .join("");
+  employees = data.employees || [];
+  renderEmployees();
 }
 
-async function loadShifts() {
-  if (!selectedLocationId || !canManageSchedule()) return;
+function renderEmployees() {
+  const list = $("employeeList");
 
-  const filter = document.getElementById("shiftFilter").value || "";
-
-  const data = await api(
-    `/shifts?locationId=${encodeURIComponent(selectedLocationId)}&page=${shiftPage}&pageSize=10&filter=${encodeURIComponent(filter)}`
-  );
-
-  const shifts = data.shifts || [];
-  const list = document.getElementById("shiftList");
-
-  if (shifts.length === 0) {
-    list.innerHTML = `
-      <div class="listRow">
-        <strong>No shifts yet</strong>
-        <span>Create shift templates on the server or with the future shift form.</span>
-        <span></span>
-      </div>
-    `;
+  if (!employees.length) {
+    list.innerHTML = `<div class="emptyState">No employees found for this location.</div>`;
     return;
   }
 
-  list.innerHTML = shifts
-    .map((shift) => {
-      const enabledDays = Array.isArray(shift.days)
-        ? shift.days
-            .filter((day) => day.enabled)
-            .map((day) => `${formatDayNumber(day.dayOfWeek)}: ${day.startTime || "--"}-${day.endTime || "--"}`)
-            .join(", ")
-        : "";
+  list.innerHTML = employees.map((employee) => {
+    const availability = Array.isArray(employee.availability) ? employee.availability : [];
+    const availableDays = availability
+      .filter((day) => day.available)
+      .sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek))
+      .map((day) => DAYS.find((item) => item.value === Number(day.dayOfWeek))?.short)
+      .join(", ") || "No days";
 
-      return `
-        <div class="listRow">
-          <strong>${escapeHtml(shift.name)}</strong>
-          <span>${escapeHtml(enabledDays || "No active days")}</span>
-          <span>Sort ${escapeHtml(shift.sort_order ?? 1)}</span>
+    const daysOff = normalizeDaysOffArray(employee.days_off);
+    const deleteButton = isOwner()
+      ? `<button class="button danger" data-action="delete-employee" data-id="${escapeHtml(employee.id)}">Delete</button>`
+      : "";
+
+    return `
+      <article class="listItem">
+        <div>
+          <strong>${escapeHtml(employee.employee_code)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
+          <span>${escapeHtml(employee.title)} · ${escapeHtml(employee.employment_type)} · ${escapeHtml(employee.weekly_hours)} hrs/week · Available: ${escapeHtml(availableDays)}</span>
+          <span>Days off: ${escapeHtml(daysOff.join(", ") || "None")}</span>
         </div>
-      `;
-    })
-    .join("");
+        <div class="rowActions">
+          <button class="button ghost" data-action="edit-employee" data-id="${escapeHtml(employee.id)}">Edit</button>
+          ${deleteButton}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function editEmployee(employeeId) {
+  const employee = employees.find((item) => item.id === employeeId);
+  if (!employee) return;
+
+  $("employeeForm").classList.remove("hidden");
+  $("employeeId").value = employee.id;
+  $("employeeCode").value = employee.employee_code || "";
+  $("employeeTitle").value = employee.title || "";
+  $("employeeFirstName").value = employee.first_name || "";
+  $("employeeLastName").value = employee.last_name || "";
+  $("employeeUsername").value = employee.username || "";
+  $("employeePassword").value = "";
+  $("employmentType").value = employee.employment_type || "full_time";
+  $("weeklyHours").value = employee.weekly_hours || "40";
+  $("dailyHours").value = employee.daily_hours || "8";
+  $("employeePriority").value = employee.priority || "1";
+  $("orientationStart").value = employee.orientation_start ? String(employee.orientation_start).slice(0, 10) : "";
+  $("canManageSchedule").checked = Boolean(employee.can_manage_schedule);
+  employeeDaysOff = new Set(normalizeDaysOffArray(employee.days_off));
+  renderAvailabilityEditor(employee.availability || defaultAvailability());
+  renderDaysOffList();
+  populatePreferredShiftSelect(employee.preferred_shift_id || "");
+  $("employeeCode").focus();
+}
+
+async function saveEmployee(event) {
+  event.preventDefault();
+
+  if (!selectedLocationId) {
+    showMessage("Select a location first.");
+    return;
+  }
+
+  const employeeId = $("employeeId").value;
+  const body = {
+    locationId: selectedLocationId,
+    employeeCode: $("employeeCode").value.trim(),
+    title: $("employeeTitle").value.trim(),
+    firstName: $("employeeFirstName").value.trim(),
+    lastName: $("employeeLastName").value.trim(),
+    username: cleanUsernameInput($("employeeUsername").value),
+    password: normalizePasswordInput($("employeePassword").value),
+    employmentType: $("employmentType").value,
+    weeklyHours: Number($("weeklyHours").value),
+    dailyHours: Number($("dailyHours").value),
+    priority: Number($("employeePriority").value),
+    preferredShiftId: $("preferredShiftId").value || null,
+    orientationStart: $("orientationStart").value || null,
+    availability: collectAvailability(),
+    daysOff: [...employeeDaysOff],
+    canManageSchedule: $("canManageSchedule").checked
+  };
+
+  if (!body.employeeCode || !body.username || (!employeeId && !body.password)) {
+    showMessage("Employee #, username, and password for new employees are required.");
+    return;
+  }
+
+  if (!employeeId && !isValidPasswordInput(body.password)) {
+    showMessage("Password must be 12–128 characters.");
+    return;
+  }
+
+  try {
+    await api(employeeId ? `/employees/${encodeURIComponent(employeeId)}` : "/employees", {
+      method: employeeId ? "PUT" : "POST",
+      body: JSON.stringify(body)
+    });
+
+    resetEmployeeForm();
+    $("employeeForm").classList.add("hidden");
+    await Promise.all([loadEmployees(), loadSchedule()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function deleteEmployee(employeeId) {
+  const employee = employees.find((item) => item.id === employeeId);
+  if (!employee) return;
+
+  const actorPassword = prompt(`Enter your owner password to delete employee ${employee.employee_code}.`);
+  if (!actorPassword) return;
+
+  try {
+    await api(`/employees/${encodeURIComponent(employeeId)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ actorPassword })
+    });
+
+    await Promise.all([loadEmployees(), loadSchedule()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function loadPlans(renderDialog = true) {
+  if (!accessToken) return;
+
+  try {
+    const data = await api("/plans");
+    currentPlanCode = data.currentPlan || "free";
+    const current = (data.plans || []).find((plan) => plan.code === currentPlanCode);
+    $("currentPlanText").innerHTML = `Current Plan: <strong>${escapeHtml(current?.name || "Free")}</strong>`;
+
+    if (renderDialog) {
+      renderPlans(data.plans || [], currentPlanCode);
+    }
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+function planFeatures(plan) {
+  const employeeLimit = plan.employee_limit === null ? "Unlimited employees" : `${plan.employee_limit} employee${plan.employee_limit === 1 ? "" : "s"}`;
+  const featureMap = {
+    free: ["Forever schedule forecast", employeeLimit, "Single location starter tools"],
+    plus: ["Everything in Free", employeeLimit, "Manager-assisted scheduling"],
+    premium: ["Everything in Plus", employeeLimit, "Multi-location growth support"],
+    pro: ["Everything in Premium", employeeLimit, "Full business scheduling scale"]
+  };
+
+  return featureMap[plan.code] || [employeeLimit, "Automatic scheduling", "Clean desktop dashboard"];
+}
+
+function renderPlans(plans, currentPlan) {
+  const list = $("planList");
+
+  list.innerHTML = plans.map((plan) => {
+    const price = plan.monthly_price_cents === 0
+      ? "$0"
+      : `$${(plan.monthly_price_cents / 100).toFixed(0)}`;
+
+    const active = plan.code === currentPlan;
+
+    return `
+      <article class="planCard ${active ? "active" : ""}">
+        <div>
+          <p class="eyebrow">${active ? "Current plan" : "Upgrade option"}</p>
+          <h3>${escapeHtml(plan.name)}</h3>
+          <div class="planPrice">${price}<span>/month</span></div>
+        </div>
+        <ul>
+          ${planFeatures(plan).map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}
+        </ul>
+        <button class="button ${active ? "secondary" : "primary"}" data-action="select-plan" data-code="${escapeHtml(plan.code)}" ${active ? "disabled" : ""}>
+          ${active ? "Current Plan" : `Choose ${escapeHtml(plan.name)}`}
+        </button>
+      </article>
+    `;
+  }).join("");
 }
 
 async function openPlanDialog() {
-  if (!currentUser || currentUser.role !== "owner") {
-    showMessage("Only the owner can change the plan.");
-    return;
+  await loadPlans(true);
+  $("planDialog").showModal();
+}
+
+async function changePlan(planCode) {
+  try {
+    await api("/plans/change", {
+      method: "POST",
+      body: JSON.stringify({ planCode })
+    });
+
+    await loadPlans(true);
+    await loadEmployees();
+  } catch (err) {
+    showMessage(err.message);
   }
-
-  const dialog = document.getElementById("planDialog");
-  const data = await api("/plans");
-
-  document.getElementById("planList").innerHTML = (data.plans || [])
-    .map(
-      (plan) => `
-        <button class="planButton" data-plan="${escapeHtml(plan.code)}">
-          ${escapeHtml(plan.name)} — $${(Number(plan.monthly_price_cents) / 100).toFixed(2)}
-          · ${plan.employee_limit === null ? "Unlimited employees" : `${escapeHtml(plan.employee_limit)} employees`}
-        </button>
-      `
-    )
-    .join("");
-
-  dialog.showModal();
 }
 
 function printSchedule() {
   window.print();
 }
 
-document.getElementById("signupButton").addEventListener("click", () => {
-  signup();
-});
+function setupEvents() {
+  $("signupButton").addEventListener("click", signup);
+  $("loginButton").addEventListener("click", login);
 
-document.getElementById("loginButton").addEventListener("click", () => {
-  login();
-});
-
-signupFieldIds.forEach((id) => {
-  const input = document.getElementById(id);
-
-  if (!input) return;
-
-  input.addEventListener("input", () => {
-    validateSignupField(id, false);
-    setNotice("signupFormMessage", "", "");
+  signupFieldIds.forEach((id) => {
+    const input = $(id);
+    if (input) {
+      input.addEventListener("input", () => validateSignupField(id, false));
+      input.addEventListener("blur", () => validateSignupField(id, true));
+    }
   });
 
-  input.addEventListener("blur", () => {
-    validateSignupField(id, true);
+  $("addLocationButton").addEventListener("click", addLocation);
+  $("locationList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+
+    const action = button.dataset.action;
+    const id = button.dataset.id;
+
+    if (action === "select-location") {
+      selectedLocationId = id;
+      renderLocations();
+      await loadSelectedLocationData();
+    }
+
+    if (action === "edit-location") {
+      event.stopPropagation();
+      await editLocation(id);
+    }
+
+    if (action === "delete-location") {
+      event.stopPropagation();
+      await deleteLocation(id);
+    }
   });
-});
 
-const signupUsernameInput = document.getElementById("signupUsername");
+  $("prevWeekButton").addEventListener("click", async () => {
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+    await loadSchedule();
+  });
 
-if (signupUsernameInput) {
-  signupUsernameInput.setAttribute("maxlength", "30");
-  signupUsernameInput.setAttribute("pattern", "[a-z0-9]{3,30}");
-  signupUsernameInput.setAttribute("title", "Use 3 to 30 lowercase letters and numbers only.");
+  $("nextWeekButton").addEventListener("click", async () => {
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    await loadSchedule();
+  });
 
-  signupUsernameInput.addEventListener("input", () => {
-    signupUsernameInput.value = cleanUsernameInput(signupUsernameInput.value);
+  $("printScheduleButton").addEventListener("click", printSchedule);
+
+  $("shiftForm").addEventListener("submit", saveShift);
+  $("resetShiftButton").addEventListener("click", resetShiftForm);
+  $("shiftFilter").addEventListener("input", async () => {
+    shiftPage = 1;
+    await loadShifts();
+  });
+  $("shiftList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+
+    if (button.dataset.action === "edit-shift") editShift(button.dataset.id);
+    if (button.dataset.action === "delete-shift") await deleteShift(button.dataset.id);
+  });
+
+  $("prevShiftPage").addEventListener("click", async () => {
+    shiftPage = Math.max(1, shiftPage - 1);
+    await loadShifts();
+  });
+
+  $("nextShiftPage").addEventListener("click", async () => {
+    shiftPage += 1;
+    await loadShifts();
+  });
+
+  $("showEmployeeFormButton").addEventListener("click", () => {
+    resetEmployeeForm();
+    $("employeeForm").classList.remove("hidden");
+  });
+
+  $("employeeForm").addEventListener("submit", saveEmployee);
+  $("cancelEmployeeButton").addEventListener("click", () => {
+    resetEmployeeForm();
+    $("employeeForm").classList.add("hidden");
+  });
+
+  $("availabilityEditor").addEventListener("click", (event) => {
+    const button = event.target.closest(".dotDay");
+    if (!button) return;
+
+    button.classList.toggle("active");
+    button.setAttribute("aria-pressed", button.classList.contains("active"));
+  });
+
+  $("addDayOffButton").addEventListener("click", addDayOff);
+  $("daysOffList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action='remove-day-off']");
+    if (button) removeDayOff(button.dataset.date);
+  });
+
+  $("employmentType").addEventListener("change", () => {
+    if ($("employmentType").value === "full_time") {
+      $("weeklyHours").value = "40";
+      $("dailyHours").value = "8";
+    } else {
+      $("weeklyHours").value = "22.5";
+      $("dailyHours").value = "4.5";
+    }
+  });
+
+  $("employeeList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+
+    if (button.dataset.action === "edit-employee") editEmployee(button.dataset.id);
+    if (button.dataset.action === "delete-employee") await deleteEmployee(button.dataset.id);
+  });
+
+  $("prevEmployeePage").addEventListener("click", async () => {
+    employeePage = Math.max(1, employeePage - 1);
+    await loadEmployees();
+  });
+
+  $("nextEmployeePage").addEventListener("click", async () => {
+    employeePage += 1;
+    await loadEmployees();
+  });
+
+  $("upgradeButton").addEventListener("click", openPlanDialog);
+  $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
+  $("planList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action='select-plan']");
+    if (!button || button.disabled) return;
+    await changePlan(button.dataset.code);
   });
 }
 
-const signupPasswordInput = document.getElementById("signupPassword");
-
-if (signupPasswordInput) {
-  signupPasswordInput.setAttribute("minlength", String(PASSWORD_MIN_LENGTH));
-  signupPasswordInput.setAttribute("maxlength", String(PASSWORD_MAX_LENGTH));
-  signupPasswordInput.setAttribute(
-    "title",
-    `Use ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`
-  );
-}
-
-const loginPasswordInput = document.getElementById("loginPassword");
-
-if (loginPasswordInput) {
-  loginPasswordInput.setAttribute("maxlength", String(PASSWORD_MAX_LENGTH));
-}
-
-document.getElementById("locationSelect").addEventListener("change", async (event) => {
-  selectedLocationId = event.target.value;
-  await loadSelectedLocationData();
-});
-
-document.getElementById("addLocationButton").addEventListener("click", () => {
-  addLocation();
-});
-
-document.getElementById("generateScheduleButton").addEventListener("click", () => {
-  generateSchedule();
-});
-
-document.getElementById("printScheduleButton").addEventListener("click", printSchedule);
-
-document.getElementById("upgradeButton").addEventListener("click", () => {
-  openPlanDialog().catch((err) => showMessage(err.message));
-});
-
-document.getElementById("closePlanDialog").addEventListener("click", () => {
-  document.getElementById("planDialog").close();
-});
-
-document.getElementById("prevWeekButton").addEventListener("click", async () => {
-  currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-  await loadSchedule();
-});
-
-document.getElementById("nextWeekButton").addEventListener("click", async () => {
-  currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-  await loadSchedule();
-});
-
-document.getElementById("prevEmployeePage").addEventListener("click", async () => {
-  employeePage = Math.max(1, employeePage - 1);
-  await loadEmployees();
-});
-
-document.getElementById("nextEmployeePage").addEventListener("click", async () => {
-  employeePage += 1;
-  await loadEmployees();
-});
-
-document.getElementById("prevShiftPage").addEventListener("click", async () => {
-  shiftPage = Math.max(1, shiftPage - 1);
-  await loadShifts();
-});
-
-document.getElementById("nextShiftPage").addEventListener("click", async () => {
-  shiftPage += 1;
-  await loadShifts();
-});
-
-document.getElementById("shiftFilter").addEventListener("input", () => {
-  shiftPage = 1;
-  loadShifts().catch((err) => showMessage(err.message));
-});
-
-document.getElementById("planList").addEventListener("click", async (event) => {
-  const button = event.target.closest(".planButton");
-  if (!button) return;
-
-  try {
-    await api("/plans/change", {
-      method: "POST",
-      body: JSON.stringify({ planCode: button.dataset.plan })
-    });
-
-    document.getElementById("planDialog").close();
-    showMessage(dashboardWelcomeText());
-  } catch (err) {
-    showMessage(err.message);
-  }
-});
-
-document.querySelectorAll(".navItem").forEach((item) => {
-  item.addEventListener("click", () => {
-    document.querySelectorAll(".navItem").forEach((navItem) => {
-      navItem.classList.remove("active");
-    });
-
-    item.classList.add("active");
-  });
+document.addEventListener("DOMContentLoaded", () => {
+  setupEvents();
+  renderShiftDayEditor(defaultShiftDays());
+  renderAvailabilityEditor(defaultAvailability());
+  renderDaysOffList();
+  resetShiftForm();
+  resetEmployeeForm();
 });
