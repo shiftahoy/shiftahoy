@@ -1504,3 +1504,104 @@ tbody tr:hover td {
     border: 0;
   }
 }
+
+/* v3 layout refinements */
+.utilityNav {
+  min-height: 38px;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topbarActions {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: min(520px, 50vw);
+}
+
+.planActionGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-left: clamp(18px, 4vw, 72px);
+}
+
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid var(--brand-border);
+  color: var(--brand);
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgba(0, 93, 170, 0.1);
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.iconButton:hover {
+  background: var(--brand-soft);
+}
+
+#locationForm,
+#shiftForm {
+  margin-bottom: 14px;
+}
+
+#ownerLocationToolbar .searchInput {
+  width: min(260px, 32vw);
+}
+
+.settingsPanel {
+  width: min(720px, calc(100vw - 28px));
+}
+
+.pageBottomAnchor {
+  height: 1px;
+}
+
+.modalCard {
+  width: min(1280px, calc(100vw - 18px));
+  padding: 16px;
+}
+
+.planGrid {
+  gap: 10px;
+}
+
+.planCard {
+  padding: 14px;
+  gap: 10px;
+}
+
+.planCard h3 {
+  font-size: 1.12rem;
+}
+
+.planPrice {
+  font-size: 1.55rem;
+}
+
+.planCard ul {
+  gap: 5px;
+  font-size: 0.85rem;
+}
+
+.planCard .button {
+  min-height: 40px;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 980px) {
+  .topbarActions {
+    min-width: 0;
+  }
+
+  .planActionGroup {
+    margin-left: 0;
+  }
+}
