@@ -207,11 +207,11 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
   const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
 
   if (!blockedDate) {
-    return res.status(400).json({ error: "Blocked date is required." });
+    return res.status(400).json({ error: "Blocked date is required.", field: "blockedDate" });
   }
 
   if (!reason) {
-    return res.status(400).json({ error: "Blocked date reason is required." });
+    return res.status(400).json({ error: "Blocked date reason is required.", field: "blockedReason" });
   }
 
   try {
@@ -285,11 +285,11 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
   const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
 
   if (!holidayDate) {
-    return res.status(400).json({ error: "Holiday date is required." });
+    return res.status(400).json({ error: "Holiday date is required.", field: "holidayDate" });
   }
 
   if (!name) {
-    return res.status(400).json({ error: "Holiday name is required." });
+    return res.status(400).json({ error: "Holiday name is required.", field: "holidayName" });
   }
 
   try {
@@ -425,15 +425,15 @@ router.post("/", requireAuth, async (req, res) => {
   const reason = cleanText(req.body.reason);
 
   if (!startDate || !endDate) {
-    return res.status(400).json({ error: "Start and end dates are required." });
+    return res.status(400).json({ error: "Start and end dates are required.", field: "dateRange" });
   }
 
   if (!reason) {
-    return res.status(400).json({ error: "Reason is required." });
+    return res.status(400).json({ error: "Reason is required.", field: "requestReason" });
   }
 
   if (endDate < startDate) {
-    return res.status(400).json({ error: "End date cannot be before start date." });
+    return res.status(400).json({ error: "End date cannot be before start date.", field: "dateRange" });
   }
 
   try {
@@ -445,7 +445,7 @@ router.post("/", requireAuth, async (req, res) => {
     const blockedDate = await hasBlockedDateInRange(req.user.businessId, startDate, endDate);
     if (blockedDate) {
       const dateText = String(blockedDate.blocked_date).slice(0, 10);
-      return res.status(409).json({ error: `Time off cannot be requested for ${dateText}. ${blockedDate.reason || ""}`.trim() });
+      return res.status(409).json({ error: `Time off cannot be requested for ${dateText}. ${blockedDate.reason || ""}`.trim(), field: "dateRange" });
     }
 
     const employee = await employeeForUser(req.user);
