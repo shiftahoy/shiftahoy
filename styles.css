@@ -210,12 +210,27 @@ p {
   color: var(--brand);
 }
 
-.topbar h1.dashboardWelcome {
+.dashboardWelcome {
+  display: grid;
+  gap: 0;
   margin: 0;
+  line-height: 1;
+}
+
+.welcomeLine {
   color: var(--ink);
   font-size: 1rem;
   font-weight: 900;
-  letter-spacing: 0;
+  line-height: 1;
+}
+
+.loginLine {
+  color: var(--brand);
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  margin-top: -1px;
 }
 
 .eyebrow {
