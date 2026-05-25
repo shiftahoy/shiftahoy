@@ -690,7 +690,11 @@ async function api(path, options = {}, retry = true) {
       openPlanDialog().catch(() => {});
     }
 
-    throw new Error(data.error || "Request failed");
+    const error = new Error(data.error || "Request failed");
+    error.status = res.status;
+    error.field = data.field || "";
+    error.data = data;
+    throw error;
   }
 
   return data;
@@ -1845,8 +1849,7 @@ function selectTimeOffCalendarDate(dateValue) {
   }
 
   if (blocked.has(dateValue)) {
-    setFieldState("timeOffDateRange", "invalid", "Blocked date");
-    setNotice("timeOffFormMessage", "error", `${formatDateForDisplay(dateValue)} is blocked: ${blocked.get(dateValue)}`);
+    setFieldState("timeOffDateRange", "invalid", `Blocked: ${formatDateForDisplay(dateValue)}`);
     return;
   }
 
@@ -1867,12 +1870,7 @@ function selectTimeOffCalendarDate(dateValue) {
 
   const blockedInRange = dateRangeIncludesBlockedDate(startDate, endDate);
   if (blockedInRange) {
-    setFieldState("timeOffDateRange", "invalid", "Range includes blocked date");
-    setNotice(
-      "timeOffFormMessage",
-      "error",
-      `Your selected range includes blocked date ${formatDateForDisplay(blockedInRange.date)}: ${blockedInRange.reason}`
-    );
+    setFieldState("timeOffDateRange", "invalid", `Blocked: ${formatDateForDisplay(blockedInRange.date)}`);
     return;
   }
 
@@ -2066,6 +2064,29 @@ async function saveTimeOffSettings(event) {
   await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
 }
 
+
+function setTimeOffFieldApiError(err, fallbackField = "timeOffReason") {
+  const message = err?.message || "Please check this field.";
+  const field = err?.field || "";
+  const lowerMessage = message.toLowerCase();
+
+  let inputId = fallbackField;
+
+  if (field === "holidayDate" || lowerMessage.includes("holiday date")) inputId = "holidayDateInput";
+  else if (field === "holidayName" || lowerMessage.includes("holiday name")) inputId = "holidayDateName";
+  else if (field === "blockedDate" || lowerMessage.includes("blocked date") || lowerMessage.includes("cannot be requested for")) inputId = "blockedDateInput";
+  else if (field === "blockedReason" || lowerMessage.includes("blocked date reason")) inputId = "blockedDateReason";
+  else if (field === "dateRange" || lowerMessage.includes("start and end") || lowerMessage.includes("end date") || lowerMessage.includes("selected range")) inputId = "timeOffDateRange";
+  else if (field === "requestReason" || lowerMessage === "reason is required." || lowerMessage.includes("request reason")) inputId = "timeOffReason";
+
+  setFieldState(inputId, "invalid", message);
+  $(inputId)?.focus?.();
+}
+
+function clearTimeOffFormNotice() {
+  setNotice("timeOffFormMessage", "", "");
+}
+
 async function addHolidayDate(event) {
   event?.preventDefault?.();
   const holidayDate = $("holidayDateInput")?.value;
@@ -2088,7 +2109,7 @@ async function addHolidayDate(event) {
     hideHolidayDateForm();
     await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
   } catch (err) {
-    setNotice("timeOffFormMessage", "error", err.message);
+    setTimeOffFieldApiError(err, err?.field === "holidayDate" ? "holidayDateInput" : "holidayDateName");
   }
 }
 
@@ -2126,7 +2147,7 @@ async function addBlockedDate(event) {
     hideBlockedDateForm();
     await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
   } catch (err) {
-    setNotice("timeOffFormMessage", "error", err.message);
+    setTimeOffFieldApiError(err, err?.field === "blockedDate" ? "blockedDateInput" : "blockedDateReason");
   }
 }
 
@@ -2336,12 +2357,7 @@ async function submitTimeOffRequest(event) {
   } else {
     const blockedInRange = dateRangeIncludesBlockedDate(body.startDate, body.endDate);
     if (blockedInRange) {
-      setFieldState("timeOffDateRange", "invalid", "Range includes blocked date");
-      setNotice(
-        "timeOffFormMessage",
-        "error",
-        `Your selected range includes blocked date ${formatDateForDisplay(blockedInRange.date)}: ${blockedInRange.reason}`
-      );
+      setFieldState("timeOffDateRange", "invalid", `Blocked: ${formatDateForDisplay(blockedInRange.date)}`);
       isValid = false;
     } else {
       setFieldState("timeOffDateRange", "valid", "Selected");
@@ -2359,7 +2375,7 @@ async function submitTimeOffRequest(event) {
     setNotice("timeOffFormMessage", "success", "Time off request submitted.");
     await Promise.all([loadTimeOffRequests(), loadAuditLog()]);
   } catch (err) {
-    setNotice("timeOffFormMessage", "error", err.message);
+    setTimeOffFieldApiError(err, err?.field === "dateRange" ? "timeOffDateRange" : "timeOffReason");
   }
 }
 
