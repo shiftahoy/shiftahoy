@@ -1649,3 +1649,35 @@ tbody tr:hover td {
     margin-left: 0;
   }
 }
+
+
+/* v5 cleanup: intentional hidden editor forms, location-specific notes, and transparent utility nav */
+.utilityNav,
+.utilityNav:visited {
+  color: #000000;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.utilityNav:hover,
+.utilityNav.active {
+  color: #000000;
+  background: transparent;
+}
+
+.panelFootnote {
+  margin-top: 12px;
+  text-align: left;
+  justify-self: start;
+}
+
+.card > .panelFootnote {
+  align-self: flex-start;
+}
+
+#locationForm.hidden,
+#shiftForm.hidden,
+#employeeForm.hidden {
+  display: none !important;
+}
