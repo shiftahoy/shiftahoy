@@ -315,11 +315,24 @@ function setupSectionNavigationHighlighting() {
   updateActiveNavigationFromScroll();
 }
 
+function validateCredentialPassword(showEmptyErrors = false) {
+  const passwordInput = $("credentialPassword");
+  const password = passwordInput?.value || "";
+
+  if (!password) {
+    setFieldState("credentialPassword", showEmptyErrors ? "invalid" : "neutral", "Required");
+    return false;
+  }
+
+  setFieldState("credentialPassword", "valid", "Password entered");
+  return true;
+}
+
 function resetCredentialDialog() {
   setNotice("credentialDialogNotice", "", "");
-  resetFieldState("credentialPassword", "Required");
   const passwordInput = $("credentialPassword");
   if (passwordInput) passwordInput.value = "";
+  validateCredentialPassword(false);
 }
 
 function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) {
@@ -339,7 +352,10 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
   resetCredentialDialog();
   if (titleEl) titleEl.textContent = title || "Confirm Delete";
   if (messageEl) messageEl.textContent = message || "Enter your owner password to continue.";
-  if (confirmButton) confirmButton.textContent = confirmLabel;
+  if (confirmButton) {
+    confirmButton.textContent = confirmLabel;
+    confirmButton.disabled = true;
+  }
 
   return new Promise((resolve) => {
     let finished = false;
@@ -348,6 +364,8 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
       if (finished) return;
       finished = true;
       form.removeEventListener("submit", handleSubmit);
+      passwordInput?.removeEventListener("input", handlePasswordInput);
+      passwordInput?.removeEventListener("blur", handlePasswordBlur);
       cancelButton?.removeEventListener("click", handleCancel);
       closeButton?.removeEventListener("click", handleCancel);
       dialog.removeEventListener("cancel", handleDialogCancel);
@@ -356,13 +374,23 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
       resolve(value);
     };
 
+    const handlePasswordInput = () => {
+      const isValid = validateCredentialPassword(false);
+      if (confirmButton) confirmButton.disabled = !isValid;
+      if (isValid) setNotice("credentialDialogNotice", "", "");
+    };
+
+    const handlePasswordBlur = () => {
+      const isValid = validateCredentialPassword(true);
+      if (confirmButton) confirmButton.disabled = !isValid;
+    };
+
     const handleSubmit = (event) => {
       event.preventDefault();
       const password = passwordInput?.value || "";
 
-      if (!password) {
-        setFieldState("credentialPassword", "invalid", "Password required");
-        setNotice("credentialDialogNotice", "error", "Enter your owner password to delete this item.");
+      if (!validateCredentialPassword(true)) {
+        setNotice("credentialDialogNotice", "error", "Owner password is required.");
         passwordInput?.focus();
         return;
       }
@@ -378,6 +406,8 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
     const handleDialogCancel = () => finish(null);
 
     form.addEventListener("submit", handleSubmit);
+    passwordInput?.addEventListener("input", handlePasswordInput);
+    passwordInput?.addEventListener("blur", handlePasswordBlur);
     cancelButton?.addEventListener("click", handleCancel);
     closeButton?.addEventListener("click", handleCancel);
     dialog.addEventListener("cancel", handleDialogCancel);
@@ -1352,18 +1382,23 @@ async function deleteEmployee(employeeId) {
   const employee = employees.find((item) => item.id === employeeId);
   if (!employee) return;
 
-  const actorPassword = prompt(`Enter your owner password to delete employee ${employee.employee_code}.`);
+  const actorPassword = await requestOwnerPassword({
+    title: "Delete Employee",
+    message: `Enter your owner password to delete employee ${employee.employee_code}.`,
+    confirmLabel: "Delete Employee"
+  });
   if (!actorPassword) return;
 
   try {
-    await api(`/employees/${encodeURIComponent(employeeId)}`, {
-      method: "DELETE",
+    await api(`/employees/${encodeURIComponent(employeeId)}/delete`, {
+      method: "POST",
       body: JSON.stringify({ actorPassword })
     });
 
     await Promise.all([loadEmployees(), loadSchedule()]);
   } catch (err) {
-    showMessage(err.message);
+    setNotice("credentialDialogNotice", "error", err.message);
+    setNotice("employeeFormMessage", "error", err.message);
   }
 }
 
