@@ -1,6 +1,7 @@
 const express = require("express");
 const argon2 = require("argon2");
 const pool = require("./db");
+const { logAudit } = require("./audit");
 const { requireAuth, requireOwner, requireScheduleManager } = require("./middleware");
 
 const router = express.Router();
@@ -9,7 +10,8 @@ const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => ({
   dayOfWeek,
   enabled: dayOfWeek <= 5,
   startTime: dayOfWeek <= 5 ? "08:00" : null,
-  endTime: dayOfWeek <= 5 ? "17:00" : null
+  endTime: dayOfWeek <= 5 ? "17:00" : null,
+  maxStaff: null
 }));
 
 async function verifyActorPassword(userId, password) {
@@ -71,6 +73,13 @@ async function assertLocationAccess(user, locationId) {
   }
 }
 
+function normalizeMaxStaff(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > 99) return null;
+  return number;
+}
+
 function normalizeDays(days) {
   const input = Array.isArray(days) && days.length > 0 ? days : DEFAULT_DAYS;
   const byDay = new Map();
@@ -87,7 +96,8 @@ function normalizeDays(days) {
       dayOfWeek,
       enabled,
       startTime: enabled ? day.startTime || "08:00" : null,
-      endTime: enabled ? day.endTime || "17:00" : null
+      endTime: enabled ? day.endTime || "17:00" : null,
+      maxStaff: enabled ? normalizeMaxStaff(day.maxStaff) : null
     });
   }
 
@@ -96,7 +106,8 @@ function normalizeDays(days) {
       dayOfWeek,
       enabled: false,
       startTime: null,
-      endTime: null
+      endTime: null,
+      maxStaff: null
     }
   ));
 }
@@ -114,7 +125,8 @@ async function loadShiftWithDays(clientOrPool, shiftId, businessId) {
              'dayOfWeek', sd.day_of_week,
              'enabled', sd.enabled,
              'startTime', to_char(sd.start_time, 'HH24:MI'),
-             'endTime', to_char(sd.end_time, 'HH24:MI')
+             'endTime', to_char(sd.end_time, 'HH24:MI'),
+             'maxStaff', sd.max_staff
            )
            ORDER BY sd.day_of_week
          ) FILTER (WHERE sd.id IS NOT NULL),
@@ -168,7 +180,8 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
                'dayOfWeek', sd.day_of_week,
                'enabled', sd.enabled,
                'startTime', to_char(sd.start_time, 'HH24:MI'),
-               'endTime', to_char(sd.end_time, 'HH24:MI')
+               'endTime', to_char(sd.end_time, 'HH24:MI'),
+             'maxStaff', sd.max_staff
              )
              ORDER BY sd.day_of_week
            ) FILTER (WHERE sd.id IS NOT NULL),
@@ -222,13 +235,23 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
 
     for (const day of normalizeDays(days)) {
       await client.query(
-        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [shiftId, day.dayOfWeek, day.enabled, day.startTime, day.endTime]
+        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [shiftId, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.maxStaff]
       );
     }
 
     const shift = await loadShiftWithDays(client, shiftId, req.user.businessId);
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId,
+      action: "Shift created",
+      entityType: "shift",
+      entityId: shift.id,
+      details: shift.name
+    });
 
     await client.query("COMMIT");
 
@@ -283,13 +306,23 @@ router.put("/:id", requireAuth, requireOwner, async (req, res) => {
 
     for (const day of normalizeDays(days)) {
       await client.query(
-        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, day.dayOfWeek, day.enabled, day.startTime, day.endTime]
+        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.maxStaff]
       );
     }
 
     const shift = await loadShiftWithDays(client, id, req.user.businessId);
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: shift.location_id,
+      action: "Shift updated",
+      entityType: "shift",
+      entityId: shift.id,
+      details: shift.name
+    });
 
     await client.query("COMMIT");
 
@@ -323,7 +356,7 @@ async function deleteShiftWithCredentials(req, res) {
     await client.query("BEGIN");
 
     const shiftResult = await client.query(
-      `SELECT id
+      `SELECT id, location_id
        FROM shifts
        WHERE id = $1
          AND business_id = $2
@@ -360,6 +393,16 @@ async function deleteShiftWithCredentials(req, res) {
          AND business_id = $2`,
       [id, req.user.businessId]
     );
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: shiftResult.rows[0].location_id,
+      action: "Shift deleted",
+      entityType: "shift",
+      entityId: id,
+      details: "Shift removed."
+    });
 
     await client.query("COMMIT");
     res.json({ message: "Shift deleted." });
