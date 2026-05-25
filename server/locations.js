@@ -181,7 +181,7 @@ async function deleteLocationWithCredentials(req, res) {
 
   const verified = await verifyActorPassword(req.user.id, actorPassword);
   if (!verified) {
-    return res.status(401).json({ error: "Owner credentials are required to delete a location." });
+    return res.status(403).json({ error: "Wrong password" });
   }
 
   const client = await pool.connect();
