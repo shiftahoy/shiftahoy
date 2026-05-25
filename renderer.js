@@ -207,6 +207,70 @@ function updatePager(prefix, page, totalPages) {
   if (next) next.classList.toggle("hidden", safePage >= safeTotalPages);
   if (pager) pager.classList.toggle("hidden", safeTotalPages <= 1);
 }
+function setActiveNavigation(sectionId) {
+  if (!sectionId) return;
+
+  document.querySelectorAll(".navList .navItem:not(.utilityNav)").forEach((link) => {
+    const targetId = (link.getAttribute("href") || "").replace("#", "");
+    link.classList.toggle("active", targetId === sectionId);
+  });
+}
+
+function visibleSectionCandidates() {
+  return ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel"]
+    .map((id) => $(id))
+    .filter((section) => section && !section.classList.contains("hidden"));
+}
+
+function updateActiveNavigationFromScroll() {
+  const sections = visibleSectionCandidates();
+  if (!sections.length) return;
+
+  const activationLine = window.innerHeight * 0.35;
+  let activeSection = sections[0];
+
+  for (const section of sections) {
+    const rect = section.getBoundingClientRect();
+    if (rect.top <= activationLine && rect.bottom >= activationLine * 0.5) {
+      activeSection = section;
+    }
+  }
+
+  setActiveNavigation(activeSection.id);
+}
+
+function setupSectionNavigationHighlighting() {
+  document.querySelectorAll(".navList .navItem:not(.utilityNav)").forEach((link) => {
+    link.addEventListener("click", () => {
+      const sectionId = (link.getAttribute("href") || "").replace("#", "");
+      setActiveNavigation(sectionId);
+    });
+  });
+
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting && !entry.target.classList.contains("hidden"))
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visibleEntry) setActiveNavigation(visibleEntry.target.id);
+      },
+      {
+        root: null,
+        rootMargin: "-24% 0px -55% 0px",
+        threshold: [0.12, 0.25, 0.5, 0.75]
+      }
+    );
+
+    visibleSectionCandidates().forEach((section) => observer.observe(section));
+  }
+
+  window.addEventListener("scroll", updateActiveNavigationFromScroll, { passive: true });
+  window.addEventListener("resize", updateActiveNavigationFromScroll);
+  updateActiveNavigationFromScroll();
+}
+
 
 function validateSignupField(inputId, showEmptyErrors = false) {
   const input = $(inputId);
@@ -334,6 +398,7 @@ function applyRoleUI() {
 
   setDashboardWelcome(dashboardWelcomeText());
   showMessage("");
+  updateActiveNavigationFromScroll();
 }
 
 async function signup() {
@@ -1368,6 +1433,7 @@ function setupEvents() {
 
 document.addEventListener("DOMContentLoaded", () => {
   setupEvents();
+  setupSectionNavigationHighlighting();
   resetLocationForm();
   $("locationForm").classList.add("hidden");
   renderShiftDayEditor(defaultShiftDays());
