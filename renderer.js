@@ -1739,7 +1739,8 @@ function renderTimeOffSettings() {
   }
 
   if (blockedList) {
-    const blockedDates = timeOffSettings.blockedDates || [];
+    const today = dateOnly(new Date());
+    const blockedDates = (timeOffSettings.blockedDates || []).filter((item) => formatRequestDate(item.blocked_date) >= today);
     blockedList.innerHTML = blockedDates.length
       ? blockedDates.map((item) => `
           <span class="dateChip">
