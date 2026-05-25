@@ -431,24 +431,24 @@
                   <p class="panelHint">Approved requests automatically remove those dates from the schedule forecast</p>
                 </div>
               </div>
-              <div class="inlineToolbar nonManagerOnly">
-                <button id="showTimeOffRequestFormButton" class="button secondary" type="button">Request Time Off</button>
-              </div>
             </div>
 
             <div id="timeOffFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
             <div id="timeOffDisabledNotice" class="formNotice error hidden" role="status">Time off requests are currently turned off by the owner.</div>
 
             <section id="timeOffRequestsCard" class="timeOffSectionCard">
-              <div class="sectionHeader compactHeader">
+              <div class="sectionHeader compactHeader dashboardCardTitleWithAction">
                 <div>
                   <h3>Requests</h3>
-                  <p class="panelHint nonManagerOnly">Your request history is organized by status and never disappears.</p>
-                  <p class="panelHint managerOnly hidden">Review pending, approved, and not approved requests for the selected location.</p>
+                  <p class="panelHint">Submit your own request or review request history by status.</p>
+                  <p class="panelHint managerOnly hidden">Managers and owners can also review pending, approved, and not approved requests for the selected location.</p>
+                </div>
+                <div class="inlineToolbar">
+                  <button id="showTimeOffRequestFormButton" class="button secondary" type="button">Request Time Off</button>
                 </div>
               </div>
 
-              <form id="timeOffRequestForm" class="editorForm nonManagerOnly hidden">
+              <form id="timeOffRequestForm" class="editorForm hidden">
                 <div class="formGrid twoColumn">
                   <div class="fieldGroup" data-field="timeOffStartDate">
                     <label class="fieldLabel" for="timeOffStartDate">
@@ -495,10 +495,13 @@
             </section>
 
             <section id="timeOffSettingsCard" class="settingsInlineCard ownerOnly hidden">
-              <div class="sectionHeader compactHeader">
+              <div class="sectionHeader compactHeader dashboardCardTitleWithAction">
                 <div>
                   <h3>Override</h3>
                   <p class="panelHint">Owner controls for employee requests and blocked dates.</p>
+                </div>
+                <div class="inlineToolbar">
+                  <button id="showBlockedDateFormButton" class="button secondary" type="button">Add Blocked Date</button>
                 </div>
               </div>
 
@@ -509,9 +512,6 @@
                 </label>
               </div>
 
-              <div class="formActions alignLeft">
-                <button id="showBlockedDateFormButton" class="button secondary" type="button">Add Blocked Date</button>
-              </div>
 
               <form id="blockedDateForm" class="editorForm hidden">
                 <div class="formGrid twoColumn">
