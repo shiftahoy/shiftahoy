@@ -668,7 +668,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
+async function deleteEmployeeWithCredentials(req, res) {
   const { id } = req.params;
   const { actorPassword } = req.body;
 
@@ -716,6 +716,9 @@ router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
   } finally {
     client.release();
   }
-});
+}
+
+router.post("/:id/delete", requireAuth, requireOwner, deleteEmployeeWithCredentials);
+router.delete("/:id", requireAuth, requireOwner, deleteEmployeeWithCredentials);
 
 module.exports = router;
