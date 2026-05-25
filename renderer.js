@@ -17,7 +17,10 @@ let selectedLocationId = null;
 let locations = [];
 let shifts = [];
 let employees = [];
+let selectedLocationRecord = null;
 let currentWeekStart = startOfWeek(new Date());
+let locationPage = 1;
+let locationTotalPages = 1;
 let employeePage = 1;
 let employeeTotalPages = 1;
 let shiftPage = 1;
@@ -76,7 +79,8 @@ function canManageSchedule() {
 }
 
 function selectedLocation() {
-  return locations.find((location) => location.id === selectedLocationId) || null;
+  return locations.find((location) => location.id === selectedLocationId) ||
+    (selectedLocationRecord?.id === selectedLocationId ? selectedLocationRecord : null);
 }
 
 function selectedLocationName() {
@@ -223,25 +227,23 @@ function visibleSectionCandidates() {
 }
 
 let navigationScrollTicking = false;
+let navigationClickHoldUntil = 0;
 
 function updateActiveNavigationFromScroll() {
+  if (Date.now() < navigationClickHoldUntil) return;
+
   const sections = visibleSectionCandidates();
   if (!sections.length) return;
 
-  const marker = window.scrollY + window.innerHeight * 0.28;
+  const activationLine = Math.min(190, Math.max(96, window.innerHeight * 0.22));
   let activeSection = sections[0];
 
   for (const section of sections) {
-    if (section.offsetTop <= marker) {
-      activeSection = section;
-    } else {
-      break;
-    }
-  }
+    const rect = section.getBoundingClientRect();
 
-  const pageBottom = document.documentElement.scrollHeight - window.innerHeight - 8;
-  if (window.scrollY >= pageBottom) {
-    activeSection = sections[sections.length - 1];
+    if (rect.top <= activationLine) {
+      activeSection = section;
+    }
   }
 
   setActiveNavigation(activeSection.id);
@@ -261,8 +263,15 @@ function setupSectionNavigationHighlighting() {
   document.querySelectorAll(".navList .navItem:not(.utilityNav)").forEach((link) => {
     link.addEventListener("click", () => {
       const sectionId = (link.getAttribute("href") || "").replace("#", "");
+      if (!sectionId) return;
+
+      navigationClickHoldUntil = Date.now() + 900;
       setActiveNavigation(sectionId);
-      window.setTimeout(updateActiveNavigationFromScroll, 250);
+
+      window.setTimeout(() => {
+        navigationClickHoldUntil = 0;
+        updateActiveNavigationFromScroll();
+      }, 950);
     });
   });
 
@@ -270,6 +279,79 @@ function setupSectionNavigationHighlighting() {
   window.addEventListener("resize", requestActiveNavigationUpdate);
   window.addEventListener("hashchange", requestActiveNavigationUpdate);
   updateActiveNavigationFromScroll();
+}
+
+function resetCredentialDialog() {
+  setNotice("credentialDialogNotice", "", "");
+  resetFieldState("credentialPassword", "Required");
+  const passwordInput = $("credentialPassword");
+  if (passwordInput) passwordInput.value = "";
+}
+
+function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) {
+  const dialog = $("credentialDialog");
+  const form = $("credentialForm");
+  const titleEl = $("credentialDialogTitle");
+  const messageEl = $("credentialDialogMessage");
+  const confirmButton = $("confirmCredentialButton");
+  const cancelButton = $("cancelCredentialButton");
+  const closeButton = $("cancelCredentialX");
+  const passwordInput = $("credentialPassword");
+
+  if (!dialog || !form || typeof dialog.showModal !== "function") {
+    return Promise.resolve(window.prompt(message || "Enter your owner password to continue."));
+  }
+
+  resetCredentialDialog();
+  if (titleEl) titleEl.textContent = title || "Confirm Delete";
+  if (messageEl) messageEl.textContent = message || "Enter your owner password to continue.";
+  if (confirmButton) confirmButton.textContent = confirmLabel;
+
+  return new Promise((resolve) => {
+    let finished = false;
+
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      form.removeEventListener("submit", handleSubmit);
+      cancelButton?.removeEventListener("click", handleCancel);
+      closeButton?.removeEventListener("click", handleCancel);
+      dialog.removeEventListener("cancel", handleDialogCancel);
+      dialog.removeEventListener("close", handleDialogCancel);
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+
+    const handleSubmit = (event) => {
+      event.preventDefault();
+      const password = passwordInput?.value || "";
+
+      if (!password) {
+        setFieldState("credentialPassword", "invalid", "Password required");
+        setNotice("credentialDialogNotice", "error", "Enter your owner password to delete this item.");
+        passwordInput?.focus();
+        return;
+      }
+
+      finish(password);
+    };
+
+    const handleCancel = (event) => {
+      event?.preventDefault?.();
+      finish(null);
+    };
+
+    const handleDialogCancel = () => finish(null);
+
+    form.addEventListener("submit", handleSubmit);
+    cancelButton?.addEventListener("click", handleCancel);
+    closeButton?.addEventListener("click", handleCancel);
+    dialog.addEventListener("cancel", handleDialogCancel);
+    dialog.addEventListener("close", handleDialogCancel);
+
+    dialog.showModal();
+    window.setTimeout(() => passwordInput?.focus(), 30);
+  });
 }
 
 
@@ -337,7 +419,25 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
-async function api(path, options = {}) {
+async function refreshSession() {
+  const res = await fetch(`${API_URL}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" }
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.accessToken) {
+    throw new Error(data.error || "Session expired. Please log in again.");
+  }
+
+  accessToken = data.accessToken;
+  currentUser = data.user || currentUser;
+  return data;
+}
+
+async function api(path, options = {}, retry = true) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     credentials: "include",
@@ -351,6 +451,11 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401 && retry && !path.startsWith("/auth/")) {
+      await refreshSession();
+      return api(path, options, false);
+    }
+
     if (res.status === 402 && isOwner()) {
       openPlanDialog().catch(() => {});
     }
@@ -460,27 +565,57 @@ async function login() {
   }
 }
 
-async function loadLocations() {
-  const data = await api("/locations");
-  locations = data.locations || [];
+async function loadLocations({ resetPage = false } = {}) {
+  if (resetPage) locationPage = 1;
 
-  if (locations.length === 0) {
+  const filter = ($("locationFilter")?.value || "").trim();
+  const params = new URLSearchParams({
+    page: String(locationPage),
+    pageSize: "5",
+    filter
+  });
+
+  if (selectedLocationId) {
+    params.set("selectedLocationId", selectedLocationId);
+  }
+
+  const data = await api(`/locations?${params.toString()}`);
+  locations = data.locations || [];
+  locationPage = data.page || locationPage;
+  locationTotalPages = data.totalPages || 1;
+  selectedLocationRecord = data.selectedLocation || null;
+
+  if (!locations.length && locationPage > 1) {
+    locationPage = Math.max(1, locationPage - 1);
+    await loadLocations();
+    return;
+  }
+
+  if (!locations.length && !selectedLocationRecord) {
     selectedLocationId = null;
     shifts = [];
     employees = [];
     renderLocations();
     renderShifts();
     renderEmployees();
+    updatePager("location", locationPage, locationTotalPages);
     updateSelectedLocationLabels();
     renderEmptySchedule();
     return;
   }
 
-  if (!selectedLocationId || !locations.some((location) => location.id === selectedLocationId)) {
-    selectedLocationId = locations[0].id;
+  const selectedStillExists =
+    !!selectedLocationId &&
+    (locations.some((location) => location.id === selectedLocationId) || selectedLocationRecord?.id === selectedLocationId);
+
+  if (!selectedStillExists) {
+    const firstLocation = locations[0] || selectedLocationRecord;
+    selectedLocationId = firstLocation?.id || null;
+    selectedLocationRecord = firstLocation || null;
   }
 
   renderLocations();
+  updatePager("location", locationPage, locationTotalPages);
   await loadSelectedLocationData();
 }
 
@@ -508,22 +643,14 @@ function showLocationForm(location = null) {
 function renderLocations() {
   updateSelectedLocationLabels();
   const list = $("locationList");
-  const filter = ($("locationFilter")?.value || "").trim().toLowerCase();
-  const visibleLocations = filter
-    ? locations.filter((location) => `${location.name || ""} ${location.address || ""}`.toLowerCase().includes(filter))
-    : locations;
+  const filter = ($("locationFilter")?.value || "").trim();
 
   if (!locations.length) {
-    list.innerHTML = `<div class="emptyState">No locations found.</div>`;
+    list.innerHTML = `<div class="emptyState">${filter ? "No locations match that filter." : "No locations found."}</div>`;
     return;
   }
 
-  if (!visibleLocations.length) {
-    list.innerHTML = `<div class="emptyState">No locations match that filter.</div>`;
-    return;
-  }
-
-  list.innerHTML = visibleLocations.map((location) => {
+  list.innerHTML = locations.map((location) => {
     const active = location.id === selectedLocationId;
     const ownerControls = isOwner()
       ? `
@@ -619,7 +746,11 @@ async function deleteLocation(locationId) {
   const location = locations.find((item) => item.id === locationId);
   if (!location) return;
 
-  const actorPassword = prompt(`Enter your owner password to delete ${location.name}. This also removes its shifts and employees.`);
+  const actorPassword = await requestOwnerPassword({
+    title: "Delete Location",
+    message: `Enter your owner password to delete ${location.name}. This also removes its shifts and employees.`,
+    confirmLabel: "Delete Location"
+  });
   if (!actorPassword) return;
 
   try {
@@ -629,8 +760,11 @@ async function deleteLocation(locationId) {
     });
 
     selectedLocationId = null;
+    selectedLocationRecord = null;
+    locationPage = 1;
     await loadLocations();
   } catch (err) {
+    setNotice("credentialDialogNotice", "error", err.message);
     setNotice("locationFormMessage", "error", err.message);
   }
 }
@@ -910,7 +1044,11 @@ async function deleteShift(shiftId) {
   const shift = shifts.find((item) => item.id === shiftId);
   if (!shift) return;
 
-  const actorPassword = prompt(`Enter your owner password to delete shift ${shift.name}.`);
+  const actorPassword = await requestOwnerPassword({
+    title: "Delete Shift",
+    message: `Enter your owner password to delete shift ${shift.name}.`,
+    confirmLabel: "Delete Shift"
+  });
   if (!actorPassword) return;
 
   try {
@@ -921,6 +1059,7 @@ async function deleteShift(shiftId) {
 
     await Promise.all([loadShifts(), loadSchedule()]);
   } catch (err) {
+    setNotice("credentialDialogNotice", "error", err.message);
     setNotice("shiftFormMessage", "error", err.message);
   }
 }
@@ -1292,7 +1431,18 @@ function setupEvents() {
     resetLocationForm();
     $("locationForm").classList.add("hidden");
   });
-  $("locationFilter").addEventListener("input", renderLocations);
+  $("locationFilter").addEventListener("input", async () => {
+    locationPage = 1;
+    await loadLocations();
+  });
+  $("prevLocationPage")?.addEventListener("click", async () => {
+    locationPage = Math.max(1, locationPage - 1);
+    await loadLocations();
+  });
+  $("nextLocationPage")?.addEventListener("click", async () => {
+    locationPage += 1;
+    await loadLocations();
+  });
   $("locationList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
@@ -1303,6 +1453,7 @@ function setupEvents() {
     if (action === "select-location") {
       if (selectedLocationId === id) return;
       selectedLocationId = id;
+      selectedLocationRecord = locations.find((location) => location.id === id) || selectedLocationRecord;
       renderLocations();
       await loadSelectedLocationData({ resetPages: true });
     }
