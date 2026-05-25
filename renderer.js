@@ -27,6 +27,9 @@ let shiftPage = 1;
 let shiftTotalPages = 1;
 let currentPlanCode = "free";
 let employeeDaysOff = new Set();
+let timeOffRequests = [];
+let timeOffSettings = { requestsEnabled: true, blockedDates: [] };
+let auditLogs = [];
 
 const message = document.getElementById("message");
 
@@ -221,7 +224,7 @@ function setActiveNavigation(sectionId) {
 }
 
 function visibleSectionCandidates() {
-  return ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel"]
+  return ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel", "timeOffPanel", "auditPanel"]
     .map((id) => $(id))
     .filter((section) => section && !section.classList.contains("hidden"));
 }
@@ -246,7 +249,7 @@ function scrollToSectionForNav(sectionId) {
   if (sectionId === "locationsPanel") {
     targetY = 0;
   } else if (sectionId === "employeesPanel") {
-    targetY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    targetY = Math.max(0, sectionDocumentTop(section) - 14);
   } else if (sectionId === "schedulePanel") {
     targetY = Math.max(0, sectionDocumentTop(section) - 14);
   } else if (sectionId === "shiftsPanel") {
@@ -686,6 +689,10 @@ function applyRoleUI() {
     el.classList.toggle("hidden", owner);
   });
 
+  document.querySelectorAll(".nonManagerOnly").forEach((el) => {
+    el.classList.toggle("hidden", canManage);
+  });
+
   document.querySelectorAll(".managerOnly").forEach((el) => {
     el.classList.toggle("hidden", !canManage);
   });
@@ -809,6 +816,7 @@ async function loadLocations({ resetPage = false } = {}) {
   renderLocations();
   updatePager("location", locationPage, locationTotalPages);
   await loadSelectedLocationData();
+  if (canManageSchedule()) await loadAuditLog();
 }
 
 function resetLocationForm() {
@@ -881,9 +889,11 @@ async function loadSelectedLocationData({ resetPages = false } = {}) {
   }
 
   await loadSchedule();
+  await loadTimeOffSettings();
+  if (!canManageSchedule()) await loadTimeOffRequests();
 
   if (canManageSchedule()) {
-    await Promise.all([loadShifts(), loadEmployees()]);
+    await Promise.all([loadShifts(), loadEmployees(), loadTimeOffRequests(), loadAuditLog()]);
   } else {
     shifts = [];
     employees = [];
@@ -974,9 +984,11 @@ async function loadSchedule() {
   );
 
   renderSchedule(data.cells || []);
+  renderScheduleWarnings(data.warnings || []);
 }
 
 function renderEmptySchedule() {
+  renderScheduleWarnings([]);
   const table = $("scheduleTable");
 
   table.innerHTML = `
@@ -991,6 +1003,22 @@ function renderEmptySchedule() {
       </tr>
     </tbody>
   `;
+}
+
+function renderScheduleWarnings(warnings) {
+  const existing = $("scheduleWarnings");
+  if (existing) existing.remove();
+
+  if (!Array.isArray(warnings) || !warnings.length) return;
+
+  const frame = document.querySelector("#schedulePanel .tableFrame");
+  if (!frame) return;
+
+  const notice = document.createElement("div");
+  notice.id = "scheduleWarnings";
+  notice.className = "formNotice warning";
+  notice.innerHTML = `<strong>Coverage warnings:</strong> ${warnings.map((warning) => escapeHtml(warning.message)).join(" ")}`;
+  frame.insertAdjacentElement("afterend", notice);
 }
 
 function renderSchedule(cells) {
@@ -1059,7 +1087,8 @@ function defaultShiftDays() {
     dayOfWeek: day.value,
     enabled: day.value <= 5,
     startTime: day.value <= 5 ? "08:00" : "",
-    endTime: day.value <= 5 ? "17:00" : ""
+    endTime: day.value <= 5 ? "17:00" : "",
+    maxStaff: null
   }));
 }
 
@@ -1082,9 +1111,20 @@ function renderShiftDayEditor(days = defaultShiftDays()) {
         </label>
         <input type="time" class="shiftStart" value="${escapeHtml(value.startTime || "")}" />
         <input type="time" class="shiftEnd" value="${escapeHtml(value.endTime || "")}" />
+        <label class="staffNeededLabel">Max Staff #
+          <input type="number" class="maxStaff" min="1" max="99" placeholder="Unlimited" value="${escapeHtml(value.maxStaff ?? "")}" />
+          <small>Optional. Leave blank for unlimited.</small>
+        </label>
       </div>
     `;
   }).join("");
+}
+
+function normalizeOptionalStaffLimit(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > 99) return null;
+  return number;
 }
 
 function collectShiftDays() {
@@ -1095,7 +1135,8 @@ function collectShiftDays() {
       dayOfWeek: Number(row.dataset.day),
       enabled,
       startTime: enabled ? row.querySelector(".shiftStart").value : null,
-      endTime: enabled ? row.querySelector(".shiftEnd").value : null
+      endTime: enabled ? row.querySelector(".shiftEnd").value : null,
+      maxStaff: enabled ? normalizeOptionalStaffLimit(row.querySelector(".maxStaff")?.value) : null
     };
   });
 }
@@ -1190,7 +1231,7 @@ function renderShifts() {
       .filter((day) => day.enabled)
       .map((day) => {
         const label = DAYS.find((item) => item.value === Number(day.dayOfWeek))?.short || day.dayOfWeek;
-        return `${label} ${day.startTime || ""}–${day.endTime || ""}`;
+        return `${label} ${day.startTime || ""}–${day.endTime || ""} · Max ${day.maxStaff || "Unlimited"}`;
       })
       .join(", ") || "No active days";
 
@@ -1597,6 +1638,456 @@ async function changePlan(planCode) {
   }
 }
 
+function formatRequestDate(value) {
+  return String(value || "").slice(0, 10);
+}
+
+function statusBadge(status) {
+  const safe = String(status || "pending");
+  return `<span class="statusBadge ${escapeHtml(safe)}">${escapeHtml(safe)}</span>`;
+}
+
+
+async function loadTimeOffSettings() {
+  if (!currentUser) return;
+
+  try {
+    const data = await api("/time-off/settings");
+    timeOffSettings = {
+      requestsEnabled: data.settings?.requestsEnabled !== false,
+      blockedDates: data.blockedDates || []
+    };
+    renderTimeOffSettings();
+  } catch (err) {
+    timeOffSettings = { requestsEnabled: true, blockedDates: [] };
+    renderTimeOffSettings();
+  }
+}
+
+function resetBlockedDateForm() {
+  const blockedDateInput = $("blockedDateInput");
+  const reasonInput = $("blockedDateReason");
+  if (blockedDateInput) blockedDateInput.value = "";
+  if (reasonInput) reasonInput.value = "";
+  resetFieldState("blockedDateInput", "Required");
+  resetFieldState("blockedDateReason", "Required");
+  setNotice("timeOffFormMessage", "", "");
+}
+
+function hideBlockedDateForm() {
+  resetBlockedDateForm();
+  $("blockedDateForm")?.classList.add("hidden");
+}
+
+function showBlockedDateForm() {
+  resetBlockedDateForm();
+  $("blockedDateForm")?.classList.remove("hidden");
+  $("blockedDateInput")?.focus();
+}
+
+function resetTimeOffRequestForm() {
+  const startInput = $("timeOffStartDate");
+  const endInput = $("timeOffEndDate");
+  const reasonInput = $("timeOffReason");
+  if (startInput) startInput.value = "";
+  if (endInput) endInput.value = "";
+  if (reasonInput) reasonInput.value = "";
+  resetFieldState("timeOffStartDate", "Required");
+  resetFieldState("timeOffEndDate", "Required");
+  resetFieldState("timeOffReason", "Required");
+  resetFieldState("blockedDateInput", "Required");
+  resetFieldState("blockedDateReason", "Required");
+  resetFieldState("decisionReason", "Required");
+  resetFieldState("timeOffReason", "Required");
+}
+
+function hideTimeOffRequestForm() {
+  resetTimeOffRequestForm();
+  $("timeOffRequestForm")?.classList.add("hidden");
+}
+
+function showTimeOffRequestForm() {
+  if (timeOffSettings.requestsEnabled === false) {
+    setNotice("timeOffFormMessage", "error", "Time off requests are currently turned off by the owner.");
+    return;
+  }
+
+  resetTimeOffRequestForm();
+  $("timeOffRequestForm")?.classList.remove("hidden");
+  $("timeOffStartDate")?.focus();
+}
+
+function renderTimeOffSettings() {
+  const enabledInput = $("timeOffRequestsEnabled");
+  const requestForm = $("timeOffRequestForm");
+  const disabledNotice = $("timeOffDisabledNotice");
+  const requestButton = $("showTimeOffRequestFormButton");
+  const blockedList = $("blockedDateList");
+
+  if (enabledInput) enabledInput.checked = timeOffSettings.requestsEnabled !== false;
+
+  if (requestButton) {
+    requestButton.disabled = timeOffSettings.requestsEnabled === false;
+  }
+
+  if (requestForm && timeOffSettings.requestsEnabled === false && !canManageSchedule()) {
+    requestForm.classList.add("hidden");
+  }
+
+  if (disabledNotice) {
+    disabledNotice.classList.toggle("hidden", timeOffSettings.requestsEnabled !== false || canManageSchedule());
+  }
+
+  if (blockedList) {
+    const blockedDates = timeOffSettings.blockedDates || [];
+    blockedList.innerHTML = blockedDates.length
+      ? blockedDates.map((item) => `
+          <span class="dateChip">
+            ${escapeHtml(formatRequestDate(item.blocked_date))}
+            <small>${escapeHtml(item.reason || "No reason")}</small>
+            <button class="button textDanger miniButton" type="button" data-action="remove-blocked-date" data-id="${escapeHtml(item.id)}">Remove</button>
+          </span>
+        `).join("")
+      : `<div class="emptyState compactEmpty">No blocked dates.</div>`;
+  }
+}
+
+async function saveTimeOffSettings(event) {
+  if (!isOwner()) return;
+
+  const enabledInput = $("timeOffRequestsEnabled");
+  const nextValue = enabledInput?.checked !== false;
+  const previousValue = timeOffSettings.requestsEnabled !== false;
+
+  if (enabledInput) enabledInput.checked = previousValue;
+
+  const updated = await runOwnerCredentialAction({
+    title: nextValue ? "Turn On Time Off Requests" : "Turn Off Time Off Requests",
+    message: `Enter your owner password to ${nextValue ? "turn on" : "turn off"} employee time off requests.`,
+    confirmLabel: nextValue ? "Turn On" : "Turn Off",
+    onConfirm: (actorPassword) =>
+      api("/time-off/settings/toggle", {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({ requestsEnabled: nextValue, actorPassword, locationId: selectedLocationId })
+      })
+  });
+
+  if (!updated) {
+    if (enabledInput) enabledInput.checked = previousValue;
+    return;
+  }
+
+  await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+}
+
+async function addBlockedDate(event) {
+  event?.preventDefault?.();
+  const blockedDate = $("blockedDateInput")?.value;
+  const reason = $("blockedDateReason")?.value.trim() || "";
+
+  let isValid = true;
+  if (!blockedDate) { setFieldState("blockedDateInput", "invalid", "Required"); isValid = false; }
+  else setFieldState("blockedDateInput", "valid", "Looks good");
+
+  if (!reason) { setFieldState("blockedDateReason", "invalid", "Required"); isValid = false; }
+  else setFieldState("blockedDateReason", "valid", "Looks good");
+
+  if (!isValid) return;
+
+  try {
+    await api("/time-off/blocked-dates", {
+      method: "POST",
+      body: JSON.stringify({ blockedDate, reason, locationId: selectedLocationId })
+    });
+    hideBlockedDateForm();
+    await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
+}
+
+async function removeBlockedDate(id) {
+  try {
+    await api(`/time-off/blocked-dates/${encodeURIComponent(id)}/delete`, {
+      method: "POST",
+      body: JSON.stringify({ locationId: selectedLocationId })
+    });
+    await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
+}
+
+async function loadTimeOffRequests() {
+  const hasTimeOffUi = $("pendingTimeOffList") || $("approvedTimeOffList") || $("deniedTimeOffList");
+  if (!hasTimeOffUi || !currentUser) return;
+
+  const path = canManageSchedule()
+    ? `/time-off?locationId=${encodeURIComponent(selectedLocationId || "")}`
+    : "/time-off";
+
+  if (canManageSchedule() && !selectedLocationId) return;
+
+  const data = await api(path);
+  timeOffRequests = data.requests || [];
+  renderTimeOffRequests();
+}
+
+function requestStatusColumnId(status) {
+  if (status === "approved") return "approvedTimeOffList";
+  if (status === "denied") return "deniedTimeOffList";
+  return "pendingTimeOffList";
+}
+
+function requesterName(request) {
+  return `${request.first_name || ""} ${request.last_name || ""}`.trim() || request.username || "Employee";
+}
+
+function approverName(request) {
+  return `${request.approver_first_name || ""} ${request.approver_last_name || ""}`.trim() || request.approver_username || "Manager/Owner";
+}
+
+function renderRequestCard(request) {
+  const managerActions = canManageSchedule() && request.status === "pending"
+    ? `<div class="rowActions">
+        <button class="button secondary" data-action="approve-time-off" data-id="${escapeHtml(request.id)}">Approve</button>
+        <button class="button ghost" data-action="deny-time-off" data-id="${escapeHtml(request.id)}">Not Approve</button>
+      </div>`
+    : "";
+
+  const decisionDetails = request.status !== "pending"
+    ? `<span><strong>${request.status === "approved" ? "Approved" : "Not approved"} by:</strong> ${escapeHtml(approverName(request))}</span>
+       <span><strong>Decision reason:</strong> ${escapeHtml(request.decision_reason || "No reason recorded")}</span>`
+    : "";
+
+  return `
+    <article class="listItem timeOffRequestItem">
+      <div>
+        <strong>${escapeHtml(requesterName(request))} · ${statusBadge(request.status)}</strong>
+        <span>${escapeHtml(formatRequestDate(request.start_date))} → ${escapeHtml(formatRequestDate(request.end_date))}</span>
+        <span><strong>Request reason:</strong> ${escapeHtml(request.reason || "No reason provided")}</span>
+        ${decisionDetails}
+      </div>
+      ${managerActions}
+    </article>
+  `;
+}
+
+function renderTimeOffRequests() {
+  const columns = ["pendingTimeOffList", "approvedTimeOffList", "deniedTimeOffList"];
+  if (!columns.some((id) => $(id))) return;
+
+  const grouped = { pendingTimeOffList: [], approvedTimeOffList: [], deniedTimeOffList: [] };
+  for (const request of timeOffRequests) {
+    grouped[requestStatusColumnId(request.status)].push(request);
+  }
+
+  for (const columnId of columns) {
+    const list = $(columnId);
+    if (!list) continue;
+    list.innerHTML = grouped[columnId].length
+      ? grouped[columnId].map(renderRequestCard).join("")
+      : `<div class="emptyState compactEmpty">No requests.</div>`;
+  }
+}
+
+function validateDecisionReason(showEmptyErrors = false) {
+  const value = $("decisionReason")?.value.trim() || "";
+  if (!value) {
+    setFieldState("decisionReason", showEmptyErrors ? "invalid" : "neutral", "Required");
+    return false;
+  }
+  setFieldState("decisionReason", "valid", "Looks good");
+  return true;
+}
+
+function requestDecisionReason({ title, message, confirmLabel }) {
+  const dialog = $("decisionDialog");
+  const form = $("decisionForm");
+  const titleEl = $("decisionDialogTitle");
+  const messageEl = $("decisionDialogMessage");
+  const confirmButton = $("confirmDecisionButton");
+  const cancelButton = $("cancelDecisionButton");
+  const closeButton = $("cancelDecisionX");
+  const reasonInput = $("decisionReason");
+
+  if (!dialog || !form || typeof dialog.showModal !== "function") {
+    const reason = window.prompt(message || "Enter a reason.");
+    return Promise.resolve(reason && reason.trim() ? reason.trim() : null);
+  }
+
+  setNotice("decisionDialogNotice", "", "");
+  if (reasonInput) reasonInput.value = "";
+  resetFieldState("decisionReason", "Required");
+  if (titleEl) titleEl.textContent = title || "Decision Reason";
+  if (messageEl) messageEl.textContent = message || "Enter the reason for this decision.";
+  if (confirmButton) {
+    confirmButton.textContent = confirmLabel || "Save Decision";
+    confirmButton.disabled = true;
+  }
+
+  return new Promise((resolve) => {
+    let finished = false;
+
+    const cleanup = () => {
+      form.removeEventListener("submit", handleSubmit);
+      reasonInput?.removeEventListener("input", handleInput);
+      reasonInput?.removeEventListener("blur", handleBlur);
+      cancelButton?.removeEventListener("click", handleCancel);
+      closeButton?.removeEventListener("click", handleCancel);
+      dialog.removeEventListener("cancel", handleCancel);
+    };
+
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+
+    const handleInput = () => {
+      const isValid = validateDecisionReason(false);
+      if (confirmButton) confirmButton.disabled = !isValid;
+    };
+
+    const handleBlur = () => {
+      const isValid = validateDecisionReason(true);
+      if (confirmButton) confirmButton.disabled = !isValid;
+    };
+
+    function handleSubmit(event) {
+      event.preventDefault();
+      if (!validateDecisionReason(true)) {
+        setNotice("decisionDialogNotice", "error", "Reason is required.");
+        reasonInput?.focus();
+        return;
+      }
+      finish(reasonInput?.value.trim() || null);
+    }
+
+    function handleCancel(event) {
+      event?.preventDefault?.();
+      finish(null);
+    }
+
+    form.addEventListener("submit", handleSubmit);
+    reasonInput?.addEventListener("input", handleInput);
+    reasonInput?.addEventListener("blur", handleBlur);
+    cancelButton?.addEventListener("click", handleCancel);
+    closeButton?.addEventListener("click", handleCancel);
+    dialog.addEventListener("cancel", handleCancel);
+
+    dialog.showModal();
+    window.setTimeout(() => reasonInput?.focus(), 30);
+  });
+}
+
+async function submitTimeOffRequest(event) {
+  event.preventDefault();
+  setNotice("timeOffFormMessage", "", "");
+  resetFieldState("timeOffStartDate", "Required");
+  resetFieldState("timeOffEndDate", "Required");
+  resetFieldState("timeOffReason", "Required");
+  resetFieldState("blockedDateInput", "Required");
+  resetFieldState("blockedDateReason", "Required");
+  resetFieldState("decisionReason", "Required");
+  resetFieldState("timeOffReason", "Required");
+
+  const body = {
+    startDate: $("timeOffStartDate").value,
+    endDate: $("timeOffEndDate").value,
+    reason: $("timeOffReason").value.trim()
+  };
+
+  let isValid = true;
+  if (!body.startDate) { setFieldState("timeOffStartDate", "invalid", "Required"); isValid = false; }
+  else setFieldState("timeOffStartDate", "valid", "Looks good");
+
+  if (!body.endDate) { setFieldState("timeOffEndDate", "invalid", "Required"); isValid = false; }
+  else if (body.endDate < body.startDate) { setFieldState("timeOffEndDate", "invalid", "End date must be after start"); isValid = false; }
+  else setFieldState("timeOffEndDate", "valid", "Looks good");
+
+  if (!body.reason) { setFieldState("timeOffReason", "invalid", "Required"); isValid = false; }
+  else setFieldState("timeOffReason", "valid", "Looks good");
+
+  if (!isValid) return;
+
+  try {
+    await api("/time-off", { method: "POST", body: JSON.stringify(body) });
+    hideTimeOffRequestForm();
+    setNotice("timeOffFormMessage", "success", "Time off request submitted.");
+    await Promise.all([loadTimeOffRequests(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
+}
+
+async function decideTimeOffRequest(id, decision) {
+  const approved = decision === "approve";
+  const decisionReason = await requestDecisionReason({
+    title: approved ? "Approve Time Off" : "Not Approve Time Off",
+    message: approved ? "Enter the required approval reason." : "Enter the required reason this request is not approved.",
+    confirmLabel: approved ? "Approve" : "Not Approve"
+  });
+
+  if (!decisionReason) return;
+
+  try {
+    await api(`/time-off/${encodeURIComponent(id)}/${decision}`, {
+      method: "POST",
+      body: JSON.stringify({ decisionReason })
+    });
+    await Promise.all([loadTimeOffRequests(), loadSchedule(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
+}
+
+async function loadAuditLog() {
+  const list = $("auditLogList");
+  if (!list || !currentUser || !canManageSchedule()) return;
+
+  try {
+    if (currentUser.role === "employee" || !selectedLocationId) {
+      auditLogs = [];
+      renderAuditLog();
+      return;
+    }
+
+    const data = await api(`/audit?locationId=${encodeURIComponent(selectedLocationId)}`);
+    auditLogs = data.logs || [];
+    renderAuditLog();
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState">Audit log could not be loaded.</div>`;
+  }
+}
+
+function renderAuditLog() {
+  const list = $("auditLogList");
+  if (!list) return;
+
+  if (!auditLogs.length) {
+    list.innerHTML = `<div class="emptyState">No audit log entries yet.</div>`;
+    return;
+  }
+
+  list.innerHTML = auditLogs.map((entry) => {
+    const actor = `${entry.first_name || ""} ${entry.last_name || ""}`.trim() || entry.username || entry.full_login || "Unknown user";
+    const date = new Date(entry.created_at).toLocaleString();
+    return `
+      <article class="listItem auditItem">
+        <div>
+          <strong>${escapeHtml(entry.action)}</strong>
+          <span>${escapeHtml(entry.details || entry.entity_type || "Action recorded")}</span>
+          <span>${escapeHtml(actor)} · ${escapeHtml(date)}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
 function printSchedule() {
   window.print();
 }
@@ -1742,6 +2233,24 @@ function setupEvents() {
     }
   });
 
+  $("showTimeOffRequestFormButton")?.addEventListener("click", showTimeOffRequestForm);
+  $("cancelTimeOffRequestButton")?.addEventListener("click", hideTimeOffRequestForm);
+  $("timeOffRequestForm")?.addEventListener("submit", submitTimeOffRequest);
+  $("timeOffRequestsEnabled")?.addEventListener("change", saveTimeOffSettings);
+  $("showBlockedDateFormButton")?.addEventListener("click", showBlockedDateForm);
+  $("cancelBlockedDateButton")?.addEventListener("click", hideBlockedDateForm);
+  $("blockedDateForm")?.addEventListener("submit", addBlockedDate);
+  $("blockedDateList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action='remove-blocked-date']");
+    if (button) await removeBlockedDate(button.dataset.id);
+  });
+  $("timeOffPanel")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "approve-time-off") await decideTimeOffRequest(button.dataset.id, "approve");
+    if (button.dataset.action === "deny-time-off") await decideTimeOffRequest(button.dataset.id, "deny");
+  });
+
   $("employeeList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
@@ -1782,4 +2291,10 @@ document.addEventListener("DOMContentLoaded", () => {
   resetShiftForm();
   $("shiftForm").classList.add("hidden");
   resetEmployeeForm();
+  resetFieldState("timeOffStartDate", "Required");
+  resetFieldState("timeOffEndDate", "Required");
+  resetFieldState("timeOffReason", "Required");
+  resetFieldState("blockedDateInput", "Required");
+  resetFieldState("blockedDateReason", "Required");
+  resetFieldState("decisionReason", "Required");
 });
