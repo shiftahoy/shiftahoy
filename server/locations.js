@@ -35,35 +35,87 @@ async function userAssignedLocationIds(userId, businessId) {
 }
 
 router.get("/", requireAuth, async (req, res) => {
+  const { page = 1, pageSize = 5, filter = "", selectedLocationId = null } = req.query;
+  const safePage = Math.max(1, Number(page) || 1);
+  const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 5));
+  const offset = (safePage - 1) * safePageSize;
+  const search = `%${String(filter || "").trim()}%`;
+
   try {
-    if (req.user.role === "owner") {
-      const result = await pool.query(
-        `SELECT id, name, address
-         FROM locations
-         WHERE business_id = $1
-         ORDER BY name`,
-        [req.user.businessId]
-      );
+    let allowedLocationIds = null;
 
-      return res.json({ locations: result.rows });
+    if (req.user.role !== "owner") {
+      allowedLocationIds = await userAssignedLocationIds(req.user.id, req.user.businessId);
+
+      if (allowedLocationIds.length === 0) {
+        return res.json({
+          locations: [],
+          selectedLocation: null,
+          page: 1,
+          pageSize: safePageSize,
+          total: 0,
+          totalPages: 1
+        });
+      }
     }
 
-    const assignedLocationIds = await userAssignedLocationIds(req.user.id, req.user.businessId);
+    const ownerWhere = `business_id = $1 AND (name ILIKE $2 OR COALESCE(address, '') ILIKE $2)`;
+    const assignedWhere = `${ownerWhere} AND id = ANY($3::uuid[])`;
+    const whereClause = req.user.role === "owner" ? ownerWhere : assignedWhere;
+    const baseParams = req.user.role === "owner"
+      ? [req.user.businessId, search]
+      : [req.user.businessId, search, allowedLocationIds];
 
-    if (assignedLocationIds.length === 0) {
-      return res.json({ locations: [] });
-    }
-
-    const result = await pool.query(
-      `SELECT id, name, address
+    const countResult = await pool.query(
+      `SELECT count(*)::int AS count
        FROM locations
-       WHERE business_id = $1
-         AND id = ANY($2::uuid[])
-       ORDER BY name`,
-      [req.user.businessId, assignedLocationIds]
+       WHERE ${whereClause}`,
+      baseParams
     );
 
-    res.json({ locations: result.rows });
+    const total = countResult.rows[0]?.count || 0;
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const pageToUse = Math.min(safePage, totalPages);
+    const pageOffset = (pageToUse - 1) * safePageSize;
+
+    const locationsResult = await pool.query(
+      `SELECT id, name, address
+       FROM locations
+       WHERE ${whereClause}
+       ORDER BY name
+       LIMIT $${baseParams.length + 1} OFFSET $${baseParams.length + 2}`,
+      [...baseParams, safePageSize, pageOffset]
+    );
+
+    let selectedLocation = null;
+
+    if (selectedLocationId) {
+      const selectedParams = req.user.role === "owner"
+        ? [req.user.businessId, selectedLocationId]
+        : [req.user.businessId, selectedLocationId, allowedLocationIds];
+      const selectedWhere = req.user.role === "owner"
+        ? `business_id = $1 AND id = $2`
+        : `business_id = $1 AND id = $2 AND id = ANY($3::uuid[])`;
+
+      const selectedResult = await pool.query(
+        `SELECT id, name, address
+         FROM locations
+         WHERE ${selectedWhere}
+         LIMIT 1`,
+        selectedParams
+      );
+
+      selectedLocation = selectedResult.rows[0] || null;
+    }
+
+    res.json({
+      locations: locationsResult.rows,
+      selectedLocation,
+      page: pageToUse,
+      pageSize: safePageSize,
+      total,
+      totalPages
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to load locations." });
