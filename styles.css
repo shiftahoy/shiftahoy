@@ -233,6 +233,24 @@ p {
   margin-top: -1px;
 }
 
+
+.dashboardStatus {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.dashboardStatus.success {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
 .eyebrow {
   color: var(--brand);
   font-size: 0.72rem;
@@ -487,6 +505,23 @@ p {
 .dashboardCardTitleWithAction .searchInput,
 .dashboardCardTitleWithAction .button {
   margin-left: auto;
+}
+
+.inlineToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.inlineToolbar .searchInput {
+  width: min(260px, 32vw);
+}
+
+.inlineToolbar .button {
+  width: auto;
+  white-space: nowrap;
 }
 
 .dashboardToolbar {
@@ -838,8 +873,10 @@ tbody tr:hover td {
 
 .pager {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+  align-items: center;
   margin-top: 16px;
 }
 
@@ -847,10 +884,20 @@ tbody tr:hover td {
   width: auto;
 }
 
+.pageLabel {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-align: right;
+}
+
 .modalCard {
-  width: min(720px, calc(100vw - 32px));
+  width: min(1180px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
   border: 1px solid var(--line);
-  padding: 22px;
+  padding: 18px;
+  overflow: hidden;
 }
 
 .modalCard::backdrop {
@@ -1077,7 +1124,8 @@ tbody tr:hover td {
   .sectionHeader,
   .welcomeCard,
   .dashboardCardTitleWithAction,
-  .scheduleHeaderRow {
+  .scheduleHeaderRow,
+  .inlineToolbar {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -1350,18 +1398,18 @@ tbody tr:hover td {
 
 .planGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(190px, 1fr));
-  gap: 16px;
-  margin-top: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .planCard {
-  min-height: 420px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 18px;
-  padding: 22px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: #ffffff;
@@ -1375,14 +1423,14 @@ tbody tr:hover td {
 
 .planCard h3 {
   margin: 0;
-  font-size: 1.45rem;
+  font-size: 1.22rem;
   letter-spacing: -0.04em;
 }
 
 .planPrice {
-  margin-top: 12px;
+  margin-top: 8px;
   color: var(--ink);
-  font-size: 2.2rem;
+  font-size: 1.8rem;
   font-weight: 950;
   letter-spacing: -0.06em;
 }
@@ -1395,7 +1443,7 @@ tbody tr:hover td {
 
 .planCard ul {
   display: grid;
-  gap: 10px;
+  gap: 7px;
   margin: 0;
   padding-left: 18px;
   color: var(--ink);
@@ -1406,7 +1454,11 @@ tbody tr:hover td {
   width: 100%;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 900px) {
+  .modalCard {
+    overflow: auto;
+  }
+
   .planGrid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
