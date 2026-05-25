@@ -308,7 +308,16 @@ function applyRoleUI() {
   $("settingsButton").classList.toggle("hidden", !owner);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
+    if (el.classList.contains("editorForm")) {
+      if (!owner) el.classList.add("hidden");
+      return;
+    }
+
     el.classList.toggle("hidden", !owner);
+  });
+
+  document.querySelectorAll(".editorForm[data-role='owner']").forEach((el) => {
+    if (!owner) el.classList.add("hidden");
   });
 
   document.querySelectorAll(".nonOwnerOnly").forEach((el) => {
@@ -477,6 +486,11 @@ async function loadSelectedLocationData({ resetPages = false } = {}) {
   if (resetPages) {
     shiftPage = 1;
     employeePage = 1;
+    shifts = [];
+    employees = [];
+    renderShifts();
+    renderEmployees();
+    $("locationForm")?.classList.add("hidden");
     $("shiftForm")?.classList.add("hidden");
     $("employeeForm")?.classList.add("hidden");
   }
@@ -510,10 +524,16 @@ async function saveLocation(event) {
   setFieldState("locationName", "valid", "Looks good");
 
   try {
+    const previousSelectedLocationId = selectedLocationId;
+
     await api(locationId ? `/locations/${encodeURIComponent(locationId)}` : "/locations", {
       method: locationId ? "PUT" : "POST",
       body: JSON.stringify({ name, address: address || null })
     });
+
+    if (!locationId && previousSelectedLocationId) {
+      selectedLocationId = previousSelectedLocationId;
+    }
 
     resetLocationForm();
     $("locationForm").classList.add("hidden");
@@ -835,7 +855,7 @@ async function deleteShift(shiftId) {
 
     await Promise.all([loadShifts(), loadSchedule()]);
   } catch (err) {
-    showMessage(err.message);
+    setNotice("shiftFormMessage", "error", err.message);
   }
 }
 
