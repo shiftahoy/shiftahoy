@@ -25,13 +25,17 @@ CREATE TABLE IF NOT EXISTS plans (
 INSERT INTO plans (code, name, monthly_price_cents, employee_limit)
 VALUES
   ('free', 'Free', 0, 1),
-  ('starter', 'Starter', 999, 15),
-  ('growth', 'Growth', 2499, 50),
-  ('unlimited', 'Unlimited', 9999, NULL)
+  ('plus', 'Plus', 999, 15),
+  ('premium', 'Premium', 2499, 50),
+  ('pro', 'Pro', 9999, NULL)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   monthly_price_cents = EXCLUDED.monthly_price_cents,
   employee_limit = EXCLUDED.employee_limit;
+
+UPDATE businesses SET plan_code = 'plus' WHERE plan_code = 'starter';
+UPDATE businesses SET plan_code = 'premium' WHERE plan_code = 'growth';
+UPDATE businesses SET plan_code = 'pro' WHERE plan_code = 'unlimited';
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,9 +130,20 @@ CREATE TABLE IF NOT EXISTS employee_availability (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-  available BOOLEAN NOT NULL DEFAULT false,
+  available BOOLEAN NOT NULL DEFAULT true,
   UNIQUE (employee_id, day_of_week)
 );
+
+CREATE TABLE IF NOT EXISTS employee_days_off (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  day_off DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, day_off)
+);
+
+CREATE INDEX IF NOT EXISTS employee_days_off_employee_date_idx
+ON employee_days_off (employee_id, day_off);
 
 CREATE TABLE IF NOT EXISTS schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -205,7 +220,7 @@ BEGIN
   END IF;
 
   INSERT INTO shifts (business_id, location_id, name, sort_order)
-  VALUES (NEW.business_id, NEW.id, 'Standard Day', 1)
+  VALUES (NEW.business_id, NEW.id, 'Standard', 1)
   RETURNING id INTO new_shift_id;
 
   INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
@@ -213,7 +228,7 @@ BEGIN
     new_shift_id,
     day_number,
     day_number BETWEEN 1 AND 5,
-    CASE WHEN day_number BETWEEN 1 AND 5 THEN '09:00'::time ELSE NULL END,
+    CASE WHEN day_number BETWEEN 1 AND 5 THEN '08:00'::time ELSE NULL END,
     CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END
   FROM generate_series(1, 7) AS day_number;
 
@@ -244,7 +259,7 @@ BEGIN
     )
   LOOP
     INSERT INTO shifts (business_id, location_id, name, sort_order)
-    VALUES (location_row.business_id, location_row.id, 'Standard Day', 1)
+    VALUES (location_row.business_id, location_row.id, 'Standard', 1)
     RETURNING id INTO new_shift_id;
 
     INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time)
@@ -252,7 +267,7 @@ BEGIN
       new_shift_id,
       day_number,
       day_number BETWEEN 1 AND 5,
-      CASE WHEN day_number BETWEEN 1 AND 5 THEN '09:00'::time ELSE NULL END,
+      CASE WHEN day_number BETWEEN 1 AND 5 THEN '08:00'::time ELSE NULL END,
       CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END
     FROM generate_series(1, 7) AS day_number;
   END LOOP;
