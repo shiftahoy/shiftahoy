@@ -123,7 +123,7 @@ router.put("/:id", requireAuth, requireOwner, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
+async function deleteLocationWithCredentials(req, res) {
   const { id } = req.params;
   const { actorPassword } = req.body;
 
@@ -248,6 +248,10 @@ router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
   } finally {
     client.release();
   }
-});
+
+}
+
+router.post("/:id/delete", requireAuth, requireOwner, deleteLocationWithCredentials);
+router.delete("/:id", requireAuth, requireOwner, deleteLocationWithCredentials);
 
 module.exports = router;
