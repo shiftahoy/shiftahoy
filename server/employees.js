@@ -1,6 +1,7 @@
 const express = require("express");
 const argon2 = require("argon2");
 const pool = require("./db");
+const { logAudit } = require("./audit");
 const { requireAuth, requireScheduleManager, requireOwner } = require("./middleware");
 
 const router = express.Router();
@@ -452,6 +453,16 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
 
     const employee = await loadEmployeeWithDetails(client, employeeId, req.user.businessId);
 
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId,
+      action: "Employee created",
+      entityType: "employee",
+      entityId: employee.id,
+      details: employee.employee_code || employee.username || "Employee created"
+    });
+
     await client.query("COMMIT");
 
     res.status(201).json({ employee });
@@ -651,6 +662,16 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
 
     const employee = await loadEmployeeWithDetails(client, id, req.user.businessId);
 
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: employee.location_id,
+      action: "Employee updated",
+      entityType: "employee",
+      entityId: employee.id,
+      details: employee.employee_code || employee.username || "Employee updated"
+    });
+
     await client.query("COMMIT");
 
     res.json({ employee });
@@ -688,7 +709,7 @@ async function deleteEmployeeWithCredentials(req, res) {
            updated_at = now()
        WHERE id = $1
          AND business_id = $2
-       RETURNING user_id`,
+       RETURNING user_id, location_id`,
       [id, req.user.businessId]
     );
 
@@ -705,6 +726,16 @@ async function deleteEmployeeWithCredentials(req, res) {
          AND business_id = $2`,
       [employeeResult.rows[0].user_id, req.user.businessId]
     );
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: employeeResult.rows[0].location_id,
+      action: "Employee deleted",
+      entityType: "employee",
+      entityId: id,
+      details: "Employee deactivated."
+    });
 
     await client.query("COMMIT");
 
