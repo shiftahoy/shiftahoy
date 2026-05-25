@@ -288,8 +288,7 @@ function applyRoleUI() {
 
   $("upgradeButton").classList.toggle("hidden", !owner);
   $("currentPlanText").classList.toggle("hidden", !owner);
-  $("ownerLocationTools").classList.toggle("hidden", !owner);
-  $("shiftForm").classList.toggle("hidden", !owner);
+  $("settingsButton").classList.toggle("hidden", !owner);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     el.classList.toggle("hidden", !owner);
@@ -388,15 +387,45 @@ async function loadLocations() {
   await loadSelectedLocationData();
 }
 
+function resetLocationForm() {
+  $("locationId").value = "";
+  $("locationName").value = "";
+  $("locationAddress").value = "";
+  setNotice("locationFormMessage", "", "");
+  resetFieldState("locationName", "Required");
+}
+
+function showLocationForm(location = null) {
+  resetLocationForm();
+
+  if (location) {
+    $("locationId").value = location.id;
+    $("locationName").value = location.name || "";
+    $("locationAddress").value = location.address || "";
+  }
+
+  $("locationForm").classList.remove("hidden");
+  $("locationName").focus();
+}
+
 function renderLocations() {
   const list = $("locationList");
+  const filter = ($("locationFilter")?.value || "").trim().toLowerCase();
+  const visibleLocations = filter
+    ? locations.filter((location) => `${location.name || ""} ${location.address || ""}`.toLowerCase().includes(filter))
+    : locations;
 
   if (!locations.length) {
     list.innerHTML = `<div class="emptyState">No locations found.</div>`;
     return;
   }
 
-  list.innerHTML = locations.map((location) => {
+  if (!visibleLocations.length) {
+    list.innerHTML = `<div class="emptyState">No locations match that filter.</div>`;
+    return;
+  }
+
+  list.innerHTML = visibleLocations.map((location) => {
     const active = location.id === selectedLocationId;
     const ownerControls = isOwner()
       ? `
@@ -427,58 +456,40 @@ async function loadSelectedLocationData() {
   }
 }
 
-async function addLocation() {
-  const nameInput = $("newLocationName");
-  const addressInput = $("newLocationAddress");
-  const name = nameInput.value.trim();
+async function saveLocation(event) {
+  event.preventDefault();
+  setNotice("locationFormMessage", "", "");
+  resetFieldState("locationName", "Required");
+
+  const locationId = $("locationId").value;
+  const name = $("locationName").value.trim();
+  const address = $("locationAddress").value.trim();
 
   if (!name) {
-    nameInput.classList.add("inputInvalid");
+    setFieldState("locationName", "invalid", "Required");
     return;
   }
 
-  nameInput.classList.remove("inputInvalid");
+  setFieldState("locationName", "valid", "Looks good");
 
   try {
-    await api("/locations", {
-      method: "POST",
-      body: JSON.stringify({ name, address: addressInput.value.trim() || null })
+    await api(locationId ? `/locations/${encodeURIComponent(locationId)}` : "/locations", {
+      method: locationId ? "PUT" : "POST",
+      body: JSON.stringify({ name, address: address || null })
     });
 
-    nameInput.value = "";
-    addressInput.value = "";
+    resetLocationForm();
+    $("locationForm").classList.add("hidden");
     await loadLocations();
   } catch (err) {
-    showMessage(err.message);
+    setNotice("locationFormMessage", "error", err.message);
   }
 }
 
-async function editLocation(locationId) {
+function editLocation(locationId) {
   const location = locations.find((item) => item.id === locationId);
   if (!location) return;
-
-  const name = prompt("Location name:", location.name);
-  if (name === null) return;
-
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    showMessage("Location name is required.");
-    return;
-  }
-
-  const address = prompt("Location address optional:", location.address || "");
-  if (address === null) return;
-
-  try {
-    await api(`/locations/${encodeURIComponent(locationId)}`, {
-      method: "PUT",
-      body: JSON.stringify({ name: trimmedName, address: address.trim() || null })
-    });
-
-    await loadLocations();
-  } catch (err) {
-    showMessage(err.message);
-  }
+  showLocationForm(location);
 }
 
 async function deleteLocation(locationId) {
@@ -497,7 +508,7 @@ async function deleteLocation(locationId) {
     selectedLocationId = null;
     await loadLocations();
   } catch (err) {
-    showMessage(err.message);
+    setNotice("locationFormMessage", "error", err.message);
   }
 }
 
@@ -647,6 +658,8 @@ function resetShiftForm() {
   $("shiftSortOrder").value = "1";
   setNotice("shiftFormMessage", "", "");
   resetFieldState("shiftName", "Required");
+  resetLocationForm();
+  $("locationForm").classList.add("hidden");
   renderShiftDayEditor(defaultShiftDays());
 }
 
@@ -1145,7 +1158,13 @@ function setupEvents() {
     }
   });
 
-  $("addLocationButton").addEventListener("click", addLocation);
+  $("showLocationFormButton").addEventListener("click", () => showLocationForm());
+  $("locationForm").addEventListener("submit", saveLocation);
+  $("cancelLocationButton").addEventListener("click", () => {
+    resetLocationForm();
+    $("locationForm").classList.add("hidden");
+  });
+  $("locationFilter").addEventListener("input", renderLocations);
   $("locationList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
@@ -1161,7 +1180,7 @@ function setupEvents() {
 
     if (action === "edit-location") {
       event.stopPropagation();
-      await editLocation(id);
+      editLocation(id);
     }
 
     if (action === "delete-location") {
@@ -1269,6 +1288,8 @@ function setupEvents() {
   });
 
   $("upgradeButton").addEventListener("click", openPlanDialog);
+  $("settingsButton").addEventListener("click", () => $("settingsDialog").showModal());
+  $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action='select-plan']");
@@ -1279,6 +1300,8 @@ function setupEvents() {
 
 document.addEventListener("DOMContentLoaded", () => {
   setupEvents();
+  resetLocationForm();
+  $("locationForm").classList.add("hidden");
   renderShiftDayEditor(defaultShiftDays());
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
