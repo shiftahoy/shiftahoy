@@ -1,6 +1,7 @@
 const express = require("express");
 const argon2 = require("argon2");
 const pool = require("./db");
+const { logAudit } = require("./audit");
 const { requireAuth, requireOwner } = require("./middleware");
 
 const router = express.Router();
@@ -137,6 +138,16 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
       [req.user.businessId, String(name).trim(), address ? String(address).trim() : null]
     );
 
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: result.rows[0].id,
+      action: "Location created",
+      entityType: "location",
+      entityId: result.rows[0].id,
+      details: result.rows[0].name
+    });
+
     res.status(201).json({ location: result.rows[0] });
   } catch (err) {
     console.error(err);
@@ -167,6 +178,16 @@ router.put("/:id", requireAuth, requireOwner, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Location not found." });
     }
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: result.rows[0].id,
+      action: "Location updated",
+      entityType: "location",
+      entityId: result.rows[0].id,
+      details: result.rows[0].name
+    });
 
     res.json({ location: result.rows[0] });
   } catch (err) {
@@ -290,6 +311,16 @@ async function deleteLocationWithCredentials(req, res) {
          AND business_id = $2`,
       [id, req.user.businessId]
     );
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: id,
+      action: "Location deleted",
+      entityType: "location",
+      entityId: id,
+      details: "Location and related records removed."
+    });
 
     await client.query("COMMIT");
     res.json({ message: "Location deleted." });
