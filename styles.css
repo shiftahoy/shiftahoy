@@ -69,10 +69,12 @@ button {
   flex-direction: column;
   gap: 28px;
   padding: 28px 22px;
-  background: #ffffff;
-  color: var(--brand);
-  border-right: 1px solid var(--line);
-  box-shadow: 18px 0 45px rgba(0, 93, 170, 0.08);
+  background:
+    linear-gradient(160deg, rgba(0, 93, 170, 0.96), rgba(0, 74, 136, 0.96)),
+    radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.32), transparent 16rem);
+  color: #ffffff;
+  border-right: 0;
+  box-shadow: 18px 0 45px rgba(0, 93, 170, 0.16);
 }
 
 .brand {
@@ -103,13 +105,13 @@ button {
   display: block;
   font-size: 1.16rem;
   letter-spacing: -0.02em;
-  color: var(--brand);
+  color: #ffffff;
 }
 
 .brand small {
   display: block;
   margin-top: 3px;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .navList {
@@ -123,14 +125,14 @@ button {
   min-height: 44px;
   padding: 0 14px;
   border-radius: 14px;
-  color: var(--brand);
+  color: rgba(255, 255, 255, 0.86);
   text-decoration: none;
   font-weight: 800;
 }
 
 .navItem:hover,
 .navItem.active {
-  background: var(--brand);
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
 
@@ -140,10 +142,10 @@ button {
   align-items: center;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--brand-border);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 16px;
-  color: var(--brand);
-  background: var(--brand-soft);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.12);
   font-size: 0.86rem;
 }
 
@@ -151,8 +153,8 @@ button {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: var(--brand);
-  box-shadow: 0 0 0 5px rgba(0, 93, 170, 0.14);
+  background: #ffffff;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.16);
 }
 
 .workspace {
@@ -197,6 +199,14 @@ p {
   font-size: clamp(2rem, 3vw, 3rem);
   letter-spacing: -0.055em;
   color: var(--brand);
+}
+
+.dashboardWelcome {
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: clamp(1.1rem, 2vw, 1.55rem);
+  font-weight: 900;
+  letter-spacing: -0.035em;
 }
 
 .eyebrow {
@@ -429,6 +439,24 @@ p {
   flex: 0 0 auto;
 }
 
+.dashboardCardTitle {
+  margin-bottom: 18px;
+}
+
+.dashboardCardTitleWithAction {
+  align-items: center;
+}
+
+.dashboardCardTitleWithAction .searchInput,
+.dashboardCardTitleWithAction .button {
+  margin-left: auto;
+}
+
+.dashboardToolbar {
+  justify-content: flex-start;
+  margin-top: 6px;
+}
+
 .formGrid.twoColumn {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -607,7 +635,7 @@ select:focus {
 
 .dashboardGrid {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: start;
   background: var(--page-bg);
@@ -640,8 +668,7 @@ select:focus {
 }
 
 .sideCard {
-  position: sticky;
-  top: 30px;
+  position: static;
 }
 
 .verticalHeader {
@@ -659,15 +686,12 @@ select:focus {
 }
 
 .panelCard {
-  grid-column: span 1;
+  grid-column: auto;
 }
 
-#shiftsPanel {
-  grid-column: 1 / 2;
-}
-
+#shiftsPanel,
 #employeesPanel {
-  grid-column: 2 / 3;
+  grid-column: auto;
 }
 
 .toolbar {
@@ -1014,9 +1038,16 @@ tbody tr:hover td {
 
   .topbar,
   .sectionHeader,
-  .welcomeCard {
+  .welcomeCard,
+  .dashboardCardTitleWithAction {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .dashboardCardTitleWithAction .searchInput,
+  .dashboardCardTitleWithAction .button {
+    margin-left: 0;
+    width: 100%;
   }
 
   .toolbar {
