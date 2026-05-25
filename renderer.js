@@ -335,6 +335,132 @@ function resetCredentialDialog() {
   validateCredentialPassword(false);
 }
 
+function isOwnerCredentialError(err) {
+  const message = String(err?.message || "").toLowerCase();
+  return (
+    message.includes("wrong password") ||
+    message.includes("owner credentials") ||
+    message.includes("owner password") ||
+    message.includes("no refresh token") ||
+    message.includes("not authenticated") ||
+    message.includes("invalid or expired token")
+  );
+}
+
+async function runOwnerCredentialAction({ title, message, confirmLabel = "Delete", onConfirm } = {}) {
+  const dialog = $("credentialDialog");
+  const form = $("credentialForm");
+  const titleEl = $("credentialDialogTitle");
+  const messageEl = $("credentialDialogMessage");
+  const confirmButton = $("confirmCredentialButton");
+  const cancelButton = $("cancelCredentialButton");
+  const closeButton = $("cancelCredentialX");
+  const passwordInput = $("credentialPassword");
+
+  if (!dialog || !form || typeof dialog.showModal !== "function") {
+    const actorPassword = window.prompt(message || "Enter your owner password to continue.");
+    if (!actorPassword || !onConfirm) return false;
+    await onConfirm(actorPassword);
+    return true;
+  }
+
+  resetCredentialDialog();
+  if (titleEl) titleEl.textContent = title || "Confirm Delete";
+  if (messageEl) messageEl.textContent = message || "Enter your owner password to continue.";
+  if (confirmButton) {
+    confirmButton.textContent = confirmLabel;
+    confirmButton.disabled = true;
+  }
+
+  return new Promise((resolve) => {
+    let finished = false;
+    let submitting = false;
+
+    const cleanup = () => {
+      form.removeEventListener("submit", handleSubmit);
+      passwordInput?.removeEventListener("input", handlePasswordInput);
+      passwordInput?.removeEventListener("blur", handlePasswordBlur);
+      cancelButton?.removeEventListener("click", handleCancel);
+      closeButton?.removeEventListener("click", handleCancel);
+      dialog.removeEventListener("cancel", handleDialogCancel);
+    };
+
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (dialog.open) dialog.close();
+      resolve(value);
+    };
+
+    const handlePasswordInput = () => {
+      const isValid = validateCredentialPassword(false);
+      if (confirmButton) confirmButton.disabled = !isValid || submitting;
+      if (isValid) setNotice("credentialDialogNotice", "", "");
+    };
+
+    const handlePasswordBlur = () => {
+      const isValid = validateCredentialPassword(true);
+      if (confirmButton) confirmButton.disabled = !isValid || submitting;
+    };
+
+    async function handleSubmit(event) {
+      event.preventDefault();
+
+      if (!validateCredentialPassword(true)) {
+        setNotice("credentialDialogNotice", "error", "Owner password is required.");
+        passwordInput?.focus();
+        return;
+      }
+
+      if (!onConfirm || submitting) return;
+
+      submitting = true;
+      if (confirmButton) confirmButton.disabled = true;
+      setNotice("credentialDialogNotice", "", "");
+
+      try {
+        await onConfirm(passwordInput?.value || "");
+        finish(true);
+      } catch (err) {
+        submitting = false;
+
+        if (isOwnerCredentialError(err)) {
+          setFieldState("credentialPassword", "invalid", "Wrong password");
+          setNotice("credentialDialogNotice", "", "");
+          if (confirmButton) confirmButton.disabled = false;
+          passwordInput?.focus();
+          passwordInput?.select?.();
+          return;
+        }
+
+        setNotice("credentialDialogNotice", "error", err.message || "Delete failed.");
+        if (confirmButton) confirmButton.disabled = false;
+      }
+    }
+
+    const handleCancel = (event) => {
+      event?.preventDefault?.();
+      finish(false);
+    };
+
+    const handleDialogCancel = (event) => {
+      event?.preventDefault?.();
+      finish(false);
+    };
+
+    form.addEventListener("submit", handleSubmit);
+    passwordInput?.addEventListener("input", handlePasswordInput);
+    passwordInput?.addEventListener("blur", handlePasswordBlur);
+    cancelButton?.addEventListener("click", handleCancel);
+    closeButton?.addEventListener("click", handleCancel);
+    dialog.addEventListener("cancel", handleDialogCancel);
+
+    dialog.showModal();
+    window.setTimeout(() => passwordInput?.focus(), 30);
+  });
+}
+
 function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) {
   const dialog = $("credentialDialog");
   const form = $("credentialForm");
@@ -502,20 +628,22 @@ async function refreshSession() {
 }
 
 async function api(path, options = {}, retry = true) {
+  const { skipRefresh = false, ...fetchOptions } = options;
+
   const res = await fetch(`${API_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(options.headers || {})
+      ...(fetchOptions.headers || {})
     }
   });
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 401 && retry && !path.startsWith("/auth/")) {
+    if (res.status === 401 && retry && !skipRefresh && !path.startsWith("/auth/")) {
       await refreshSession();
       return api(path, options, false);
     }
@@ -810,27 +938,24 @@ async function deleteLocation(locationId) {
   const location = locations.find((item) => item.id === locationId);
   if (!location) return;
 
-  const actorPassword = await requestOwnerPassword({
+  const deleted = await runOwnerCredentialAction({
     title: "Delete Location",
     message: `Enter your owner password to delete ${location.name}. This also removes its shifts and employees.`,
-    confirmLabel: "Delete Location"
+    confirmLabel: "Delete Location",
+    onConfirm: (actorPassword) =>
+      api(`/locations/${encodeURIComponent(locationId)}/delete`, {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({ actorPassword })
+      })
   });
-  if (!actorPassword) return;
 
-  try {
-    await api(`/locations/${encodeURIComponent(locationId)}/delete`, {
-      method: "POST",
-      body: JSON.stringify({ actorPassword })
-    });
+  if (!deleted) return;
 
-    selectedLocationId = null;
-    selectedLocationRecord = null;
-    locationPage = 1;
-    await loadLocations();
-  } catch (err) {
-    setNotice("credentialDialogNotice", "error", err.message);
-    setNotice("locationFormMessage", "error", err.message);
-  }
+  selectedLocationId = null;
+  selectedLocationRecord = null;
+  locationPage = 1;
+  await loadLocations();
 }
 
 async function loadSchedule() {
@@ -1108,24 +1233,21 @@ async function deleteShift(shiftId) {
   const shift = shifts.find((item) => item.id === shiftId);
   if (!shift) return;
 
-  const actorPassword = await requestOwnerPassword({
+  const deleted = await runOwnerCredentialAction({
     title: "Delete Shift",
     message: `Enter your owner password to delete shift ${shift.name}.`,
-    confirmLabel: "Delete Shift"
+    confirmLabel: "Delete Shift",
+    onConfirm: (actorPassword) =>
+      api(`/shifts/${encodeURIComponent(shiftId)}/delete`, {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({ actorPassword })
+      })
   });
-  if (!actorPassword) return;
 
-  try {
-    await api(`/shifts/${encodeURIComponent(shiftId)}/delete`, {
-      method: "POST",
-      body: JSON.stringify({ actorPassword })
-    });
+  if (!deleted) return;
 
-    await Promise.all([loadShifts(), loadSchedule()]);
-  } catch (err) {
-    setNotice("credentialDialogNotice", "error", err.message);
-    setNotice("shiftFormMessage", "error", err.message);
-  }
+  await Promise.all([loadShifts(), loadSchedule()]);
 }
 
 function defaultAvailability() {
@@ -1382,24 +1504,21 @@ async function deleteEmployee(employeeId) {
   const employee = employees.find((item) => item.id === employeeId);
   if (!employee) return;
 
-  const actorPassword = await requestOwnerPassword({
+  const deleted = await runOwnerCredentialAction({
     title: "Delete Employee",
     message: `Enter your owner password to delete employee ${employee.employee_code}.`,
-    confirmLabel: "Delete Employee"
+    confirmLabel: "Delete Employee",
+    onConfirm: (actorPassword) =>
+      api(`/employees/${encodeURIComponent(employeeId)}/delete`, {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({ actorPassword })
+      })
   });
-  if (!actorPassword) return;
 
-  try {
-    await api(`/employees/${encodeURIComponent(employeeId)}/delete`, {
-      method: "POST",
-      body: JSON.stringify({ actorPassword })
-    });
+  if (!deleted) return;
 
-    await Promise.all([loadEmployees(), loadSchedule()]);
-  } catch (err) {
-    setNotice("credentialDialogNotice", "error", err.message);
-    setNotice("employeeFormMessage", "error", err.message);
-  }
+  await Promise.all([loadEmployees(), loadSchedule()]);
 }
 
 async function loadPlans(renderDialog = true) {
