@@ -19,7 +19,9 @@ let shifts = [];
 let employees = [];
 let currentWeekStart = startOfWeek(new Date());
 let employeePage = 1;
+let employeeTotalPages = 1;
 let shiftPage = 1;
+let shiftTotalPages = 1;
 let currentPlanCode = "free";
 let employeeDaysOff = new Set();
 
@@ -43,15 +45,26 @@ function dashboardWelcomeText() {
   return login ? `Welcome aboard, ${login}` : "Welcome aboard";
 }
 
-function showMessage(text) {
+function setDashboardWelcome(text) {
   const loginText = $("dashboardLoginText");
+  if (!loginText) return;
 
-  if (loginText && text.startsWith("Welcome aboard,")) {
-    loginText.textContent = text.replace("Welcome aboard,", "").trim();
+  const prefix = "Welcome aboard,";
+  loginText.textContent = text.startsWith(prefix) ? text.replace(prefix, "").trim() : text;
+}
+
+function showMessage(text, type = "error") {
+  const status = $("dashboardStatus");
+  if (!status) return;
+
+  if (!text) {
+    status.className = "dashboardStatus hidden";
+    status.textContent = "";
     return;
   }
 
-  if (message) message.textContent = text;
+  status.className = `dashboardStatus ${type}`;
+  status.textContent = text;
 }
 
 function isOwner() {
@@ -157,6 +170,25 @@ function setFieldState(inputId, state, message) {
 
   input.removeAttribute("aria-invalid");
   if (status) status.textContent = message;
+}
+
+function resetFieldState(inputId, message = "") {
+  setFieldState(inputId, "neutral", message);
+}
+
+function updatePager(prefix, page, totalPages) {
+  const pager = $(`${prefix}Pager`);
+  const previous = $(`prev${prefix[0].toUpperCase()}${prefix.slice(1)}Page`);
+  const next = $(`next${prefix[0].toUpperCase()}${prefix.slice(1)}Page`);
+  const label = $(`${prefix}PageLabel`);
+
+  const safeTotalPages = Math.max(1, Number(totalPages) || 1);
+  const safePage = Math.min(Math.max(1, Number(page) || 1), safeTotalPages);
+
+  if (label) label.textContent = `Page ${safePage}/${safeTotalPages}`;
+  if (previous) previous.classList.toggle("hidden", safePage <= 1);
+  if (next) next.classList.toggle("hidden", safePage >= safeTotalPages);
+  if (pager) pager.classList.toggle("hidden", safeTotalPages <= 1);
 }
 
 function validateSignupField(inputId, showEmptyErrors = false) {
@@ -275,7 +307,8 @@ function applyRoleUI() {
     el.classList.toggle("hidden", currentUser?.role === "employee");
   });
 
-  showMessage(dashboardWelcomeText());
+  setDashboardWelcome(dashboardWelcomeText());
+  showMessage("");
 }
 
 async function signup() {
@@ -612,14 +645,24 @@ function resetShiftForm() {
   $("shiftId").value = "";
   $("shiftName").value = "Standard";
   $("shiftSortOrder").value = "1";
+  setNotice("shiftFormMessage", "", "");
+  resetFieldState("shiftName", "Required");
   renderShiftDayEditor(defaultShiftDays());
+}
+
+function showShiftForm() {
+  resetShiftForm();
+  $("shiftForm").classList.remove("hidden");
+  $("shiftName").focus();
 }
 
 async function saveShift(event) {
   event.preventDefault();
+  setNotice("shiftFormMessage", "", "");
+  resetFieldState("shiftName", "Required");
 
   if (!selectedLocationId) {
-    showMessage("Select a location first.");
+    setNotice("shiftFormMessage", "error", "Select a location first.");
     return;
   }
 
@@ -632,9 +675,11 @@ async function saveShift(event) {
   };
 
   if (!body.name) {
-    showMessage("Shift name is required.");
+    setFieldState("shiftName", "invalid", "Required");
     return;
   }
+
+  setFieldState("shiftName", "valid", "Looks good");
 
   try {
     await api(shiftId ? `/shifts/${encodeURIComponent(shiftId)}` : "/shifts", {
@@ -643,9 +688,10 @@ async function saveShift(event) {
     });
 
     resetShiftForm();
+    $("shiftForm").classList.add("hidden");
     await Promise.all([loadShifts(), loadSchedule()]);
   } catch (err) {
-    showMessage(err.message);
+    setNotice("shiftFormMessage", "error", err.message);
   }
 }
 
@@ -655,11 +701,14 @@ async function loadShifts() {
   const filter = $("shiftFilter").value.trim();
 
   const data = await api(
-    `/shifts?locationId=${encodeURIComponent(selectedLocationId)}&page=${shiftPage}&pageSize=100&filter=${encodeURIComponent(filter)}`
+    `/shifts?locationId=${encodeURIComponent(selectedLocationId)}&page=${shiftPage}&pageSize=5&filter=${encodeURIComponent(filter)}`
   );
 
   shifts = data.shifts || [];
+  shiftPage = data.page || shiftPage;
+  shiftTotalPages = data.totalPages || 1;
   renderShifts();
+  updatePager("shift", shiftPage, shiftTotalPages);
   populatePreferredShiftSelect();
 }
 
@@ -706,6 +755,9 @@ function editShift(shiftId) {
   const shift = shifts.find((item) => item.id === shiftId);
   if (!shift) return;
 
+  $("shiftForm").classList.remove("hidden");
+  setNotice("shiftFormMessage", "", "");
+  resetFieldState("shiftName", "Required");
   $("shiftId").value = shift.id;
   $("shiftName").value = shift.name;
   $("shiftSortOrder").value = shift.sort_order || 1;
@@ -812,6 +864,10 @@ function resetEmployeeForm() {
   $("orientationStart").value = "";
   $("canManageSchedule").checked = false;
   employeeDaysOff = new Set();
+  setNotice("employeeFormMessage", "", "");
+  resetFieldState("employeeCode", "Required");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", "Required for new");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
   populatePreferredShiftSelect();
@@ -820,12 +876,17 @@ function resetEmployeeForm() {
 async function loadEmployees() {
   if (!selectedLocationId || !canManageSchedule()) return;
 
+  const filter = $("employeeFilter").value.trim();
+
   const data = await api(
-    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=100`
+    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=5&filter=${encodeURIComponent(filter)}`
   );
 
   employees = data.employees || [];
+  employeePage = data.page || employeePage;
+  employeeTotalPages = data.totalPages || 1;
   renderEmployees();
+  updatePager("employee", employeePage, employeeTotalPages);
 }
 
 function renderEmployees() {
@@ -870,6 +931,10 @@ function editEmployee(employeeId) {
   if (!employee) return;
 
   $("employeeForm").classList.remove("hidden");
+  setNotice("employeeFormMessage", "", "");
+  resetFieldState("employeeCode", "Required");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", "Optional while editing");
   $("employeeId").value = employee.id;
   $("employeeCode").value = employee.employee_code || "";
   $("employeeTitle").value = employee.title || "";
@@ -892,9 +957,13 @@ function editEmployee(employeeId) {
 
 async function saveEmployee(event) {
   event.preventDefault();
+  setNotice("employeeFormMessage", "", "");
+  resetFieldState("employeeCode", "Required");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required for new");
 
   if (!selectedLocationId) {
-    showMessage("Select a location first.");
+    setNotice("employeeFormMessage", "error", "Select a location first.");
     return;
   }
 
@@ -918,15 +987,38 @@ async function saveEmployee(event) {
     canManageSchedule: $("canManageSchedule").checked
   };
 
-  if (!body.employeeCode || !body.username || (!employeeId && !body.password)) {
-    showMessage("Employee #, username, and password for new employees are required.");
-    return;
+  let isValid = true;
+
+  if (!body.employeeCode) {
+    setFieldState("employeeCode", "invalid", "Required");
+    isValid = false;
+  } else {
+    setFieldState("employeeCode", "valid", "Looks good");
   }
 
-  if (!employeeId && !isValidPasswordInput(body.password)) {
-    showMessage("Password must be 12–128 characters.");
-    return;
+  if (!body.username) {
+    setFieldState("employeeUsername", "invalid", "Required");
+    isValid = false;
+  } else if (body.username.length < 3) {
+    setFieldState("employeeUsername", "invalid", "3–30 letters or numbers");
+    isValid = false;
+  } else {
+    setFieldState("employeeUsername", "valid", "Username works");
   }
+
+  if (!employeeId && !body.password) {
+    setFieldState("employeePassword", "invalid", "Required for new employees");
+    isValid = false;
+  } else if (body.password && !isValidPasswordInput(body.password)) {
+    setFieldState("employeePassword", "invalid", "12–128 characters");
+    isValid = false;
+  } else if (body.password) {
+    setFieldState("employeePassword", "valid", "Password length works");
+  } else {
+    resetFieldState("employeePassword", "Optional while editing");
+  }
+
+  if (!isValid) return;
 
   try {
     await api(employeeId ? `/employees/${encodeURIComponent(employeeId)}` : "/employees", {
@@ -938,7 +1030,7 @@ async function saveEmployee(event) {
     $("employeeForm").classList.add("hidden");
     await Promise.all([loadEmployees(), loadSchedule()]);
   } catch (err) {
-    showMessage(err.message);
+    setNotice("employeeFormMessage", "error", err.message);
   }
 }
 
@@ -1090,8 +1182,12 @@ function setupEvents() {
 
   $("printScheduleButton").addEventListener("click", printSchedule);
 
+  $("showShiftFormButton").addEventListener("click", showShiftForm);
   $("shiftForm").addEventListener("submit", saveShift);
-  $("resetShiftButton").addEventListener("click", resetShiftForm);
+  $("resetShiftButton").addEventListener("click", () => {
+    resetShiftForm();
+    $("shiftForm").classList.add("hidden");
+  });
   $("shiftFilter").addEventListener("input", async () => {
     shiftPage = 1;
     await loadShifts();
@@ -1117,6 +1213,11 @@ function setupEvents() {
   $("showEmployeeFormButton").addEventListener("click", () => {
     resetEmployeeForm();
     $("employeeForm").classList.remove("hidden");
+  });
+
+  $("employeeFilter").addEventListener("input", async () => {
+    employeePage = 1;
+    await loadEmployees();
   });
 
   $("employeeForm").addEventListener("submit", saveEmployee);
@@ -1182,5 +1283,6 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
   resetShiftForm();
+  $("shiftForm").classList.add("hidden");
   resetEmployeeForm();
 });
