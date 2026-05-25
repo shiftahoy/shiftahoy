@@ -64,6 +64,7 @@ async function loadSettings(businessId) {
     `SELECT id, blocked_date, reason
      FROM time_off_blocked_dates
      WHERE business_id = $1
+       AND blocked_date >= CURRENT_DATE
      ORDER BY blocked_date ASC`,
     [businessId]
   );
