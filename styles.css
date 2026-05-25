@@ -1377,7 +1377,7 @@ tbody tr:hover td {
 .dateSub {
   display: block;
   margin-top: 4px;
-  color: var(--muted);
+  color: var(--ink);
   font-size: 0.74rem;
   font-weight: 800;
 }
