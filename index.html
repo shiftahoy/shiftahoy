@@ -15,16 +15,15 @@
             <img class="brandLogo" src="assets/logo.png" alt="Shift Ahoy logo" />
           </span>
           <span>
-            <strong>Shift Ahoy</strong>
-            <small>Scheduling Command</small>
+            <strong>Shift Ahoy Dashboard</strong>
           </span>
         </a>
 
         <nav class="navList">
           <a class="navItem active" href="#schedulePanel">Schedule</a>
-          <a class="navItem" href="#locationsPanel">Locations</a>
-          <a class="navItem managerOnly" href="#shiftsPanel">Shifts</a>
-          <a class="navItem managerOnly" href="#employeesPanel">Employees</a>
+          <a class="navItem" href="#locationsPanel">Location</a>
+          <a class="navItem managerOnly" href="#shiftsPanel">Shift</a>
+          <a class="navItem managerOnly" href="#employeesPanel">Employee</a>
         </nav>
 
         <div class="sidebarFooter">
@@ -36,8 +35,8 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Workforce scheduling</p>
             <h1>Shift Ahoy</h1>
+            <p id="message" class="dashboardWelcome">Welcome aboard.</p>
           </div>
 
           <div class="topbarActions">
@@ -225,19 +224,32 @@
         </section>
 
         <section id="appView" class="hidden dashboardGrid">
-          <section class="welcomeCard">
-            <div>
-              <p class="eyebrow">Dashboard</p>
-              <h2 id="message">Welcome aboard, matey!</h2>
+          <section id="schedulePanel" class="card scheduleCard">
+            <div class="cardTitle dashboardCardTitle">
+              <span class="iconBadge">01</span>
+              <div>
+                <h2>Schedule</h2>
+              </div>
             </div>
-            <span class="pill">Live workspace</span>
+
+            <div class="toolbar dashboardToolbar">
+              <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
+              <span id="weekLabel" class="weekLabel"></span>
+              <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
+              <button id="generateScheduleButton" class="button primary">Generate</button>
+              <button id="printScheduleButton" class="button secondary">Print</button>
+            </div>
+
+            <div class="tableFrame">
+              <table id="scheduleTable"></table>
+            </div>
           </section>
 
           <section id="locationsPanel" class="card sideCard">
-            <div class="sectionHeader verticalHeader">
+            <div class="cardTitle dashboardCardTitle">
+              <span class="iconBadge">02</span>
               <div>
-                <p class="eyebrow">Location</p>
-                <h2>Locations</h2>
+                <h2>Location</h2>
               </div>
             </div>
 
@@ -249,32 +261,11 @@
             </div>
           </section>
 
-          <section id="schedulePanel" class="card scheduleCard">
-            <div class="sectionHeader">
-              <div>
-                <p class="eyebrow">Weekly schedule</p>
-                <h2>Schedule</h2>
-              </div>
-
-              <div class="toolbar">
-                <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
-                <span id="weekLabel" class="weekLabel"></span>
-                <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
-                <button id="generateScheduleButton" class="button primary">Generate</button>
-                <button id="printScheduleButton" class="button secondary">Print</button>
-              </div>
-            </div>
-
-            <div class="tableFrame">
-              <table id="scheduleTable"></table>
-            </div>
-          </section>
-
           <section id="shiftsPanel" class="card managerOnly panelCard">
-            <div class="sectionHeader">
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+              <span class="iconBadge">03</span>
               <div>
-                <p class="eyebrow">Templates</p>
-                <h2>Shifts</h2>
+                <h2>Shift</h2>
               </div>
 
               <input id="shiftFilter" class="searchInput" placeholder="Filter shifts" />
@@ -289,10 +280,10 @@
           </section>
 
           <section id="employeesPanel" class="card managerOnly panelCard">
-            <div class="sectionHeader">
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+              <span class="iconBadge">04</span>
               <div>
-                <p class="eyebrow">Team roster</p>
-                <h2>Employees</h2>
+                <h2>Employee</h2>
               </div>
 
               <button id="showEmployeeFormButton" class="button secondary">Add Employee</button>
