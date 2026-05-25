@@ -33,10 +33,9 @@
       </aside>
 
       <section class="workspace">
-        <header class="topbar">
-          <div>
-            <h1>Shift Ahoy</h1>
-            <p id="message" class="dashboardWelcome">Welcome aboard.</p>
+        <header class="topbar dashboardTopbar">
+          <div class="dashboardTopbarTitle">
+            <h1 id="message" class="dashboardWelcome">Welcome aboard</h1>
           </div>
 
           <div class="topbarActions">
@@ -225,19 +224,19 @@
 
         <section id="appView" class="hidden dashboardGrid">
           <section id="schedulePanel" class="card scheduleCard">
-            <div class="cardTitle dashboardCardTitle">
-              <span class="iconBadge">01</span>
-              <div>
+            <div class="cardTitle dashboardCardTitle scheduleHeaderRow">
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">01</span>
                 <h2>Schedule</h2>
               </div>
-            </div>
 
-            <div class="toolbar dashboardToolbar">
-              <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
-              <span id="weekLabel" class="weekLabel"></span>
-              <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
-              <button id="generateScheduleButton" class="button primary">Generate</button>
-              <button id="printScheduleButton" class="button secondary">Print</button>
+              <div class="toolbar dashboardToolbar">
+                <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
+                <span id="weekLabel" class="weekLabel"></span>
+                <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
+                <button id="generateScheduleButton" class="button primary">Generate</button>
+                <button id="printScheduleButton" class="button secondary">Print</button>
+              </div>
             </div>
 
             <div class="tableFrame">
@@ -248,9 +247,7 @@
           <section id="locationsPanel" class="card sideCard">
             <div class="cardTitle dashboardCardTitle">
               <span class="iconBadge">02</span>
-              <div>
-                <h2>Location</h2>
-              </div>
+              <h2>Location</h2>
             </div>
 
             <select id="locationSelect"></select>
@@ -263,8 +260,8 @@
 
           <section id="shiftsPanel" class="card managerOnly panelCard">
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-              <span class="iconBadge">03</span>
-              <div>
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">03</span>
                 <h2>Shift</h2>
               </div>
 
@@ -281,8 +278,8 @@
 
           <section id="employeesPanel" class="card managerOnly panelCard">
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-              <span class="iconBadge">04</span>
-              <div>
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">04</span>
                 <h2>Employee</h2>
               </div>
 
