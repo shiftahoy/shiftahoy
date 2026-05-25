@@ -6,13 +6,23 @@ const router = express.Router();
 
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(
+    const plansResult = await pool.query(
       `SELECT code, name, monthly_price_cents, employee_limit
        FROM plans
        ORDER BY monthly_price_cents`
     );
 
-    res.json({ plans: result.rows });
+    const businessResult = await pool.query(
+      `SELECT plan_code
+       FROM businesses
+       WHERE id = $1`,
+      [req.user.businessId]
+    );
+
+    res.json({
+      plans: plansResult.rows,
+      currentPlan: businessResult.rows[0]?.plan_code || "free"
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to load plans." });
@@ -65,7 +75,7 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
       [plan.code, plan.employee_limit, req.user.businessId]
     );
 
-    res.json({ message: "Plan updated immediately." });
+    res.json({ message: "Plan updated immediately.", currentPlan: plan.code });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Plan change failed." });
