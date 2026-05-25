@@ -75,6 +75,23 @@ function canManageSchedule() {
   return !!currentUser && (currentUser.role === "owner" || currentUser.canManageSchedule);
 }
 
+function selectedLocation() {
+  return locations.find((location) => location.id === selectedLocationId) || null;
+}
+
+function selectedLocationName() {
+  const location = selectedLocation();
+  return location?.name || "selected location";
+}
+
+function updateSelectedLocationLabels() {
+  const name = selectedLocationName();
+  ["scheduleLocationName", "shiftLocationName", "employeeLocationName"].forEach((id) => {
+    const element = $(id);
+    if (element) element.textContent = name;
+  });
+}
+
 function startOfWeek(date) {
   const copy = new Date(date);
   const day = copy.getDay();
@@ -374,7 +391,12 @@ async function loadLocations() {
 
   if (locations.length === 0) {
     selectedLocationId = null;
+    shifts = [];
+    employees = [];
     renderLocations();
+    renderShifts();
+    renderEmployees();
+    updateSelectedLocationLabels();
     renderEmptySchedule();
     return;
   }
@@ -409,6 +431,7 @@ function showLocationForm(location = null) {
 }
 
 function renderLocations() {
+  updateSelectedLocationLabels();
   const list = $("locationList");
   const filter = ($("locationFilter")?.value || "").trim().toLowerCase();
   const visibleLocations = filter
@@ -448,11 +471,25 @@ function renderLocations() {
   }).join("");
 }
 
-async function loadSelectedLocationData() {
+async function loadSelectedLocationData({ resetPages = false } = {}) {
+  updateSelectedLocationLabels();
+
+  if (resetPages) {
+    shiftPage = 1;
+    employeePage = 1;
+    $("shiftForm")?.classList.add("hidden");
+    $("employeeForm")?.classList.add("hidden");
+  }
+
   await loadSchedule();
 
   if (canManageSchedule()) {
     await Promise.all([loadShifts(), loadEmployees()]);
+  } else {
+    shifts = [];
+    employees = [];
+    renderShifts();
+    renderEmployees();
   }
 }
 
@@ -513,6 +550,8 @@ async function deleteLocation(locationId) {
 }
 
 async function loadSchedule() {
+  updateSelectedLocationLabels();
+
   if (!selectedLocationId) {
     renderEmptySchedule();
     return;
@@ -539,7 +578,7 @@ function renderEmptySchedule() {
     </thead>
     <tbody>
       <tr>
-        <td>No schedule data yet.</td>
+        <td>Select or add a location to see its schedule.</td>
       </tr>
     </tbody>
   `;
@@ -658,12 +697,15 @@ function resetShiftForm() {
   $("shiftSortOrder").value = "1";
   setNotice("shiftFormMessage", "", "");
   resetFieldState("shiftName", "Required");
-  resetLocationForm();
-  $("locationForm").classList.add("hidden");
   renderShiftDayEditor(defaultShiftDays());
 }
 
 function showShiftForm() {
+  if (!selectedLocationId) {
+    setNotice("shiftFormMessage", "error", "Select a location before creating a shift.");
+    return;
+  }
+
   resetShiftForm();
   $("shiftForm").classList.remove("hidden");
   $("shiftName").focus();
@@ -1173,9 +1215,10 @@ function setupEvents() {
     const id = button.dataset.id;
 
     if (action === "select-location") {
+      if (selectedLocationId === id) return;
       selectedLocationId = id;
       renderLocations();
-      await loadSelectedLocationData();
+      await loadSelectedLocationData({ resetPages: true });
     }
 
     if (action === "edit-location") {
@@ -1230,6 +1273,11 @@ function setupEvents() {
   });
 
   $("showEmployeeFormButton").addEventListener("click", () => {
+    if (!selectedLocationId) {
+      setNotice("employeeFormMessage", "error", "Select a location before adding an employee.");
+      return;
+    }
+
     resetEmployeeForm();
     $("employeeForm").classList.remove("hidden");
   });
