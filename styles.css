@@ -185,6 +185,15 @@ button {
   margin-bottom: 24px;
 }
 
+.dashboardTopbar {
+  align-items: center;
+}
+
+.dashboardTopbarTitle {
+  display: flex;
+  align-items: center;
+}
+
 .appShell:has(#authView:not(.hidden)) .topbar {
   display: none;
 }
@@ -202,11 +211,11 @@ p {
 }
 
 .dashboardWelcome {
-  margin-top: 6px;
-  color: var(--ink);
-  font-size: clamp(1.1rem, 2vw, 1.55rem);
+  margin: 0;
+  color: var(--brand);
+  font-size: clamp(2rem, 3vw, 3rem);
   font-weight: 900;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.055em;
 }
 
 .eyebrow {
@@ -409,7 +418,7 @@ p {
 
 .cardTitle {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 0;
 }
@@ -440,11 +449,24 @@ p {
 }
 
 .dashboardCardTitle {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .dashboardCardTitleWithAction {
   align-items: center;
+  justify-content: space-between;
+}
+
+.dashboardTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scheduleHeaderRow {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
 }
 
 .dashboardCardTitleWithAction .searchInput,
@@ -453,8 +475,8 @@ p {
 }
 
 .dashboardToolbar {
-  justify-content: flex-start;
-  margin-top: 6px;
+  justify-content: flex-end;
+  margin-top: 0;
 }
 
 .formGrid.twoColumn {
@@ -722,7 +744,7 @@ select:focus {
 }
 
 .tableFrame {
-  margin-top: 18px;
+  margin-top: 8px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -1039,9 +1061,14 @@ tbody tr:hover td {
   .topbar,
   .sectionHeader,
   .welcomeCard,
-  .dashboardCardTitleWithAction {
+  .dashboardCardTitleWithAction,
+  .scheduleHeaderRow {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .scheduleHeaderRow .dashboardToolbar {
+    justify-content: flex-start;
   }
 
   .dashboardCardTitleWithAction .searchInput,
