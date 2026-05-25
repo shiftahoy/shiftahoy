@@ -8,7 +8,7 @@
   </head>
 
   <body>
-    <main class="appShell">
+    <main id="pageTop" class="appShell">
       <aside class="sidebar" aria-label="Primary navigation">
         <a class="brand" href="#" aria-label="Shift Ahoy home">
           <span class="brandLogoWrap">
@@ -20,10 +20,12 @@
         </a>
 
         <nav class="navList">
+          <a class="navItem utilityNav" href="#pageTop">Top of Page</a>
           <a class="navItem active" href="#schedulePanel">Schedule</a>
           <a class="navItem" href="#locationsPanel">Location</a>
           <a class="navItem managerOnly" href="#shiftsPanel">Shift</a>
           <a class="navItem managerOnly" href="#employeesPanel">Employee</a>
+          <a class="navItem utilityNav" href="#pageBottom">Bottom of Page</a>
         </nav>
 
         <div class="sidebarFooter">
@@ -43,8 +45,11 @@
           </div>
 
           <div class="topbarActions">
-            <div id="currentPlanText" class="currentPlanText hidden">Current Plan: <strong>Free</strong></div>
-            <button id="upgradeButton" class="button secondary hidden">Upgrade</button>
+            <div class="planActionGroup">
+              <div id="currentPlanText" class="currentPlanText hidden">Current Plan: <strong>Free</strong></div>
+              <button id="upgradeButton" class="button secondary hidden">Upgrade</button>
+              <button id="settingsButton" class="iconButton hidden" type="button" aria-label="Open settings" title="Settings">⚙</button>
+            </div>
           </div>
         </header>
 
@@ -196,22 +201,46 @@
           </section>
 
           <section id="locationsPanel" class="card sideCard">
-            <div class="cardTitle dashboardCardTitle">
-              <span class="iconBadge">02</span>
-              <div>
-                <h2>Location</h2>
-                <p class="panelHint ownerOnly">All locations are visible. Select one to manage shifts and employees.</p>
-                <p class="panelHint nonOwnerOnly hidden">Your assigned location.</p>
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">02</span>
+                <div>
+                  <h2>Location</h2>
+                  <p class="panelHint ownerOnly">All locations are visible. Select one to manage shifts and employees.</p>
+                  <p class="panelHint nonOwnerOnly hidden">Your assigned location.</p>
+                </div>
+              </div>
+
+              <div id="ownerLocationToolbar" class="inlineToolbar ownerOnly">
+                <input id="locationFilter" class="searchInput" placeholder="Filter locations" />
+                <button id="showLocationFormButton" class="button secondary" type="button">Add Location</button>
               </div>
             </div>
 
-            <div id="locationList" class="locationList"></div>
+            <div id="locationFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
-            <div id="ownerLocationTools" class="inlineForm">
-              <input id="newLocationName" placeholder="New Location Name" />
-              <input id="newLocationAddress" placeholder="Address optional" />
-              <button id="addLocationButton" class="button secondary">Add Location</button>
-            </div>
+            <form id="locationForm" class="editorForm ownerOnly hidden">
+              <input type="hidden" id="locationId" />
+              <div class="formGrid twoColumn">
+                <div class="fieldGroup" data-field="locationName">
+                  <label class="fieldLabel" for="locationName">
+                    Location Name
+                    <span id="locationNameStatus" class="fieldStatus">Required</span>
+                  </label>
+                  <input id="locationName" placeholder="New Location Name" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="locationAddress">Address <span class="optionalText">(optional)</span></label>
+                  <input id="locationAddress" placeholder="Address (optional)" />
+                </div>
+              </div>
+              <div class="formActions">
+                <button id="saveLocationButton" class="button primary" type="submit">Save Location</button>
+                <button id="cancelLocationButton" class="button ghost" type="button">Cancel</button>
+              </div>
+            </form>
+
+            <div id="locationList" class="locationList"></div>
           </section>
 
           <section id="shiftsPanel" class="card managerOnly panelCard">
@@ -397,6 +426,22 @@
 
           <div id="planList" class="planGrid"></div>
         </dialog>
+
+        <dialog id="settingsDialog" class="modalCard settingsPanel">
+          <div class="sectionHeader">
+            <div>
+              <p class="eyebrow">Settings</p>
+              <h2>Settings</h2>
+              <p class="panelHint">Settings options will be added here later.</p>
+            </div>
+
+            <button id="closeSettingsDialog" class="button ghost">Close</button>
+          </div>
+
+          <div class="emptyState">No settings have been added yet.</div>
+        </dialog>
+
+        <div id="pageBottom" class="pageBottomAnchor" aria-hidden="true"></div>
       </section>
     </main>
 
