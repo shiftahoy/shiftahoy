@@ -1874,3 +1874,198 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.calendarPicker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.calendarPickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendarPickerHeader strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.selectedRangeText {
+  min-height: 22px;
+  color: var(--brand);
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.calendarMonths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.calendarMonth {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.calendarMonth h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.calendarWeekdays,
+.calendarDays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.calendarWeekdays span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.calendarDay {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.calendarDay:not(:disabled):hover {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.calendarDay.inRange {
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
+}
+
+.calendarDay.selected {
+  border-color: var(--brand);
+  color: #ffffff;
+  background: var(--brand);
+}
+
+.calendarDay.holiday {
+  color: #92400e;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.calendarDay.holiday:not(:disabled):hover {
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+.calendarDay.blocked,
+.calendarDay.past {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: #f1f5f9;
+  opacity: 0.82;
+}
+
+.calendarDay.blocked {
+  color: var(--danger);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.calendarDay.spacer {
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+}
+
+.calendarLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.calendarLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.legendDot.selected {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+
+.legendDot.blocked {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.legendDot.holiday {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.chipListLabel {
+  width: 100%;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.holidayChip {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+@media (max-width: 760px) {
+  .calendarMonths {
+    grid-template-columns: 1fr;
+  }
+}
