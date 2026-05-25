@@ -28,7 +28,10 @@ let shiftTotalPages = 1;
 let currentPlanCode = "free";
 let employeeDaysOff = new Set();
 let timeOffRequests = [];
-let timeOffSettings = { requestsEnabled: true, blockedDates: [] };
+let timeOffSettings = { requestsEnabled: true, blockedDates: [], holidayDates: [] };
+let timeOffCalendarMonth = startOfMonth(new Date());
+let timeOffRangeStart = null;
+let timeOffRangeEnd = null;
 let auditLogs = [];
 
 const message = document.getElementById("message");
@@ -116,6 +119,38 @@ function addDays(date, days) {
 
 function dateOnly(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function parseDateOnly(value) {
+  const [year, month, day] = String(value || "").split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function startOfMonth(date) {
+  const copy = new Date(date);
+  copy.setDate(1);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function addMonths(date, months) {
+  const copy = startOfMonth(date);
+  copy.setMonth(copy.getMonth() + months);
+  return copy;
+}
+
+function formatMonthLabel(date) {
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function formatDateForDisplay(value) {
+  const parsed = parseDateOnly(value);
+  return parsed ? parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : value;
+}
+
+function compareDateOnly(a, b) {
+  return String(a || "").localeCompare(String(b || ""));
 }
 
 function formatDateForLabel(date) {
@@ -1647,6 +1682,203 @@ function statusBadge(status) {
   return `<span class="statusBadge ${escapeHtml(safe)}">${escapeHtml(safe)}</span>`;
 }
 
+function activeBlockedDateMap() {
+  const today = dateOnly(new Date());
+  const map = new Map();
+
+  for (const item of timeOffSettings.blockedDates || []) {
+    const blockedDate = formatRequestDate(item.blocked_date);
+    if (blockedDate >= today) {
+      map.set(blockedDate, item.reason || "Blocked by owner");
+    }
+  }
+
+  return map;
+}
+
+function activeHolidayDateMap() {
+  const today = dateOnly(new Date());
+  const map = new Map();
+
+  for (const item of timeOffSettings.holidayDates || []) {
+    const holidayDate = formatRequestDate(item.holiday_date);
+    if (holidayDate >= today) {
+      map.set(holidayDate, item.name || "Holiday");
+    }
+  }
+
+  return map;
+}
+
+function dateRangeIncludesBlockedDate(startDate, endDate) {
+  if (!startDate || !endDate) return null;
+
+  const blocked = activeBlockedDateMap();
+  let cursor = parseDateOnly(startDate);
+  const end = parseDateOnly(endDate);
+
+  if (!cursor || !end) return null;
+
+  while (cursor <= end) {
+    const cursorDate = dateOnly(cursor);
+    if (blocked.has(cursorDate)) {
+      return { date: cursorDate, reason: blocked.get(cursorDate) };
+    }
+    cursor = addDays(cursor, 1);
+  }
+
+  return null;
+}
+
+function setTimeOffRange(startDate, endDate) {
+  timeOffRangeStart = startDate;
+  timeOffRangeEnd = endDate;
+
+  const startInput = $("timeOffStartDate");
+  const endInput = $("timeOffEndDate");
+  const rangeInput = $("timeOffDateRange");
+
+  if (startInput) startInput.value = startDate || "";
+  if (endInput) endInput.value = endDate || "";
+  if (rangeInput) rangeInput.value = startDate && endDate ? `${startDate} to ${endDate}` : "";
+
+  const rangeText = $("timeOffSelectedRange");
+  if (rangeText) {
+    rangeText.textContent = startDate && endDate
+      ? startDate === endDate
+        ? `Selected: ${formatDateForDisplay(startDate)}`
+        : `Selected: ${formatDateForDisplay(startDate)} – ${formatDateForDisplay(endDate)}`
+      : "No dates selected.";
+  }
+
+  renderTimeOffCalendar();
+}
+
+function renderCalendarMonth(monthDate, blockedDates, holidayDates, today) {
+  const monthStart = startOfMonth(monthDate);
+  const firstDayIndex = monthStart.getDay();
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const cells = [];
+
+  for (let index = 0; index < firstDayIndex; index += 1) {
+    cells.push(`<span class="calendarDay spacer" aria-hidden="true"></span>`);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+    const dateValue = dateOnly(date);
+    const isPast = dateValue < today;
+    const isBlocked = blockedDates.has(dateValue);
+    const isHoliday = holidayDates.has(dateValue);
+    const isSelected = dateValue === timeOffRangeStart || dateValue === timeOffRangeEnd;
+    const isInRange = timeOffRangeStart && timeOffRangeEnd && dateValue > timeOffRangeStart && dateValue < timeOffRangeEnd;
+    const classes = ["calendarDay"];
+    if (isPast) classes.push("past");
+    if (isHoliday) classes.push("holiday");
+    if (isBlocked) classes.push("blocked");
+    if (isSelected) classes.push("selected");
+    if (isInRange) classes.push("inRange");
+
+    const title = isPast
+      ? "Past date"
+      : isBlocked
+        ? `Blocked: ${blockedDates.get(dateValue)}`
+        : isHoliday
+          ? `Holiday: ${holidayDates.get(dateValue)}`
+          : "Available";
+
+    cells.push(`
+      <button
+        class="${classes.join(" ")}"
+        type="button"
+        data-date="${escapeHtml(dateValue)}"
+        ${isPast || isBlocked ? "disabled" : ""}
+        title="${escapeHtml(title)}"
+        aria-label="${escapeHtml(`${formatDateForDisplay(dateValue)} - ${title}`)}"
+      >
+        <span>${day}</span>
+      </button>
+    `);
+  }
+
+  return `
+    <section class="calendarMonth" aria-label="${escapeHtml(formatMonthLabel(monthStart))}">
+      <h4>${escapeHtml(formatMonthLabel(monthStart))}</h4>
+      <div class="calendarWeekdays" aria-hidden="true">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="calendarDays">${cells.join("")}</div>
+    </section>
+  `;
+}
+
+function renderTimeOffCalendar() {
+  const grid = $("timeOffCalendarGrid");
+  const label = $("timeOffCalendarLabel");
+  if (!grid) return;
+
+  const today = dateOnly(new Date());
+  const blockedDates = activeBlockedDateMap();
+  const holidayDates = activeHolidayDateMap();
+  const firstMonth = startOfMonth(timeOffCalendarMonth);
+  const secondMonth = addMonths(firstMonth, 1);
+
+  if (label) {
+    label.textContent = `${formatMonthLabel(firstMonth)} – ${formatMonthLabel(secondMonth)}`;
+  }
+
+  grid.innerHTML = `${renderCalendarMonth(firstMonth, blockedDates, holidayDates, today)}${renderCalendarMonth(secondMonth, blockedDates, holidayDates, today)}`;
+
+  const rangeText = $("timeOffSelectedRange");
+  if (rangeText && (!timeOffRangeStart || !timeOffRangeEnd)) {
+    rangeText.textContent = "No dates selected.";
+  }
+}
+
+function selectTimeOffCalendarDate(dateValue) {
+  const blocked = activeBlockedDateMap();
+  const today = dateOnly(new Date());
+
+  if (dateValue < today) {
+    setFieldState("timeOffDateRange", "invalid", "Choose today or a future date");
+    return;
+  }
+
+  if (blocked.has(dateValue)) {
+    setFieldState("timeOffDateRange", "invalid", "Blocked date");
+    setNotice("timeOffFormMessage", "error", `${formatDateForDisplay(dateValue)} is blocked: ${blocked.get(dateValue)}`);
+    return;
+  }
+
+  setNotice("timeOffFormMessage", "", "");
+
+  let startDate = dateValue;
+  let endDate = dateValue;
+
+  if (timeOffRangeStart && timeOffRangeEnd && timeOffRangeStart === timeOffRangeEnd) {
+    if (dateValue < timeOffRangeStart) {
+      startDate = dateValue;
+      endDate = timeOffRangeStart;
+    } else {
+      startDate = timeOffRangeStart;
+      endDate = dateValue;
+    }
+  }
+
+  const blockedInRange = dateRangeIncludesBlockedDate(startDate, endDate);
+  if (blockedInRange) {
+    setFieldState("timeOffDateRange", "invalid", "Range includes blocked date");
+    setNotice(
+      "timeOffFormMessage",
+      "error",
+      `Your selected range includes blocked date ${formatDateForDisplay(blockedInRange.date)}: ${blockedInRange.reason}`
+    );
+    return;
+  }
+
+  setTimeOffRange(startDate, endDate);
+  setFieldState("timeOffDateRange", "valid", "Selected");
+}
 
 async function loadTimeOffSettings() {
   if (!currentUser) return;
@@ -1655,11 +1887,12 @@ async function loadTimeOffSettings() {
     const data = await api("/time-off/settings");
     timeOffSettings = {
       requestsEnabled: data.settings?.requestsEnabled !== false,
-      blockedDates: data.blockedDates || []
+      blockedDates: data.blockedDates || [],
+      holidayDates: data.holidayDates || []
     };
     renderTimeOffSettings();
   } catch (err) {
-    timeOffSettings = { requestsEnabled: true, blockedDates: [] };
+    timeOffSettings = { requestsEnabled: true, blockedDates: [], holidayDates: [] };
     renderTimeOffSettings();
   }
 }
@@ -1671,7 +1904,31 @@ function resetBlockedDateForm() {
   if (reasonInput) reasonInput.value = "";
   resetFieldState("blockedDateInput", "Required");
   resetFieldState("blockedDateReason", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
   setNotice("timeOffFormMessage", "", "");
+}
+
+function resetHolidayDateForm() {
+  const holidayDateInput = $("holidayDateInput");
+  const nameInput = $("holidayDateName");
+  if (holidayDateInput) holidayDateInput.value = "";
+  if (nameInput) nameInput.value = "";
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
+  setNotice("timeOffFormMessage", "", "");
+}
+
+function hideHolidayDateForm() {
+  resetHolidayDateForm();
+  $("holidayDateForm")?.classList.add("hidden");
+}
+
+function showHolidayDateForm() {
+  resetHolidayDateForm();
+  hideBlockedDateForm();
+  $("holidayDateForm")?.classList.remove("hidden");
+  $("holidayDateInput")?.focus();
 }
 
 function hideBlockedDateForm() {
@@ -1681,6 +1938,7 @@ function hideBlockedDateForm() {
 
 function showBlockedDateForm() {
   resetBlockedDateForm();
+  hideHolidayDateForm();
   $("blockedDateForm")?.classList.remove("hidden");
   $("blockedDateInput")?.focus();
 }
@@ -1688,17 +1946,25 @@ function showBlockedDateForm() {
 function resetTimeOffRequestForm() {
   const startInput = $("timeOffStartDate");
   const endInput = $("timeOffEndDate");
+  const rangeInput = $("timeOffDateRange");
   const reasonInput = $("timeOffReason");
   if (startInput) startInput.value = "";
   if (endInput) endInput.value = "";
+  if (rangeInput) rangeInput.value = "";
   if (reasonInput) reasonInput.value = "";
-  resetFieldState("timeOffStartDate", "Required");
-  resetFieldState("timeOffEndDate", "Required");
+  timeOffRangeStart = null;
+  timeOffRangeEnd = null;
+  timeOffCalendarMonth = startOfMonth(new Date());
+  resetFieldState("timeOffDateRange", "Required");
   resetFieldState("timeOffReason", "Required");
   resetFieldState("blockedDateInput", "Required");
   resetFieldState("blockedDateReason", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
   resetFieldState("decisionReason", "Required");
-  resetFieldState("timeOffReason", "Required");
+  renderTimeOffCalendar();
 }
 
 function hideTimeOffRequestForm() {
@@ -1714,7 +1980,8 @@ function showTimeOffRequestForm() {
 
   resetTimeOffRequestForm();
   $("timeOffRequestForm")?.classList.remove("hidden");
-  $("timeOffStartDate")?.focus();
+  renderTimeOffCalendar();
+  $("timeOffCalendarGrid")?.querySelector("button.calendarDay:not([disabled])")?.focus();
 }
 
 function renderTimeOffSettings() {
@@ -1723,6 +1990,7 @@ function renderTimeOffSettings() {
   const disabledNotice = $("timeOffDisabledNotice");
   const requestButton = $("showTimeOffRequestFormButton");
   const blockedList = $("blockedDateList");
+  const holidayList = $("holidayDateList");
 
   if (enabledInput) enabledInput.checked = timeOffSettings.requestsEnabled !== false;
 
@@ -1738,11 +2006,25 @@ function renderTimeOffSettings() {
     disabledNotice.classList.toggle("hidden", timeOffSettings.requestsEnabled !== false || canManageSchedule());
   }
 
+  if (holidayList) {
+    const today = dateOnly(new Date());
+    const holidayDates = (timeOffSettings.holidayDates || []).filter((item) => formatRequestDate(item.holiday_date) >= today);
+    holidayList.innerHTML = holidayDates.length
+      ? `<div class="chipListLabel">Holidays</div>` + holidayDates.map((item) => `
+          <span class="dateChip holidayChip">
+            ${escapeHtml(formatRequestDate(item.holiday_date))}
+            <small>${escapeHtml(item.name || "Holiday")}</small>
+            <button class="button textDanger miniButton" type="button" data-action="remove-holiday-date" data-id="${escapeHtml(item.id)}">Remove</button>
+          </span>
+        `).join("")
+      : `<div class="emptyState compactEmpty">No holiday dates.</div>`;
+  }
+
   if (blockedList) {
     const today = dateOnly(new Date());
     const blockedDates = (timeOffSettings.blockedDates || []).filter((item) => formatRequestDate(item.blocked_date) >= today);
     blockedList.innerHTML = blockedDates.length
-      ? blockedDates.map((item) => `
+      ? `<div class="chipListLabel">Blocked Dates</div>` + blockedDates.map((item) => `
           <span class="dateChip">
             ${escapeHtml(formatRequestDate(item.blocked_date))}
             <small>${escapeHtml(item.reason || "No reason")}</small>
@@ -1751,6 +2033,8 @@ function renderTimeOffSettings() {
         `).join("")
       : `<div class="emptyState compactEmpty">No blocked dates.</div>`;
   }
+
+  renderTimeOffCalendar();
 }
 
 async function saveTimeOffSettings(event) {
@@ -1780,6 +2064,44 @@ async function saveTimeOffSettings(event) {
   }
 
   await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+}
+
+async function addHolidayDate(event) {
+  event?.preventDefault?.();
+  const holidayDate = $("holidayDateInput")?.value;
+  const name = $("holidayDateName")?.value.trim() || "";
+
+  let isValid = true;
+  if (!holidayDate) { setFieldState("holidayDateInput", "invalid", "Required"); isValid = false; }
+  else setFieldState("holidayDateInput", "valid", "Looks good");
+
+  if (!name) { setFieldState("holidayDateName", "invalid", "Required"); isValid = false; }
+  else setFieldState("holidayDateName", "valid", "Looks good");
+
+  if (!isValid) return;
+
+  try {
+    await api("/time-off/holidays", {
+      method: "POST",
+      body: JSON.stringify({ holidayDate, name, locationId: selectedLocationId })
+    });
+    hideHolidayDateForm();
+    await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
+}
+
+async function removeHolidayDate(id) {
+  try {
+    await api(`/time-off/holidays/${encodeURIComponent(id)}/delete`, {
+      method: "POST",
+      body: JSON.stringify({ locationId: selectedLocationId })
+    });
+    await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("timeOffFormMessage", "error", err.message);
+  }
 }
 
 async function addBlockedDate(event) {
@@ -1988,13 +2310,15 @@ function requestDecisionReason({ title, message, confirmLabel }) {
 async function submitTimeOffRequest(event) {
   event.preventDefault();
   setNotice("timeOffFormMessage", "", "");
-  resetFieldState("timeOffStartDate", "Required");
-  resetFieldState("timeOffEndDate", "Required");
+  resetFieldState("timeOffDateRange", "Required");
   resetFieldState("timeOffReason", "Required");
   resetFieldState("blockedDateInput", "Required");
   resetFieldState("blockedDateReason", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
   resetFieldState("decisionReason", "Required");
-  resetFieldState("timeOffReason", "Required");
 
   const body = {
     startDate: $("timeOffStartDate").value,
@@ -2003,12 +2327,26 @@ async function submitTimeOffRequest(event) {
   };
 
   let isValid = true;
-  if (!body.startDate) { setFieldState("timeOffStartDate", "invalid", "Required"); isValid = false; }
-  else setFieldState("timeOffStartDate", "valid", "Looks good");
-
-  if (!body.endDate) { setFieldState("timeOffEndDate", "invalid", "Required"); isValid = false; }
-  else if (body.endDate < body.startDate) { setFieldState("timeOffEndDate", "invalid", "End date must be after start"); isValid = false; }
-  else setFieldState("timeOffEndDate", "valid", "Looks good");
+  if (!body.startDate || !body.endDate) {
+    setFieldState("timeOffDateRange", "invalid", "Required");
+    isValid = false;
+  } else if (body.endDate < body.startDate) {
+    setFieldState("timeOffDateRange", "invalid", "End date must be after start");
+    isValid = false;
+  } else {
+    const blockedInRange = dateRangeIncludesBlockedDate(body.startDate, body.endDate);
+    if (blockedInRange) {
+      setFieldState("timeOffDateRange", "invalid", "Range includes blocked date");
+      setNotice(
+        "timeOffFormMessage",
+        "error",
+        `Your selected range includes blocked date ${formatDateForDisplay(blockedInRange.date)}: ${blockedInRange.reason}`
+      );
+      isValid = false;
+    } else {
+      setFieldState("timeOffDateRange", "valid", "Selected");
+    }
+  }
 
   if (!body.reason) { setFieldState("timeOffReason", "invalid", "Required"); isValid = false; }
   else setFieldState("timeOffReason", "valid", "Looks good");
@@ -2237,7 +2575,23 @@ function setupEvents() {
   $("showTimeOffRequestFormButton")?.addEventListener("click", showTimeOffRequestForm);
   $("cancelTimeOffRequestButton")?.addEventListener("click", hideTimeOffRequestForm);
   $("timeOffRequestForm")?.addEventListener("submit", submitTimeOffRequest);
+  $("prevTimeOffCalendarMonth")?.addEventListener("click", () => {
+    timeOffCalendarMonth = addMonths(timeOffCalendarMonth, -1);
+    renderTimeOffCalendar();
+  });
+  $("nextTimeOffCalendarMonth")?.addEventListener("click", () => {
+    timeOffCalendarMonth = addMonths(timeOffCalendarMonth, 1);
+    renderTimeOffCalendar();
+  });
+  $("timeOffCalendarGrid")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-date]");
+    if (!button || button.disabled) return;
+    selectTimeOffCalendarDate(button.dataset.date);
+  });
   $("timeOffRequestsEnabled")?.addEventListener("change", saveTimeOffSettings);
+  $("showHolidayDateFormButton")?.addEventListener("click", showHolidayDateForm);
+  $("cancelHolidayDateButton")?.addEventListener("click", hideHolidayDateForm);
+  $("holidayDateForm")?.addEventListener("submit", addHolidayDate);
   $("showBlockedDateFormButton")?.addEventListener("click", showBlockedDateForm);
   $("cancelBlockedDateButton")?.addEventListener("click", hideBlockedDateForm);
   $("blockedDateForm")?.addEventListener("submit", addBlockedDate);
@@ -2292,10 +2646,13 @@ document.addEventListener("DOMContentLoaded", () => {
   resetShiftForm();
   $("shiftForm").classList.add("hidden");
   resetEmployeeForm();
-  resetFieldState("timeOffStartDate", "Required");
-  resetFieldState("timeOffEndDate", "Required");
+  resetFieldState("timeOffDateRange", "Required");
   resetFieldState("timeOffReason", "Required");
   resetFieldState("blockedDateInput", "Required");
   resetFieldState("blockedDateReason", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
+  resetFieldState("holidayDateInput", "Required");
+  resetFieldState("holidayDateName", "Required");
   resetFieldState("decisionReason", "Required");
 });
