@@ -317,23 +317,58 @@ router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
     return res.status(401).json({ error: "Owner credentials are required to delete a shift." });
   }
 
+  const client = await pool.connect();
+
   try {
-    const result = await pool.query(
-      `DELETE FROM shifts
+    await client.query("BEGIN");
+
+    const shiftResult = await client.query(
+      `SELECT id
+       FROM shifts
        WHERE id = $1
          AND business_id = $2
-       RETURNING id`,
+       FOR UPDATE`,
       [id, req.user.businessId]
     );
 
-    if (result.rows.length === 0) {
+    if (shiftResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Shift not found." });
     }
 
+    await client.query(
+      `UPDATE employees
+       SET preferred_shift_id = NULL,
+           updated_at = now()
+       WHERE business_id = $1
+         AND preferred_shift_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `UPDATE schedule_cells
+       SET shift_id = NULL
+       WHERE shift_id = $1`,
+      [id]
+    );
+
+    await client.query(`DELETE FROM shift_days WHERE shift_id = $1`, [id]);
+
+    await client.query(
+      `DELETE FROM shifts
+       WHERE id = $1
+         AND business_id = $2`,
+      [id, req.user.businessId]
+    );
+
+    await client.query("COMMIT");
     res.json({ message: "Shift deleted." });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error(err);
     res.status(500).json({ error: "Shift deletion failed." });
+  } finally {
+    client.release();
   }
 });
 
