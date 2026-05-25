@@ -23,7 +23,7 @@ const signupFieldIds = [
 
 function dashboardWelcomeText() {
   const login = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "";
-  return login ? `Welcome aboard, ${login}.` : "Welcome aboard.";
+  return login ? `Welcome aboard, ${login}` : "Welcome aboard";
 }
 
 function showMessage(text) {
