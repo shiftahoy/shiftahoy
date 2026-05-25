@@ -24,6 +24,8 @@
           <a class="navItem" href="#schedulePanel">Schedule</a>
           <a class="navItem managerOnly" href="#shiftsPanel">Shift</a>
           <a class="navItem managerOnly" href="#employeesPanel">Employee</a>
+          <a class="navItem" href="#timeOffPanel">Time Off</a>
+          <a class="navItem managerOnly" href="#auditPanel">Audit Log</a>
         </nav>
 
         <div class="sidebarFooter">
@@ -419,6 +421,137 @@
             </div>
             <p class="panelHint panelFootnote">Managers can add and edit employees for their assigned location. Owners can delete with credentials</p>
           </section>
+
+          <section id="timeOffPanel" class="card panelCard timeOffPanel">
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">05</span>
+                <div>
+                  <h2>Time Off</h2>
+                  <p class="panelHint">Approved requests automatically remove those dates from the schedule forecast</p>
+                </div>
+              </div>
+              <div class="inlineToolbar nonManagerOnly">
+                <button id="showTimeOffRequestFormButton" class="button secondary" type="button">Request Time Off</button>
+              </div>
+            </div>
+
+            <div id="timeOffFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+            <div id="timeOffDisabledNotice" class="formNotice error hidden" role="status">Time off requests are currently turned off by the owner.</div>
+
+            <section id="timeOffRequestsCard" class="timeOffSectionCard">
+              <div class="sectionHeader compactHeader">
+                <div>
+                  <h3>Requests</h3>
+                  <p class="panelHint nonManagerOnly">Your request history is organized by status and never disappears.</p>
+                  <p class="panelHint managerOnly hidden">Review pending, approved, and not approved requests for the selected location.</p>
+                </div>
+              </div>
+
+              <form id="timeOffRequestForm" class="editorForm nonManagerOnly hidden">
+                <div class="formGrid twoColumn">
+                  <div class="fieldGroup" data-field="timeOffStartDate">
+                    <label class="fieldLabel" for="timeOffStartDate">
+                      Start Date
+                      <span id="timeOffStartDateStatus" class="fieldStatus">Required</span>
+                    </label>
+                    <input id="timeOffStartDate" type="date" />
+                  </div>
+                  <div class="fieldGroup" data-field="timeOffEndDate">
+                    <label class="fieldLabel" for="timeOffEndDate">
+                      End Date
+                      <span id="timeOffEndDateStatus" class="fieldStatus">Required</span>
+                    </label>
+                    <input id="timeOffEndDate" type="date" />
+                  </div>
+                </div>
+                <div class="fieldGroup" data-field="timeOffReason">
+                  <label class="fieldLabel" for="timeOffReason">
+                    Reason
+                    <span id="timeOffReasonStatus" class="fieldStatus">Required</span>
+                  </label>
+                  <input id="timeOffReason" placeholder="Vacation, appointment, personal, etc." />
+                </div>
+                <div class="formActions">
+                  <button id="submitTimeOffRequestButton" class="button primary" type="submit">Submit Request</button>
+                  <button id="cancelTimeOffRequestButton" class="button ghost" type="button">Cancel</button>
+                </div>
+              </form>
+
+              <div id="timeOffColumns" class="timeOffColumns">
+                <section class="timeOffColumn">
+                  <h4>Pending Review</h4>
+                  <div id="pendingTimeOffList" class="listStack"></div>
+                </section>
+                <section class="timeOffColumn">
+                  <h4>Approved</h4>
+                  <div id="approvedTimeOffList" class="listStack"></div>
+                </section>
+                <section class="timeOffColumn">
+                  <h4>Not Approved</h4>
+                  <div id="deniedTimeOffList" class="listStack"></div>
+                </section>
+              </div>
+            </section>
+
+            <section id="timeOffSettingsCard" class="settingsInlineCard ownerOnly hidden">
+              <div class="sectionHeader compactHeader">
+                <div>
+                  <h3>Override</h3>
+                  <p class="panelHint">Owner controls for employee requests and blocked dates.</p>
+                </div>
+              </div>
+
+              <div class="overrideControlRow">
+                <label class="switchLine">
+                  <input id="timeOffRequestsEnabled" type="checkbox" />
+                  <span>Allow employee time off requests</span>
+                </label>
+              </div>
+
+              <div class="formActions alignLeft">
+                <button id="showBlockedDateFormButton" class="button secondary" type="button">Add Blocked Date</button>
+              </div>
+
+              <form id="blockedDateForm" class="editorForm hidden">
+                <div class="formGrid twoColumn">
+                  <div class="fieldGroup" data-field="blockedDateInput">
+                    <label class="fieldLabel" for="blockedDateInput">
+                      Blocked Date
+                      <span id="blockedDateInputStatus" class="fieldStatus">Required</span>
+                    </label>
+                    <input id="blockedDateInput" type="date" />
+                  </div>
+                  <div class="fieldGroup" data-field="blockedDateReason">
+                    <label class="fieldLabel" for="blockedDateReason">
+                      Reason
+                      <span id="blockedDateReasonStatus" class="fieldStatus">Required</span>
+                    </label>
+                    <input id="blockedDateReason" placeholder="Holiday, inventory, blackout date, etc." />
+                  </div>
+                </div>
+                <div class="formActions">
+                  <button id="addBlockedDateButton" class="button primary" type="submit">Save Blocked Date</button>
+                  <button id="cancelBlockedDateButton" class="button ghost" type="button">Cancel</button>
+                </div>
+              </form>
+
+              <div id="blockedDateList" class="chipList"></div>
+            </section>
+          </section>
+
+          <section id="auditPanel" class="card panelCard managerOnly">
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">06</span>
+                <div>
+                  <h2>Audit Log</h2>
+                  <p class="panelHint">Most recent changes and actions appear first.</p>
+                </div>
+              </div>
+            </div>
+            <div id="auditLogList" class="listStack"></div>
+          </section>
         </section>
 
         <dialog id="planDialog" class="modalCard">
@@ -446,6 +579,34 @@
           </div>
 
           <div class="emptyState">No settings have been added yet.</div>
+        </dialog>
+
+        <dialog id="decisionDialog" class="modalCard credentialDialog">
+          <form id="decisionForm" method="dialog">
+            <div class="sectionHeader">
+              <div>
+                <p class="eyebrow">Time off request</p>
+                <h2 id="decisionDialogTitle">Decision Reason</h2>
+                <p id="decisionDialogMessage" class="panelHint">Enter the reason for this decision.</p>
+              </div>
+              <button id="cancelDecisionX" class="button ghost" type="button">Close</button>
+            </div>
+
+            <div id="decisionDialogNotice" class="formNotice hidden" role="status" aria-live="polite"></div>
+
+            <div class="fieldGroup" data-field="decisionReason">
+              <label class="fieldLabel" for="decisionReason">
+                Reason
+                <span id="decisionReasonStatus" class="fieldStatus">Required</span>
+              </label>
+              <input id="decisionReason" placeholder="Reason for approval or denial" required />
+            </div>
+
+            <div class="formActions">
+              <button id="confirmDecisionButton" class="button primary" type="submit">Save Decision</button>
+              <button id="cancelDecisionButton" class="button ghost" type="button">Cancel</button>
+            </div>
+          </form>
         </dialog>
 
         <dialog id="credentialDialog" class="modalCard credentialDialog">
