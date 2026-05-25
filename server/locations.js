@@ -132,23 +132,121 @@ router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
     return res.status(401).json({ error: "Owner credentials are required to delete a location." });
   }
 
+  const client = await pool.connect();
+
   try {
-    const result = await pool.query(
-      `DELETE FROM locations
+    await client.query("BEGIN");
+
+    const locationResult = await client.query(
+      `SELECT id
+       FROM locations
        WHERE id = $1
          AND business_id = $2
-       RETURNING id`,
+       FOR UPDATE`,
       [id, req.user.businessId]
     );
 
-    if (result.rows.length === 0) {
+    if (locationResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "Location not found." });
     }
 
+    const employeeUserResult = await client.query(
+      `SELECT user_id
+       FROM employees
+       WHERE business_id = $1
+         AND location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    const employeeUserIds = employeeUserResult.rows
+      .map((row) => row.user_id)
+      .filter(Boolean);
+
+    await client.query(
+      `DELETE FROM schedule_cells sc
+       USING schedules s
+       WHERE sc.schedule_id = s.id
+         AND s.business_id = $1
+         AND s.location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM schedules
+       WHERE business_id = $1
+         AND location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM employee_days_off edo
+       USING employees e
+       WHERE edo.employee_id = e.id
+         AND e.business_id = $1
+         AND e.location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM employee_availability ea
+       USING employees e
+       WHERE ea.employee_id = e.id
+         AND e.business_id = $1
+         AND e.location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM employees
+       WHERE business_id = $1
+         AND location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    if (employeeUserIds.length) {
+      await client.query(
+        `UPDATE users
+         SET active = false,
+             updated_at = now()
+         WHERE business_id = $1
+           AND role <> 'owner'
+           AND id = ANY($2::uuid[])`,
+        [req.user.businessId, employeeUserIds]
+      );
+    }
+
+    await client.query(
+      `DELETE FROM shift_days sd
+       USING shifts s
+       WHERE sd.shift_id = s.id
+         AND s.business_id = $1
+         AND s.location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM shifts
+       WHERE business_id = $1
+         AND location_id = $2`,
+      [req.user.businessId, id]
+    );
+
+    await client.query(
+      `DELETE FROM locations
+       WHERE id = $1
+         AND business_id = $2`,
+      [id, req.user.businessId]
+    );
+
+    await client.query("COMMIT");
     res.json({ message: "Location deleted." });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error(err);
     res.status(500).json({ error: "Location deletion failed." });
+  } finally {
+    client.release();
   }
 });
 
