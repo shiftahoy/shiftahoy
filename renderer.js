@@ -214,7 +214,7 @@ function updatePager(prefix, page, totalPages) {
 function setActiveNavigation(sectionId) {
   if (!sectionId) return;
 
-  document.querySelectorAll(".navList .navItem:not(.utilityNav)").forEach((link) => {
+  document.querySelectorAll(".navList .navItem").forEach((link) => {
     const targetId = (link.getAttribute("href") || "").replace("#", "");
     link.classList.toggle("active", targetId === sectionId);
   });
@@ -229,19 +229,51 @@ function visibleSectionCandidates() {
 let navigationScrollTicking = false;
 let navigationClickHoldUntil = 0;
 
+function sectionDocumentTop(section) {
+  return section.getBoundingClientRect().top + window.scrollY;
+}
+
+function sectionDocumentBottom(section) {
+  return section.getBoundingClientRect().bottom + window.scrollY;
+}
+
+function scrollToSectionForNav(sectionId) {
+  const section = $(sectionId);
+  if (!section) return;
+
+  let targetY = sectionDocumentTop(section);
+
+  if (sectionId === "locationsPanel") {
+    targetY = 0;
+  } else if (sectionId === "employeesPanel") {
+    targetY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  } else if (sectionId === "schedulePanel") {
+    targetY = Math.max(0, sectionDocumentTop(section) - 14);
+  } else if (sectionId === "shiftsPanel") {
+    targetY = Math.max(0, sectionDocumentBottom(section) - window.innerHeight + 18);
+  }
+
+  window.scrollTo({ top: targetY, behavior: "smooth" });
+}
+
 function updateActiveNavigationFromScroll() {
   if (Date.now() < navigationClickHoldUntil) return;
 
   const sections = visibleSectionCandidates();
   if (!sections.length) return;
 
-  const activationLine = Math.min(190, Math.max(96, window.innerHeight * 0.22));
+  if (window.scrollY <= 4) {
+    setActiveNavigation("locationsPanel");
+    return;
+  }
+
+  const viewportBottomY = window.scrollY + window.innerHeight;
   let activeSection = sections[0];
 
   for (const section of sections) {
-    const rect = section.getBoundingClientRect();
+    const activationY = sectionDocumentTop(section);
 
-    if (rect.top <= activationLine) {
+    if (viewportBottomY >= activationY + 1) {
       activeSection = section;
     }
   }
@@ -260,13 +292,15 @@ function requestActiveNavigationUpdate() {
 }
 
 function setupSectionNavigationHighlighting() {
-  document.querySelectorAll(".navList .navItem:not(.utilityNav)").forEach((link) => {
-    link.addEventListener("click", () => {
+  document.querySelectorAll(".navList .navItem").forEach((link) => {
+    link.addEventListener("click", (event) => {
       const sectionId = (link.getAttribute("href") || "").replace("#", "");
       if (!sectionId) return;
 
+      event.preventDefault();
       navigationClickHoldUntil = Date.now() + 900;
       setActiveNavigation(sectionId);
+      scrollToSectionForNav(sectionId);
 
       window.setTimeout(() => {
         navigationClickHoldUntil = 0;
