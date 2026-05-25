@@ -196,14 +196,39 @@ async function loadEmployeeWithDetails(clientOrPool, employeeId, businessId) {
 }
 
 router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
-  const { locationId, page = 1, pageSize = 100 } = req.query;
+  const { locationId, page = 1, pageSize = 5, filter = "" } = req.query;
 
   try {
     await assertLocationAccess(req.user, locationId);
 
     const safePage = Math.max(1, Number(page) || 1);
-    const safePageSize = Math.min(100, Math.max(1, Number(pageSize) || 100));
+    const safePageSize = Math.min(25, Math.max(1, Number(pageSize) || 5));
     const offset = (safePage - 1) * safePageSize;
+    const search = `%${filter}%`;
+
+    const countResult = await pool.query(
+      `SELECT count(*)::int AS total
+       FROM employees e
+       JOIN users u ON u.id = e.user_id
+       WHERE e.business_id = $1
+         AND e.location_id = $2
+         AND e.active = true
+         AND u.active = true
+         AND (
+           e.employee_code ILIKE $3
+           OR e.title ILIKE $3
+           OR u.first_name ILIKE $3
+           OR u.last_name ILIKE $3
+           OR u.username ILIKE $3
+           OR u.full_login ILIKE $3
+         )`,
+      [req.user.businessId, locationId, search]
+    );
+
+    const total = countResult.rows[0]?.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const currentPage = Math.min(safePage, totalPages);
+    const currentOffset = (currentPage - 1) * safePageSize;
 
     const result = await pool.query(
       `SELECT
@@ -235,13 +260,27 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
          AND e.location_id = $2
          AND e.active = true
          AND u.active = true
+         AND (
+           e.employee_code ILIKE $3
+           OR e.title ILIKE $3
+           OR u.first_name ILIKE $3
+           OR u.last_name ILIKE $3
+           OR u.username ILIKE $3
+           OR u.full_login ILIKE $3
+         )
        GROUP BY e.id, u.id
        ORDER BY e.priority ASC, u.last_name ASC, u.first_name ASC
-       LIMIT $3 OFFSET $4`,
-      [req.user.businessId, locationId, safePageSize, offset]
+       LIMIT $4 OFFSET $5`,
+      [req.user.businessId, locationId, search, safePageSize, currentOffset]
     );
 
-    res.json({ employees: result.rows });
+    res.json({
+      employees: result.rows,
+      page: currentPage,
+      pageSize: safePageSize,
+      total,
+      totalPages
+    });
   } catch (err) {
     console.error(err);
     res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to load employees." });
