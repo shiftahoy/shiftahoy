@@ -308,7 +308,7 @@ router.put("/:id", requireAuth, requireOwner, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
+async function deleteShiftWithCredentials(req, res) {
   const { id } = req.params;
   const { actorPassword } = req.body;
 
@@ -370,6 +370,10 @@ router.delete("/:id", requireAuth, requireOwner, async (req, res) => {
   } finally {
     client.release();
   }
-});
+
+}
+
+router.post("/:id/delete", requireAuth, requireOwner, deleteShiftWithCredentials);
+router.delete("/:id", requireAuth, requireOwner, deleteShiftWithCredentials);
 
 module.exports = router;
