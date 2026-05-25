@@ -34,9 +34,12 @@
 
       <section class="workspace">
         <header class="topbar dashboardTopbar">
-          <div id="message" class="dashboardWelcome">
-            <span class="welcomeLine">Welcome aboard,</span>
-            <span id="dashboardLoginText" class="loginLine">Login</span>
+          <div>
+            <div id="message" class="dashboardWelcome">
+              <span class="welcomeLine">Welcome aboard,</span>
+              <span id="dashboardLoginText" class="loginLine">Login</span>
+            </div>
+            <div id="dashboardStatus" class="dashboardStatus hidden" role="status" aria-live="polite"></div>
           </div>
 
           <div class="topbarActions">
@@ -221,14 +224,22 @@
                 </div>
               </div>
 
-              <input id="shiftFilter" class="searchInput" placeholder="Filter shifts" />
+              <div class="inlineToolbar">
+                <input id="shiftFilter" class="searchInput" placeholder="Filter shifts" />
+                <button id="showShiftFormButton" class="button secondary ownerOnly" type="button">Create Shift</button>
+              </div>
             </div>
 
-            <form id="shiftForm" class="editorForm ownerOnly">
+            <div id="shiftFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+
+            <form id="shiftForm" class="editorForm ownerOnly hidden">
               <input type="hidden" id="shiftId" />
               <div class="formGrid twoColumn">
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="shiftName">Shift Name</label>
+                <div class="fieldGroup" data-field="shiftName">
+                  <label class="fieldLabel" for="shiftName">
+                    Shift Name
+                    <span id="shiftNameStatus" class="fieldStatus">Required</span>
+                  </label>
                   <input id="shiftName" placeholder="Standard" />
                 </div>
                 <div class="fieldGroup">
@@ -245,9 +256,10 @@
 
             <div id="shiftList" class="listStack"></div>
 
-            <div class="pager">
+            <div id="shiftPager" class="pager hidden">
               <button id="prevShiftPage" class="button ghost">← Previous</button>
               <button id="nextShiftPage" class="button ghost">Next →</button>
+              <div id="shiftPageLabel" class="pageLabel">Page 1/1</div>
             </div>
           </section>
 
@@ -261,15 +273,23 @@
                 </div>
               </div>
 
-              <button id="showEmployeeFormButton" class="button secondary">Add Employee</button>
+              <div class="inlineToolbar">
+                <input id="employeeFilter" class="searchInput" placeholder="Filter employees" />
+                <button id="showEmployeeFormButton" class="button secondary">Add Employee</button>
+              </div>
             </div>
+
+            <div id="employeeFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
             <form id="employeeForm" class="editorForm hidden">
               <input type="hidden" id="employeeId" />
 
               <div class="formGrid twoColumn">
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="employeeCode">Employee #</label>
+                <div class="fieldGroup" data-field="employeeCode">
+                  <label class="fieldLabel" for="employeeCode">
+                    Employee #
+                    <span id="employeeCodeStatus" class="fieldStatus">Required</span>
+                  </label>
                   <input id="employeeCode" placeholder="Employee #" />
                 </div>
                 <div class="fieldGroup">
@@ -284,12 +304,18 @@
                   <label class="fieldLabel" for="employeeLastName">Last Name <span class="optionalText">(optional)</span></label>
                   <input id="employeeLastName" autocomplete="family-name" placeholder="Last Name" />
                 </div>
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="employeeUsername">Username</label>
+                <div class="fieldGroup" data-field="employeeUsername">
+                  <label class="fieldLabel" for="employeeUsername">
+                    Username
+                    <span id="employeeUsernameStatus" class="fieldStatus">Required</span>
+                  </label>
                   <input id="employeeUsername" autocomplete="username" placeholder="Username" />
                 </div>
-                <div class="fieldGroup">
-                  <label class="fieldLabel" for="employeePassword">Password <span class="optionalText editPasswordHint">(required for new employees)</span></label>
+                <div class="fieldGroup" data-field="employeePassword">
+                  <label class="fieldLabel" for="employeePassword">
+                    Password <span class="optionalText editPasswordHint">(required for new employees)</span>
+                    <span id="employeePasswordStatus" class="fieldStatus">Required for new</span>
+                  </label>
                   <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
                 </div>
                 <div class="fieldGroup">
@@ -351,9 +377,10 @@
 
             <div id="employeeList" class="listStack"></div>
 
-            <div class="pager">
+            <div id="employeePager" class="pager hidden">
               <button id="prevEmployeePage" class="button ghost">← Previous</button>
               <button id="nextEmployeePage" class="button ghost">Next →</button>
+              <div id="employeePageLabel" class="pageLabel">Page 1/1</div>
             </div>
           </section>
         </section>
