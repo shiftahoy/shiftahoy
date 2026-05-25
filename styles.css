@@ -212,7 +212,7 @@ p {
 
 .dashboardWelcome {
   display: grid;
-  gap: 0;
+  gap: 5px;
   margin: 0;
   line-height: 1;
 }
