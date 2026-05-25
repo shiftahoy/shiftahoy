@@ -46,6 +46,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .appShell {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
