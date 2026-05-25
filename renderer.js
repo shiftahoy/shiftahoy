@@ -21,6 +21,11 @@ const signupFieldIds = [
   "signupPassword"
 ];
 
+function dashboardWelcomeText() {
+  const login = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "";
+  return login ? `Welcome aboard, ${login}.` : "Welcome aboard.";
+}
+
 function showMessage(text) {
   if (message) message.textContent = text;
 }
@@ -267,8 +272,7 @@ function applyRoleUI() {
 
   document.getElementById("generateScheduleButton").classList.toggle("hidden", !canManage);
 
-  const displayName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ");
-  showMessage(displayName ? `Welcome aboard, ${displayName}.` : "Welcome aboard.");
+  showMessage(dashboardWelcomeText());
 }
 
 async function signup() {
@@ -749,7 +753,7 @@ document.getElementById("planList").addEventListener("click", async (event) => {
     });
 
     document.getElementById("planDialog").close();
-    showMessage("Plan updated immediately.");
+    showMessage(dashboardWelcomeText());
   } catch (err) {
     showMessage(err.message);
   }
