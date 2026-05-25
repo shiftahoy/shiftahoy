@@ -222,21 +222,39 @@ function visibleSectionCandidates() {
     .filter((section) => section && !section.classList.contains("hidden"));
 }
 
+let navigationScrollTicking = false;
+
 function updateActiveNavigationFromScroll() {
   const sections = visibleSectionCandidates();
   if (!sections.length) return;
 
-  const activationLine = window.innerHeight * 0.35;
+  const marker = window.scrollY + window.innerHeight * 0.28;
   let activeSection = sections[0];
 
   for (const section of sections) {
-    const rect = section.getBoundingClientRect();
-    if (rect.top <= activationLine && rect.bottom >= activationLine * 0.5) {
+    if (section.offsetTop <= marker) {
       activeSection = section;
+    } else {
+      break;
     }
   }
 
+  const pageBottom = document.documentElement.scrollHeight - window.innerHeight - 8;
+  if (window.scrollY >= pageBottom) {
+    activeSection = sections[sections.length - 1];
+  }
+
   setActiveNavigation(activeSection.id);
+}
+
+function requestActiveNavigationUpdate() {
+  if (navigationScrollTicking) return;
+
+  navigationScrollTicking = true;
+  window.requestAnimationFrame(() => {
+    updateActiveNavigationFromScroll();
+    navigationScrollTicking = false;
+  });
 }
 
 function setupSectionNavigationHighlighting() {
@@ -244,30 +262,13 @@ function setupSectionNavigationHighlighting() {
     link.addEventListener("click", () => {
       const sectionId = (link.getAttribute("href") || "").replace("#", "");
       setActiveNavigation(sectionId);
+      window.setTimeout(updateActiveNavigationFromScroll, 250);
     });
   });
 
-  if ("IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visibleEntry = entries
-          .filter((entry) => entry.isIntersecting && !entry.target.classList.contains("hidden"))
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-
-        if (visibleEntry) setActiveNavigation(visibleEntry.target.id);
-      },
-      {
-        root: null,
-        rootMargin: "-24% 0px -55% 0px",
-        threshold: [0.12, 0.25, 0.5, 0.75]
-      }
-    );
-
-    visibleSectionCandidates().forEach((section) => observer.observe(section));
-  }
-
-  window.addEventListener("scroll", updateActiveNavigationFromScroll, { passive: true });
-  window.addEventListener("resize", updateActiveNavigationFromScroll);
+  window.addEventListener("scroll", requestActiveNavigationUpdate, { passive: true });
+  window.addEventListener("resize", requestActiveNavigationUpdate);
+  window.addEventListener("hashchange", requestActiveNavigationUpdate);
   updateActiveNavigationFromScroll();
 }
 
@@ -622,8 +623,8 @@ async function deleteLocation(locationId) {
   if (!actorPassword) return;
 
   try {
-    await api(`/locations/${encodeURIComponent(locationId)}`, {
-      method: "DELETE",
+    await api(`/locations/${encodeURIComponent(locationId)}/delete`, {
+      method: "POST",
       body: JSON.stringify({ actorPassword })
     });
 
@@ -913,8 +914,8 @@ async function deleteShift(shiftId) {
   if (!actorPassword) return;
 
   try {
-    await api(`/shifts/${encodeURIComponent(shiftId)}`, {
-      method: "DELETE",
+    await api(`/shifts/${encodeURIComponent(shiftId)}/delete`, {
+      method: "POST",
       body: JSON.stringify({ actorPassword })
     });
 
