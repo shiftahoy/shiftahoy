@@ -218,6 +218,12 @@
             </form>
 
             <div id="locationList" class="locationList"></div>
+
+            <div id="locationPager" class="pager hidden">
+              <button id="prevLocationPage" class="button ghost">← Previous</button>
+              <button id="nextLocationPage" class="button ghost">Next →</button>
+              <div id="locationPageLabel" class="pageLabel">Page 1/1</div>
+            </div>
           </section>
 
           <section id="schedulePanel" class="card scheduleCard">
@@ -442,6 +448,35 @@
           </div>
 
           <div class="emptyState">No settings have been added yet.</div>
+        </dialog>
+
+        <dialog id="credentialDialog" class="modalCard credentialDialog">
+          <form id="credentialForm" method="dialog">
+            <div class="sectionHeader">
+              <div>
+                <p class="eyebrow">Owner credentials</p>
+                <h2 id="credentialDialogTitle">Confirm Delete</h2>
+                <p id="credentialDialogMessage" class="panelHint">Enter your owner password to continue.</p>
+              </div>
+
+              <button id="cancelCredentialX" class="button ghost" type="button">Close</button>
+            </div>
+
+            <div id="credentialDialogNotice" class="formNotice hidden" role="status" aria-live="polite"></div>
+
+            <div class="fieldGroup" data-field="credentialPassword">
+              <label class="fieldLabel" for="credentialPassword">
+                Owner Password
+                <span id="credentialPasswordStatus" class="fieldStatus">Required</span>
+              </label>
+              <input id="credentialPassword" type="password" autocomplete="current-password" placeholder="Owner password" required />
+            </div>
+
+            <div class="formActions">
+              <button id="confirmCredentialButton" class="button danger" type="submit">Delete</button>
+              <button id="cancelCredentialButton" class="button ghost" type="button">Cancel</button>
+            </div>
+          </form>
         </dialog>
 
         <div id="pageBottom" class="pageBottomAnchor" aria-hidden="true"></div>
