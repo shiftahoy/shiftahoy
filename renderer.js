@@ -27,6 +27,13 @@ function dashboardWelcomeText() {
 }
 
 function showMessage(text) {
+  const loginText = document.getElementById("dashboardLoginText");
+
+  if (loginText && text.startsWith("Welcome aboard,")) {
+    loginText.textContent = text.replace("Welcome aboard,", "").trim();
+    return;
+  }
+
   if (message) message.textContent = text;
 }
 
