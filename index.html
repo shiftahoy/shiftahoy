@@ -40,6 +40,7 @@
           </div>
 
           <div class="topbarActions">
+            <div id="currentPlanText" class="currentPlanText hidden">Current Plan: <strong>Free</strong></div>
             <button id="upgradeButton" class="button secondary hidden">Upgrade</button>
           </div>
         </header>
@@ -52,18 +53,16 @@
 
             <p class="eyebrow">Blue-water clarity</p>
             <h2>Build schedules without the spreadsheet hassle.</h2>
-            <p>
-              Navigate schedules from one clean experience.
-            </p>
+            <p>Navigate schedules from one clean experience.</p>
 
             <div class="metricGrid" aria-label="Product highlights">
               <div>
                 <strong>FORECAST</strong>
-                <span>view up to 3 weeks of schedules</span>
+                <span>automatically updates every week</span>
               </div>
               <div>
                 <strong>MANAGE</strong>
-                <span>allow others to adjust schedules</span>
+                <span>owner and manager role controls</span>
               </div>
               <div>
                 <strong>PRINT</strong>
@@ -90,14 +89,8 @@
                     First Name
                     <span id="signupFirstNameStatus" class="fieldStatus">(Required)</span>
                   </label>
-                  <input
-                    id="signupFirstName"
-                    autocomplete="given-name"
-                    placeholder="First Name"
-                    aria-describedby="signupFirstNameHelp"
-                    required
-                  />
-                  <small id="signupFirstNameHelp" class="fieldHelp">Enter your first name.</small>
+                  <input id="signupFirstName" autocomplete="given-name" placeholder="First Name" required />
+                  <small class="fieldHelp">Enter your first name.</small>
                 </div>
 
                 <div class="fieldGroup" data-field="signupLastName">
@@ -105,14 +98,8 @@
                     Last Name
                     <span id="signupLastNameStatus" class="fieldStatus">(Required)</span>
                   </label>
-                  <input
-                    id="signupLastName"
-                    autocomplete="family-name"
-                    placeholder="Last Name"
-                    aria-describedby="signupLastNameHelp"
-                    required
-                  />
-                  <small id="signupLastNameHelp" class="fieldHelp">Enter your last name.</small>
+                  <input id="signupLastName" autocomplete="family-name" placeholder="Last Name" required />
+                  <small class="fieldHelp">Enter your last name.</small>
                 </div>
               </div>
 
@@ -121,16 +108,8 @@
                   Business
                   <span id="signupBusinessNameStatus" class="fieldStatus">(Required)</span>
                 </label>
-                <input
-                  id="signupBusinessName"
-                  autocomplete="organization"
-                  placeholder="Business"
-                  aria-describedby="signupBusinessNameHelp"
-                  required
-                />
-                <small id="signupBusinessNameHelp" class="fieldHelp">
-                  Becomes part of your login.
-                </small>
+                <input id="signupBusinessName" autocomplete="organization" placeholder="Business" required />
+                <small class="fieldHelp">Becomes part of your login.</small>
               </div>
 
               <div class="fieldGroup" data-field="signupEmail">
@@ -138,15 +117,8 @@
                   Email
                   <span id="signupEmailStatus" class="fieldStatus">(Required)</span>
                 </label>
-                <input
-                  id="signupEmail"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="Email"
-                  aria-describedby="signupEmailHelp"
-                  required
-                />
-                <small id="signupEmailHelp" class="fieldHelp">Use a valid email address.</small>
+                <input id="signupEmail" type="email" autocomplete="email" placeholder="Email" required />
+                <small class="fieldHelp">Use a valid email address.</small>
               </div>
 
               <div class="fieldGroup" data-field="signupUsername">
@@ -154,18 +126,8 @@
                   Username
                   <span id="signupUsernameStatus" class="fieldStatus">(3–30)</span>
                 </label>
-                <input
-                  id="signupUsername"
-                  autocomplete="username"
-                  placeholder="Username"
-                  maxlength="30"
-                  pattern="[a-z0-9]{3,30}"
-                  aria-describedby="signupUsernameHelp"
-                  required
-                />
-                <small id="signupUsernameHelp" class="fieldHelp">
-                  Letters and numbers only.
-                </small>
+                <input id="signupUsername" autocomplete="username" placeholder="Username" maxlength="30" required />
+                <small class="fieldHelp">Letters and numbers only.</small>
               </div>
 
               <div class="fieldGroup" data-field="signupPassword">
@@ -173,19 +135,8 @@
                   Password
                   <span id="signupPasswordStatus" class="fieldStatus">(12–128)</span>
                 </label>
-                <input
-                  id="signupPassword"
-                  type="password"
-                  autocomplete="new-password"
-                  placeholder="Password"
-                  minlength="12"
-                  maxlength="128"
-                  aria-describedby="signupPasswordHelp"
-                  required
-                />
-                <small id="signupPasswordHelp" class="fieldHelp">
-                  Spaces and symbols allowed.
-                </small>
+                <input id="signupPassword" type="password" autocomplete="new-password" placeholder="Password" minlength="12" maxlength="128" required />
+                <small class="fieldHelp">Spaces and symbols allowed.</small>
               </div>
 
               <button id="signupButton" class="button primary">Create Account</button>
@@ -209,13 +160,7 @@
 
               <div class="fieldGroup">
                 <label class="fieldLabel" for="loginPassword">Password</label>
-                <input
-                  id="loginPassword"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="Password"
-                  maxlength="128"
-                />
+                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
               </div>
 
               <button id="loginButton" class="button primary">Login</button>
@@ -228,14 +173,16 @@
             <div class="cardTitle dashboardCardTitle scheduleHeaderRow">
               <div class="dashboardTitleGroup">
                 <span class="iconBadge">01</span>
-                <h2>Schedule</h2>
+                <div>
+                  <h2>Schedule</h2>
+                  <p class="panelHint">Forever forecast: updates automatically from locations, shifts, employees, availability, and days off.</p>
+                </div>
               </div>
 
               <div class="toolbar dashboardToolbar">
                 <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
                 <span id="weekLabel" class="weekLabel"></span>
                 <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
-                <button id="generateScheduleButton" class="button primary">Generate</button>
                 <button id="printScheduleButton" class="button secondary">Print</button>
               </div>
             </div>
@@ -248,13 +195,18 @@
           <section id="locationsPanel" class="card sideCard">
             <div class="cardTitle dashboardCardTitle">
               <span class="iconBadge">02</span>
-              <h2>Location</h2>
+              <div>
+                <h2>Location</h2>
+                <p class="panelHint ownerOnly">All locations are visible. Select one to manage shifts and employees.</p>
+                <p class="panelHint nonOwnerOnly hidden">Your assigned location.</p>
+              </div>
             </div>
 
-            <select id="locationSelect"></select>
+            <div id="locationList" class="locationList"></div>
 
             <div id="ownerLocationTools" class="inlineForm">
               <input id="newLocationName" placeholder="New Location Name" />
+              <input id="newLocationAddress" placeholder="Address optional" />
               <button id="addLocationButton" class="button secondary">Add Location</button>
             </div>
           </section>
@@ -263,11 +215,33 @@
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
               <div class="dashboardTitleGroup">
                 <span class="iconBadge">03</span>
-                <h2>Shift</h2>
+                <div>
+                  <h2>Shift</h2>
+                  <p class="panelHint">Shifts belong to the selected location.</p>
+                </div>
               </div>
 
               <input id="shiftFilter" class="searchInput" placeholder="Filter shifts" />
             </div>
+
+            <form id="shiftForm" class="editorForm ownerOnly">
+              <input type="hidden" id="shiftId" />
+              <div class="formGrid twoColumn">
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="shiftName">Shift Name</label>
+                  <input id="shiftName" placeholder="Standard" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="shiftSortOrder">Sort Order</label>
+                  <input id="shiftSortOrder" type="number" min="1" value="1" />
+                </div>
+              </div>
+              <div id="shiftDayEditor" class="dayEditor"></div>
+              <div class="formActions">
+                <button id="saveShiftButton" class="button primary" type="submit">Save Shift</button>
+                <button id="resetShiftButton" class="button ghost" type="button">Clear</button>
+              </div>
+            </form>
 
             <div id="shiftList" class="listStack"></div>
 
@@ -281,11 +255,99 @@
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
               <div class="dashboardTitleGroup">
                 <span class="iconBadge">04</span>
-                <h2>Employee</h2>
+                <div>
+                  <h2>Employee</h2>
+                  <p class="panelHint">Managers can add and edit employees for their assigned location. Owners can delete with credentials.</p>
+                </div>
               </div>
 
               <button id="showEmployeeFormButton" class="button secondary">Add Employee</button>
             </div>
+
+            <form id="employeeForm" class="editorForm hidden">
+              <input type="hidden" id="employeeId" />
+
+              <div class="formGrid twoColumn">
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeeCode">Employee #</label>
+                  <input id="employeeCode" placeholder="Employee #" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeeTitle">Title</label>
+                  <input id="employeeTitle" placeholder="Crew Member" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeeFirstName">First Name <span class="optionalText">(optional)</span></label>
+                  <input id="employeeFirstName" autocomplete="given-name" placeholder="First Name" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeeLastName">Last Name <span class="optionalText">(optional)</span></label>
+                  <input id="employeeLastName" autocomplete="family-name" placeholder="Last Name" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeeUsername">Username</label>
+                  <input id="employeeUsername" autocomplete="username" placeholder="Username" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeePassword">Password <span class="optionalText editPasswordHint">(required for new employees)</span></label>
+                  <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employmentType">Employment Type</label>
+                  <select id="employmentType">
+                    <option value="full_time">Full Time</option>
+                    <option value="part_time">Part Time</option>
+                  </select>
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="weeklyHours">Weekly Hours</label>
+                  <input id="weeklyHours" type="number" min="1" step="0.25" value="40" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="dailyHours">Max Daily Hours</label>
+                  <input id="dailyHours" type="number" min="1" step="0.25" value="8" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="employeePriority">Priority</label>
+                  <input id="employeePriority" type="number" min="1" max="25" value="1" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="preferredShiftId">Preferred Shift</label>
+                  <select id="preferredShiftId"></select>
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="orientationStart">Orientation Start</label>
+                  <input id="orientationStart" type="date" />
+                </div>
+              </div>
+
+              <div class="fieldGroup">
+                <span class="fieldLabel">Can Work Days</span>
+                <div id="availabilityEditor" class="dotDayRow"></div>
+                <small class="fieldHelp">Highlighted dots mean the employee can work that day.</small>
+              </div>
+
+              <div class="fieldGroup">
+                <label class="fieldLabel" for="daysOffInput">Days Off</label>
+                <div class="compoundField">
+                  <input id="daysOffInput" type="date" />
+                  <button id="addDayOffButton" class="button ghost" type="button">Add Day Off</button>
+                </div>
+                <div id="daysOffList" class="pillList"></div>
+              </div>
+
+              <div class="fieldGroup ownerOnly">
+                <label class="checkboxLine">
+                  <input id="canManageSchedule" type="checkbox" />
+                  Manager permission
+                </label>
+              </div>
+
+              <div class="formActions">
+                <button id="saveEmployeeButton" class="button primary" type="submit">Save Employee</button>
+                <button id="cancelEmployeeButton" class="button ghost" type="button">Cancel</button>
+              </div>
+            </form>
 
             <div id="employeeList" class="listStack"></div>
 
