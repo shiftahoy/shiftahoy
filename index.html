@@ -21,8 +21,8 @@
 
         <nav class="navList">
           <a class="navItem utilityNav" href="#pageTop">Top of Page</a>
-          <a class="navItem active" href="#schedulePanel">Schedule</a>
-          <a class="navItem" href="#locationsPanel">Location</a>
+          <a class="navItem active" href="#locationsPanel">Location</a>
+          <a class="navItem" href="#schedulePanel">Schedule</a>
           <a class="navItem managerOnly" href="#shiftsPanel">Shift</a>
           <a class="navItem managerOnly" href="#employeesPanel">Employee</a>
           <a class="navItem utilityNav" href="#pageBottom">Bottom of Page</a>
@@ -177,33 +177,10 @@
         </section>
 
         <section id="appView" class="hidden dashboardGrid">
-          <section id="schedulePanel" class="card scheduleCard">
-            <div class="cardTitle dashboardCardTitle scheduleHeaderRow">
-              <div class="dashboardTitleGroup">
-                <span class="iconBadge">01</span>
-                <div>
-                  <h2>Schedule</h2>
-                  <p class="panelHint">Forever forecast: updates automatically from locations, shifts, employees, availability, and days off.</p>
-                </div>
-              </div>
-
-              <div class="toolbar dashboardToolbar">
-                <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
-                <span id="weekLabel" class="weekLabel"></span>
-                <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
-                <button id="printScheduleButton" class="button secondary">Print</button>
-              </div>
-            </div>
-
-            <div class="tableFrame">
-              <table id="scheduleTable"></table>
-            </div>
-          </section>
-
           <section id="locationsPanel" class="card sideCard">
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
               <div class="dashboardTitleGroup">
-                <span class="iconBadge">02</span>
+                <span class="iconBadge">01</span>
                 <div>
                   <h2>Location</h2>
                   <p class="panelHint ownerOnly">All locations are visible. Select one to manage shifts and employees.</p>
@@ -243,13 +220,36 @@
             <div id="locationList" class="locationList"></div>
           </section>
 
+          <section id="schedulePanel" class="card scheduleCard">
+            <div class="cardTitle dashboardCardTitle scheduleHeaderRow">
+              <div class="dashboardTitleGroup">
+                <span class="iconBadge">02</span>
+                <div>
+                  <h2>Schedule</h2>
+                  <p class="panelHint">Forecast for <strong id="scheduleLocationName">selected location</strong>. Updates automatically from that location's shifts, employees, availability, and days off.</p>
+                </div>
+              </div>
+
+              <div class="toolbar dashboardToolbar">
+                <button id="prevWeekButton" class="button ghost" aria-label="Previous week">←</button>
+                <span id="weekLabel" class="weekLabel"></span>
+                <button id="nextWeekButton" class="button ghost" aria-label="Next week">→</button>
+                <button id="printScheduleButton" class="button secondary">Print</button>
+              </div>
+            </div>
+
+            <div class="tableFrame">
+              <table id="scheduleTable"></table>
+            </div>
+          </section>
+
           <section id="shiftsPanel" class="card managerOnly panelCard">
             <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
               <div class="dashboardTitleGroup">
                 <span class="iconBadge">03</span>
                 <div>
                   <h2>Shift</h2>
-                  <p class="panelHint">Shifts belong to the selected location.</p>
+                  <p class="panelHint">Shifts for <strong id="shiftLocationName">selected location</strong>.</p>
                 </div>
               </div>
 
@@ -298,7 +298,7 @@
                 <span class="iconBadge">04</span>
                 <div>
                   <h2>Employee</h2>
-                  <p class="panelHint">Managers can add and edit employees for their assigned location. Owners can delete with credentials.</p>
+                  <p class="panelHint">Employees for <strong id="employeeLocationName">selected location</strong>. Managers can add and edit employees for their assigned location. Owners can delete with credentials.</p>
                 </div>
               </div>
 
