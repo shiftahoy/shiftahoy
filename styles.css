@@ -1681,3 +1681,13 @@ tbody tr:hover td {
 #employeeForm.hidden {
   display: none !important;
 }
+
+.credentialDialog {
+  width: min(560px, calc(100vw - 28px));
+  overflow: visible;
+}
+
+.credentialDialog form {
+  display: grid;
+  gap: 16px;
+}
