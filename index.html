@@ -208,7 +208,7 @@
                 </div>
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="locationAddress">Address <span class="optionalText">(optional)</span></label>
-                  <input id="locationAddress" placeholder="Address (optional)" />
+                  <input id="locationAddress" placeholder="Address" />
                 </div>
               </div>
               <div class="formActions">
@@ -226,7 +226,7 @@
                 <span class="iconBadge">02</span>
                 <div>
                   <h2>Schedule</h2>
-                  <p class="panelHint">Forecast for <strong id="scheduleLocationName">selected location</strong>. Updates automatically from that location's shifts, employees, availability, and days off.</p>
+                  <p class="panelHint">Forecast for <strong id="scheduleLocationName">selected location</strong></p>
                 </div>
               </div>
 
@@ -241,6 +241,7 @@
             <div class="tableFrame">
               <table id="scheduleTable"></table>
             </div>
+            <p class="panelHint panelFootnote">Updates automatically from that location's shifts, employees, availability, and days off</p>
           </section>
 
           <section id="shiftsPanel" class="card managerOnly panelCard">
@@ -249,7 +250,7 @@
                 <span class="iconBadge">03</span>
                 <div>
                   <h2>Shift</h2>
-                  <p class="panelHint">Shifts for <strong id="shiftLocationName">selected location</strong>.</p>
+                  <p class="panelHint">Shifts for <strong id="shiftLocationName">selected location</strong></p>
                 </div>
               </div>
 
@@ -290,6 +291,7 @@
               <button id="nextShiftPage" class="button ghost">Next →</button>
               <div id="shiftPageLabel" class="pageLabel">Page 1/1</div>
             </div>
+            <p class="panelHint panelFootnote">Only shifts for the selected location are shown here</p>
           </section>
 
           <section id="employeesPanel" class="card managerOnly panelCard">
@@ -298,7 +300,7 @@
                 <span class="iconBadge">04</span>
                 <div>
                   <h2>Employee</h2>
-                  <p class="panelHint">Employees for <strong id="employeeLocationName">selected location</strong>. Managers can add and edit employees for their assigned location. Owners can delete with credentials.</p>
+                  <p class="panelHint">Employees for <strong id="employeeLocationName">selected location</strong></p>
                 </div>
               </div>
 
@@ -411,6 +413,7 @@
               <button id="nextEmployeePage" class="button ghost">Next →</button>
               <div id="employeePageLabel" class="pageLabel">Page 1/1</div>
             </div>
+            <p class="panelHint panelFootnote">Managers can add and edit employees for their assigned location. Owners can delete with credentials</p>
           </section>
         </section>
 
