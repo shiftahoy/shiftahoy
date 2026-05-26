@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS businesses (
 );
 
 ALTER TABLE businesses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS owner_2fa_enabled BOOLEAN NOT NULL DEFAULT false;
 
 CREATE UNIQUE INDEX IF NOT EXISTS businesses_business_slug_unique
 ON businesses (business_slug);
