@@ -2547,3 +2547,128 @@ body {
     width: 100%;
   }
 }
+
+/* v10: make 01B Location Rules match EP-04 full-width panel sizing */
+.locationRulesInline {
+  width: 100%;
+  justify-self: stretch;
+  align-self: stretch;
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+#locationRulesPanel.locationRulesInline {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+#locationRulesPanel.locationRulesInline .locationRulesHeader {
+  min-width: 0;
+}
+
+#locationRulesPanel.locationRulesInline #locationRulesForm {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 0;
+}
+
+#locationRulesPanel.locationRulesInline #locationRulesForm.hidden {
+  display: none !important;
+}
+
+#locationRulesPanel.locationRulesInline .formGrid.twoColumn {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#locationRulesPanel.locationRulesInline .fieldGroup,
+#locationRulesPanel.locationRulesInline input,
+#locationRulesPanel.locationRulesInline select,
+#locationRulesPanel.locationRulesInline #ruleOpenDays {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  #locationRulesPanel.locationRulesInline .formGrid.twoColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* v10: keep the left navigation panel stationary while dashboard content scrolls */
+@media (min-width: 901px) {
+  .appShell:not(:has(#authView:not(.hidden))) {
+    display: block;
+  }
+
+  .appShell:not(:has(#authView:not(.hidden))) .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 300px;
+    height: 100vh;
+    z-index: 20;
+  }
+
+  .appShell:not(:has(#authView:not(.hidden))) .workspace {
+    width: calc(100% - 300px);
+    margin-left: 300px;
+  }
+}
+
+/* v11: place 01B in the same full-width portal flow as EP-04 */
+#portalsPanel > #locationRulesPanel.locationRulesInline {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  justify-self: stretch;
+  align-self: stretch;
+  box-sizing: border-box;
+}
+
+#portalsPanel > #locationRulesPanel.locationRulesInline .locationRulesHeader,
+#portalsPanel > #locationRulesPanel.locationRulesInline #locationRulesForm,
+#portalsPanel > #locationRulesPanel.locationRulesInline .formGrid,
+#portalsPanel > #locationRulesPanel.locationRulesInline .fieldGroup {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#portalsPanel > #locationRulesPanel.locationRulesInline .formGrid.twoColumn {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#portalsPanel > #locationRulesPanel.locationRulesInline input,
+#portalsPanel > #locationRulesPanel.locationRulesInline select,
+#portalsPanel > #locationRulesPanel.locationRulesInline #ruleOpenDays {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#portalsPanel > #locationRulesPanel.locationRulesInline .rulesHeaderToolbar {
+  justify-self: end;
+  margin-left: auto;
+}
+
+#portalsPanel > #locationRulesPanel.locationRulesInline #createLocationRulesButton {
+  width: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  #portalsPanel > #locationRulesPanel.locationRulesInline .formGrid.twoColumn {
+    grid-template-columns: 1fr;
+  }
+
+  #portalsPanel > #locationRulesPanel.locationRulesInline .rulesHeaderToolbar,
+  #portalsPanel > #locationRulesPanel.locationRulesInline #createLocationRulesButton {
+    width: 100%;
+    max-width: none;
+  }
+}
