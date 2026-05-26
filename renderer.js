@@ -54,7 +54,7 @@ let currentPlanRecord = null;
 let pendingRecoveryMode = "password";
 let ownerSecuritySettings = { twoFactorEnabled: false };
 let lastPrintedScheduleTitle = "Shift Ahoy Schedule";
-let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
+let lastSchedulePayload = { cells: [], employees: [], coverage: [], warnings: [], health: null };
 
 const message = document.getElementById("message");
 
@@ -1279,12 +1279,13 @@ async function loadSchedule() {
 
   lastSchedulePayload = {
     cells: data.cells || [],
+    employees: data.employees || [],
     coverage: data.coverage || [],
     warnings: data.warnings || [],
     health: data.health || null,
     skipped: data.skipped || []
   };
-  renderSchedule(lastSchedulePayload.cells);
+  renderSchedule(lastSchedulePayload.cells, lastSchedulePayload.employees);
   renderScheduleHealth(lastSchedulePayload.health, lastSchedulePayload.coverage, lastSchedulePayload.warnings);
   renderUltimateAutomationPanels();
 }
@@ -1358,17 +1359,38 @@ function renderScheduleWarnings(warnings) {
   renderScheduleHealth(null, [], warnings);
 }
 
-function renderSchedule(cells) {
+function renderSchedule(cells, employeeRows = []) {
   const table = $("scheduleTable");
   const grouped = new Map();
+  const safeEmployees = Array.isArray(employeeRows) ? employeeRows : [];
+  const safeCells = Array.isArray(cells) ? cells : [];
 
-  for (const cell of cells) {
+  for (const employee of safeEmployees) {
+    const employeeId = employee.employee_id || employee.id;
+    if (!employeeId || grouped.has(employeeId)) continue;
+
+    grouped.set(employeeId, {
+      employeeId,
+      priority: Number(employee.priority || 0),
+      employeeCode: employee.employee_code || "—",
+      employee: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.username || "Employee",
+      title: employee.title || "—",
+      employmentType: employee.employment_type || "",
+      weeklyHours: Number(employee.weekly_hours || 0),
+      days: {}
+    });
+  }
+
+  for (const cell of safeCells) {
     if (!grouped.has(cell.employee_id)) {
       grouped.set(cell.employee_id, {
-        priority: cell.priority,
-        employeeCode: cell.employee_code,
-        employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.username,
-        title: cell.title,
+        employeeId: cell.employee_id,
+        priority: Number(cell.priority || 0),
+        employeeCode: cell.employee_code || "—",
+        employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.username || "Employee",
+        title: cell.title || "—",
+        employmentType: cell.employment_type || "",
+        weeklyHours: Number(cell.weekly_hours || 0),
         days: {}
       });
     }
@@ -1376,40 +1398,59 @@ function renderSchedule(cells) {
     grouped.get(cell.employee_id).days[cell.work_date] = cell;
   }
 
+  const rows = [...grouped.values()].sort((a, b) => (
+    Number(a.priority) - Number(b.priority) ||
+    String(a.employeeCode).localeCompare(String(b.employeeCode)) ||
+    String(a.employee).localeCompare(String(b.employee))
+  ));
+
+  const weekEnd = addDays(currentWeekStart, 6);
+  const totalCells = safeCells.length;
+  const totalEmployees = rows.length;
+  const assignedEmployees = rows.filter((row) => Object.keys(row.days).length > 0).length;
+
   table.innerHTML = `
+    <caption class="scheduleCaption">
+      <strong>Schedule Forecast</strong>
+      <span>${escapeHtml(selectedLocationName())} · ${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))} · ${escapeHtml(totalCells)} shift assignment${totalCells === 1 ? "" : "s"} · ${escapeHtml(assignedEmployees)}/${escapeHtml(totalEmployees)} employee${totalEmployees === 1 ? "" : "s"} scheduled</span>
+    </caption>
     <thead>
       <tr>
-        <th>Priority</th>
-        <th>Employee #</th>
-        <th>Employee</th>
-        <th>Title</th>
+        <th scope="col" class="employeeMetaCol">Priority</th>
+        <th scope="col" class="employeeMetaCol">Employee #</th>
+        <th scope="col" class="employeeNameCol">Employee</th>
+        <th scope="col" class="employeeMetaCol">Title</th>
         ${DAYS.map((day, index) => {
           const current = addDays(currentWeekStart, index);
-          return `<th>${day.long}<span class="dateSub">${dateOnly(current)}</span></th>`;
+          return `<th scope="col" class="dayCol">${day.long}<span class="dateSub">${dateOnly(current)}</span></th>`;
         }).join("")}
       </tr>
     </thead>
     <tbody>
       ${
-        grouped.size === 0
-          ? `<tr><td colspan="11">No forecasted schedule for this week. Add a location, shifts, and employees with available days.</td></tr>`
-          : [...grouped.values()].map((row) => `
-            <tr>
-              <td>${escapeHtml(row.priority)}</td>
-              <td>${escapeHtml(row.employeeCode)}</td>
-              <td>${escapeHtml(row.employee)}</td>
-              <td>${escapeHtml(row.title)}</td>
+        rows.length === 0
+          ? `<tr><td colspan="11" class="emptyScheduleCell">No active employees found for this location. Add employees before generating a schedule forecast.</td></tr>`
+          : rows.map((row) => `
+            <tr class="${Object.keys(row.days).length ? "" : "unscheduledEmployeeRow"}">
+              <td class="employeeMetaCell">${escapeHtml(row.priority || "—")}</td>
+              <td class="employeeMetaCell">${escapeHtml(row.employeeCode)}</td>
+              <th scope="row" class="employeeNameCell">
+                ${escapeHtml(row.employee)}
+                ${Object.keys(row.days).length ? "" : `<span class="employeeRowNote">No shifts this week</span>`}
+              </th>
+              <td class="employeeMetaCell">${escapeHtml(row.title)}</td>
               ${DAYS.map((day, index) => {
                 const current = dateOnly(addDays(currentWeekStart, index));
                 const cell = row.days[current];
 
-                if (!cell) return `<td class="mutedCell">Off</td>`;
+                if (!cell) return `<td class="scheduleCell mutedCell"><span class="offLabel">Off</span></td>`;
 
+                const reasonText = (cell.assignment_reason || []).join(" • ");
                 return `
-                  <td>
+                  <td class="scheduleCell assignedCell">
                     <strong>${escapeHtml(cell.shift_name || "Shift")}</strong>
-                    <span>${escapeHtml((cell.start_time || "").slice(0, 5))}–${escapeHtml((cell.end_time || "").slice(0, 5))}</span>
-                    <small class="assignmentReason" title="${escapeHtml((cell.assignment_reason || []).join(" • "))}">Score ${escapeHtml(cell.fairness_score ?? "—")}</small>
+                    <span class="shiftTime">${escapeHtml((cell.start_time || "").slice(0, 5))}–${escapeHtml((cell.end_time || "").slice(0, 5))}</span>
+                    <small class="assignmentReason" title="${escapeHtml(reasonText)}">Score ${escapeHtml(cell.fairness_score ?? "—")}</small>
                   </td>
                 `;
               }).join("")}
@@ -2861,15 +2902,54 @@ function renderAuditLog() {
 }
 
 
+function ensureSchedulePrintHeader() {
+  const schedulePanel = $("schedulePanel");
+  if (!schedulePanel) return null;
+
+  let header = $("schedulePrintHeader");
+  if (!header) {
+    header = document.createElement("section");
+    header.id = "schedulePrintHeader";
+    header.className = "schedulePrintHeader";
+    schedulePanel.insertAdjacentElement("afterbegin", header);
+  }
+
+  const weekEnd = addDays(currentWeekStart, 6);
+  const health = lastSchedulePayload.health || {};
+  const cells = lastSchedulePayload.cells || [];
+  const warnings = lastSchedulePayload.warnings || [];
+
+  header.innerHTML = `
+    <div>
+      <p class="eyebrow">Shift Ahoy Schedule Forecast</p>
+      <h1>${escapeHtml(selectedLocationName())}</h1>
+      <p>${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))}</p>
+    </div>
+    <dl>
+      <div><dt>Assignments</dt><dd>${escapeHtml(cells.length)}</dd></div>
+      <div><dt>Health</dt><dd>${escapeHtml(health.score ?? "—")}${health.score === undefined || health.score === null ? "" : "%"}</dd></div>
+      <div><dt>Needed</dt><dd>${escapeHtml(health.coverageNeeded ?? 0)}</dd></div>
+      <div><dt>Warnings</dt><dd>${escapeHtml(warnings.length)}</dd></div>
+    </dl>
+  `;
+
+  return header;
+}
+
 function printSchedule() {
   if (!lastSchedulePayload.cells?.length) {
-    showMessage("Load a schedule before printing.");
+    showMessage("Load a schedule before previewing or printing.");
     return;
   }
   lastPrintedScheduleTitle = `${selectedLocationName()} · Week of ${formatDateForLabel(currentWeekStart)}`;
+  ensureSchedulePrintHeader();
+  document.body.classList.add("printingSchedule");
   document.title = `Shift Ahoy Schedule - ${lastPrintedScheduleTitle}`;
   window.print();
-  window.setTimeout(() => { document.title = "Shift Ahoy"; }, 250);
+  window.setTimeout(() => {
+    document.title = "Shift Ahoy";
+    document.body.classList.remove("printingSchedule");
+  }, 250);
 }
 
 function setupEvents() {
@@ -3632,7 +3712,7 @@ async function loadEmployeeSchedule() {
     const timeOff = data.timeOff || [];
     const openShifts = data.openShifts || [];
     list.innerHTML = `
-      <article class="automationSummary"><strong>${cells.length}</strong><span>published shifts this week</span></article>
+      <article class="automationSummary healthMetricCard"><strong>${cells.length}</strong><span>published shifts this week</span></article>
       ${cells.length ? cells.map((cell) => `
         <article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
       `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
@@ -3727,7 +3807,7 @@ async function loadLaborForecast() {
     const employeeRows = data.byEmployee || [];
     const warnings = data.warnings || [];
     list.innerHTML = `
-      <section class="automationMetrics">
+      <section class="automationMetrics healthMetricGrid">
         <article><strong>${moneyFromCents(data.totalCostCents)}</strong><span>estimated labor</span></article>
         <article><strong>${moneyFromCents(data.laborBudgetCents)}</strong><span>weekly budget</span></article>
         <article><strong>${warnings.length}</strong><span>warnings</span></article>
@@ -3747,7 +3827,7 @@ async function loadApprovalQueue() {
     const data = await api(`/automation/approval-queue?locationId=${encodeURIComponent(selectedLocationId)}`);
     const queue = data.queue || { timeOff: [], shiftSwaps: [], openShifts: [], total: 0 };
     list.innerHTML = `
-      <section class="automationMetrics"><article><strong>${escapeHtml(queue.total || 0)}</strong><span>items needing attention</span></article><article><strong>${escapeHtml(queue.timeOff.length)}</strong><span>time off</span></article><article><strong>${escapeHtml(queue.shiftSwaps.length)}</strong><span>swap/cover</span></article><article><strong>${escapeHtml(queue.openShifts.length)}</strong><span>open shifts</span></article></section>
+      <section class="automationMetrics healthMetricGrid"><article><strong>${escapeHtml(queue.total || 0)}</strong><span>items needing attention</span></article><article><strong>${escapeHtml(queue.timeOff.length)}</strong><span>time off</span></article><article><strong>${escapeHtml(queue.shiftSwaps.length)}</strong><span>swap/cover</span></article><article><strong>${escapeHtml(queue.openShifts.length)}</strong><span>open shifts</span></article></section>
       <div class="automationDivider">Time Off</div>
       ${queue.timeOff.length ? queue.timeOff.map((r) => `<article class="listItem"><div><strong>${escapeHtml(`${r.first_name || ""} ${r.last_name || ""}`.trim() || r.username)}</strong><span>${escapeHtml(formatRequestDate(r.start_date))}–${escapeHtml(formatRequestDate(r.end_date))} · ${escapeHtml(r.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No pending time off.</div>`}
       <div class="automationDivider">Shift Swaps / Covers</div>
