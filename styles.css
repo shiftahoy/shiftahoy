@@ -4044,8 +4044,8 @@ body.theme-dark .stackedControls .switchLine {
   left: auto;
   bottom: auto;
   width: auto;
-  min-width: 148px;
-  max-width: 190px;
+  min-width: 111px;
+  max-width: 143px;
   padding: 0;
   z-index: 3;
 }
