@@ -2808,3 +2808,83 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Professional polish: language picker, settings, plan dialog, employee-only view, and print preview. */
+.languageDock {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 5;
+  min-width: 220px;
+}
+.languageSelectWrap,
+.settingsLanguageSelector .languageSelectWrap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 93, 170, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+.languageFlag { font-size: 1.15rem; }
+.languageSelect { width: 100%; border: 0; background: transparent; color: var(--ink); font-weight: 800; outline: none; }
+.authUtilityLinks { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.linkButton { background: transparent; color: var(--brand); font-weight: 900; padding: 0; text-decoration: underline; }
+.settingsGrid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px; margin-top: 18px; }
+.settingsCard { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface-soft); }
+.settingsCard h3 { margin: 0; color: var(--brand); }
+.toggleRow { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+.planCard.active { outline: 3px solid rgba(0, 93, 170, 0.28); }
+.planActionMeta { margin-top: 8px; color: var(--muted); font-size: 0.82rem; font-weight: 800; }
+.auditItem span { display: block; }
+body.employeePortalOnly .sidebar { display: none; }
+body.employeePortalOnly .workspace { grid-column: 1; max-width: 1120px; margin: 0 auto; }
+body.employeePortalOnly .dashboardGrid > section:not(#portalsPanel) { display: none !important; }
+body.employeePortalOnly #managerPortalPanel { display: none !important; }
+body.theme-dark {
+  --ink: #e5edf7;
+  --muted: #a8b7ca;
+  --line: #203247;
+  --surface: #0f172a;
+  --surface-soft: #111f33;
+  --page-bg: #07111f;
+  --brand-soft: #0b2745;
+  color: var(--ink);
+}
+body.theme-dark .card,
+body.theme-dark .welcomeCard,
+body.theme-dark .modalCard,
+body.theme-dark .heroPanel,
+body.theme-dark .settingsCard,
+body.theme-dark input,
+body.theme-dark select,
+body.theme-dark .listItem,
+body.theme-dark .portalSubcard,
+body.theme-dark .automationCard { background-color: var(--surface); color: var(--ink); border-color: var(--line); }
+body.theme-dark .workspace,
+body.theme-dark .appShell { background: var(--page-bg); }
+@media print {
+  body { background: #fff !important; }
+  .sidebar,
+  .topbar,
+  #locationsPanel,
+  #portalsPanel,
+  #shiftsPanel,
+  #employeesPanel,
+  #auditPanel,
+  #publishScheduleBar,
+  .panelFootnote,
+  .toolbar button:not(#printScheduleButton) { display: none !important; }
+  .appShell,
+  .dashboardGrid,
+  .workspace { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; }
+  #schedulePanel { display: block !important; box-shadow: none !important; border: 0 !important; padding: 0 !important; break-inside: avoid; }
+  #schedulePanel .tableFrame { overflow: visible !important; border: 0 !important; }
+  #scheduleTable { width: 100% !important; border-collapse: collapse !important; font-size: 10pt !important; }
+  #scheduleTable th,
+  #scheduleTable td { border: 1px solid #999 !important; padding: 6px !important; }
+}
