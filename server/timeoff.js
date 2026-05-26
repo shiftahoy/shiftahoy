@@ -45,7 +45,7 @@ async function employeeForUser(user) {
   return result.rows[0] || null;
 }
 
-async function loadSettings(businessId) {
+async function loadSettings(businessId, locationId = null) {
   await pool.query(
     `INSERT INTO time_off_settings (business_id, requests_enabled)
      VALUES ($1, true)
@@ -60,23 +60,29 @@ async function loadSettings(businessId) {
     [businessId]
   );
 
-  const blockedResult = await pool.query(
-    `SELECT id, blocked_date, reason
-     FROM time_off_blocked_dates
-     WHERE business_id = $1
-       AND blocked_date >= CURRENT_DATE
-     ORDER BY blocked_date ASC`,
-    [businessId]
-  );
+  const blockedResult = locationId
+    ? await pool.query(
+        `SELECT id, blocked_date, reason, location_id
+         FROM time_off_blocked_dates
+         WHERE business_id = $1
+           AND location_id = $2
+           AND blocked_date >= CURRENT_DATE
+         ORDER BY blocked_date ASC`,
+        [businessId, locationId]
+      )
+    : { rows: [] };
 
-  const holidayResult = await pool.query(
-    `SELECT id, holiday_date, name
-     FROM time_off_holiday_dates
-     WHERE business_id = $1
-       AND holiday_date >= CURRENT_DATE
-     ORDER BY holiday_date ASC`,
-    [businessId]
-  );
+  const holidayResult = locationId
+    ? await pool.query(
+        `SELECT id, holiday_date, name, location_id
+         FROM time_off_holiday_dates
+         WHERE business_id = $1
+           AND location_id = $2
+           AND holiday_date >= CURRENT_DATE
+         ORDER BY holiday_date ASC`,
+        [businessId, locationId]
+      )
+    : { rows: [] };
 
   return {
     settings: {
@@ -87,16 +93,17 @@ async function loadSettings(businessId) {
   };
 }
 
-async function hasBlockedDateInRange(businessId, startDate, endDate) {
+async function hasBlockedDateInRange(businessId, locationId, startDate, endDate) {
   const result = await pool.query(
     `SELECT blocked_date, reason
      FROM time_off_blocked_dates
      WHERE business_id = $1
-       AND blocked_date >= $2::date
-       AND blocked_date <= $3::date
+       AND location_id = $2
+       AND blocked_date >= $3::date
+       AND blocked_date <= $4::date
      ORDER BY blocked_date ASC
      LIMIT 1`,
-    [businessId, startDate, endDate]
+    [businessId, locationId, startDate, endDate]
   );
 
   return result.rows[0] || null;
@@ -158,12 +165,40 @@ async function ownerOwnsLocation(user, locationId) {
 async function safeOwnerLocationId(user, locationId) {
   return (await ownerOwnsLocation(user, locationId)) ? locationId : null;
 }
+async function requireOwnerSelectedLocation(user, locationId) {
+  if (!locationId) {
+    const error = new Error("Selected location is required.");
+    error.status = 400;
+    throw error;
+  }
+
+  const owns = await ownerOwnsLocation(user, locationId);
+  if (!owns) {
+    const error = new Error("Location not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  return locationId;
+}
+
+async function resolveTimeOffLocationId(user, locationId) {
+  if (locationId) {
+    await assertManagerLocationAccess(user, locationId);
+    return locationId;
+  }
+
+  const employee = await employeeForUser(user);
+  return employee?.location_id || null;
+}
+
 router.get("/settings", requireAuth, async (req, res) => {
   try {
-    res.json(await loadSettings(req.user.businessId));
+    const locationId = await resolveTimeOffLocationId(req.user, req.query.locationId);
+    res.json(await loadSettings(req.user.businessId, locationId));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to load time off settings." });
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to load time off settings." });
   }
 });
 
@@ -194,7 +229,7 @@ router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
       details: requestsEnabled ? "Employees can submit time off requests." : "Employees cannot submit time off requests."
     });
 
-    res.json(await loadSettings(req.user.businessId));
+    res.json(await loadSettings(req.user.businessId, auditLocationId));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update time off settings." });
@@ -204,7 +239,12 @@ router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
 router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
   const blockedDate = normalizeDate(req.body.blockedDate);
   const reason = cleanText(req.body.reason);
-  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
+  let auditLocationId;
+  try {
+    auditLocationId = await requireOwnerSelectedLocation(req.user, req.body.locationId);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message, field: "blockedDate" });
+  }
 
   if (!blockedDate) {
     return res.status(400).json({ error: "Blocked date is required.", field: "blockedDate" });
@@ -216,12 +256,12 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO time_off_blocked_dates (business_id, blocked_date, reason)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (business_id, blocked_date)
+      `INSERT INTO time_off_blocked_dates (business_id, location_id, blocked_date, reason)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (business_id, location_id, blocked_date)
        DO UPDATE SET reason = EXCLUDED.reason
-       RETURNING id, blocked_date, reason`,
-      [req.user.businessId, blockedDate, reason]
+       RETURNING id, blocked_date, reason, location_id`,
+      [req.user.businessId, auditLocationId, blockedDate, reason]
     );
 
     await logAudit({
@@ -234,7 +274,7 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
       details: `${blockedDate} — ${reason}`
     });
 
-    res.status(201).json(await loadSettings(req.user.businessId));
+    res.status(201).json(await loadSettings(req.user.businessId, auditLocationId));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to add blocked date." });
@@ -243,16 +283,22 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
 
 router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, res) => {
   const { id } = req.params;
-  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
 
   try {
     const existing = await pool.query(
-      `SELECT blocked_date, reason
+      `SELECT blocked_date, reason, location_id
        FROM time_off_blocked_dates
        WHERE id = $1
          AND business_id = $2`,
       [id, req.user.businessId]
     );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Blocked date not found." });
+    }
+
+    const auditLocationId = existing.rows[0].location_id;
+    await requireOwnerSelectedLocation(req.user, auditLocationId);
 
     await pool.query(
       `DELETE FROM time_off_blocked_dates
@@ -268,13 +314,13 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
       action: "Blocked time off date removed",
       entityType: "time_off_blocked_date",
       entityId: id,
-      details: existing.rows[0] ? `${String(existing.rows[0].blocked_date).slice(0, 10)} — ${existing.rows[0].reason || "No reason"}` : "Blocked date removed."
+      details: `${String(existing.rows[0].blocked_date).slice(0, 10)} — ${existing.rows[0].reason || "No reason"}`
     });
 
-    res.json(await loadSettings(req.user.businessId));
+    res.json(await loadSettings(req.user.businessId, auditLocationId));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to remove blocked date." });
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to remove blocked date." });
   }
 });
 
@@ -282,7 +328,12 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
 router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
   const holidayDate = normalizeDate(req.body.holidayDate);
   const name = cleanText(req.body.name);
-  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
+  let auditLocationId;
+  try {
+    auditLocationId = await requireOwnerSelectedLocation(req.user, req.body.locationId);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message, field: "holidayDate" });
+  }
 
   if (!holidayDate) {
     return res.status(400).json({ error: "Holiday date is required.", field: "holidayDate" });
@@ -294,12 +345,12 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO time_off_holiday_dates (business_id, holiday_date, name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (business_id, holiday_date)
+      `INSERT INTO time_off_holiday_dates (business_id, location_id, holiday_date, name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (business_id, location_id, holiday_date)
        DO UPDATE SET name = EXCLUDED.name
-       RETURNING id, holiday_date, name`,
-      [req.user.businessId, holidayDate, name]
+       RETURNING id, holiday_date, name, location_id`,
+      [req.user.businessId, auditLocationId, holidayDate, name]
     );
 
     await logAudit({
@@ -312,7 +363,7 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
       details: `${holidayDate} — ${name}`
     });
 
-    res.status(201).json(await loadSettings(req.user.businessId));
+    res.status(201).json(await loadSettings(req.user.businessId, auditLocationId));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to add holiday date." });
@@ -321,16 +372,22 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
 
 router.post("/holidays/:id/delete", requireAuth, requireOwner, async (req, res) => {
   const { id } = req.params;
-  const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
 
   try {
     const existing = await pool.query(
-      `SELECT holiday_date, name
+      `SELECT holiday_date, name, location_id
        FROM time_off_holiday_dates
        WHERE id = $1
          AND business_id = $2`,
       [id, req.user.businessId]
     );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Holiday date not found." });
+    }
+
+    const auditLocationId = existing.rows[0].location_id;
+    await requireOwnerSelectedLocation(req.user, auditLocationId);
 
     await pool.query(
       `DELETE FROM time_off_holiday_dates
@@ -346,13 +403,13 @@ router.post("/holidays/:id/delete", requireAuth, requireOwner, async (req, res) 
       action: "Holiday date removed",
       entityType: "time_off_holiday_date",
       entityId: id,
-      details: existing.rows[0] ? `${String(existing.rows[0].holiday_date).slice(0, 10)} — ${existing.rows[0].name || "Holiday"}` : "Holiday date removed."
+      details: `${String(existing.rows[0].holiday_date).slice(0, 10)} — ${existing.rows[0].name || "Holiday"}`
     });
 
-    res.json(await loadSettings(req.user.businessId));
+    res.json(await loadSettings(req.user.businessId, auditLocationId));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to remove holiday date." });
+    res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to remove holiday date." });
   }
 });
 
@@ -437,19 +494,19 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   try {
-    const settings = await loadSettings(req.user.businessId);
+    const employee = await employeeForUser(req.user);
+    if (!employee) return res.status(403).json({ error: "Only employees assigned to a location can request time off." });
+
+    const settings = await loadSettings(req.user.businessId, employee.location_id);
     if (settings.settings.requestsEnabled === false) {
       return res.status(403).json({ error: "Time off requests are currently turned off." });
     }
 
-    const blockedDate = await hasBlockedDateInRange(req.user.businessId, startDate, endDate);
+    const blockedDate = await hasBlockedDateInRange(req.user.businessId, employee.location_id, startDate, endDate);
     if (blockedDate) {
       const dateText = String(blockedDate.blocked_date).slice(0, 10);
       return res.status(409).json({ error: `Time off cannot be requested for ${dateText}. ${blockedDate.reason || ""}`.trim(), field: "dateRange" });
     }
-
-    const employee = await employeeForUser(req.user);
-    if (!employee) return res.status(403).json({ error: "Only employees assigned to a location can request time off." });
 
     const result = await pool.query(
       `INSERT INTO time_off_requests (business_id, location_id, employee_id, start_date, end_date, reason)
