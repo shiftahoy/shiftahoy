@@ -584,7 +584,27 @@ router.get("/", requireAuth, async (req, res) => {
       shiftsCount: shiftsResult.rows.length
     });
 
-    res.json({ cells, warnings, health, coverage: coverageSlots, skipped: skipped.slice(0, 30) });
+    const employees = employeesResult.rows.map((employee) => ({
+      employee_id: employee.employee_id,
+      priority: employee.priority,
+      employee_code: employee.employee_code,
+      title: employee.title,
+      employment_type: employee.employment_type,
+      weekly_hours: Number(employee.weekly_hours || 0),
+      daily_hours: Number(employee.daily_hours || 0),
+      pay_rate_cents: Number(employee.pay_rate_cents || 0),
+      overtime_allowed: employee.overtime_allowed !== false,
+      overtime_threshold_hours: Number(employee.overtime_threshold_hours || 40),
+      min_rest_hours: Number(employee.min_rest_hours || 8),
+      preferred_shift_id: employee.preferred_shift_id,
+      first_name: employee.first_name,
+      last_name: employee.last_name,
+      username: employee.username,
+      role: employee.role,
+      can_manage_schedule: employee.can_manage_schedule
+    }));
+
+    res.json({ employees, cells, warnings, health, coverage: coverageSlots, skipped: skipped.slice(0, 30) });
   } catch (err) {
     console.error(err);
     res.status(err.status || 500).json({ error: err.status ? err.message : "Failed to load schedule." });
