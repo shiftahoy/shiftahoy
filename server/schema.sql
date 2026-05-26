@@ -185,8 +185,12 @@ ON time_off_requests (employee_id, status, start_date);
 CREATE TABLE IF NOT EXISTS time_off_settings (
   business_id UUID PRIMARY KEY REFERENCES businesses(id) ON DELETE CASCADE,
   requests_enabled BOOLEAN NOT NULL DEFAULT true,
+  shift_swaps_enabled BOOLEAN NOT NULL DEFAULT true,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE time_off_settings
+ADD COLUMN IF NOT EXISTS shift_swaps_enabled BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS time_off_blocked_dates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
