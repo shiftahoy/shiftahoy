@@ -11,6 +11,7 @@ const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => ({
   enabled: dayOfWeek <= 5,
   startTime: dayOfWeek <= 5 ? "08:00" : null,
   endTime: dayOfWeek <= 5 ? "17:00" : null,
+  requiredStaff: dayOfWeek <= 5 ? 1 : 0,
   maxStaff: null
 }));
 
@@ -73,6 +74,14 @@ async function assertLocationAccess(user, locationId) {
   }
 }
 
+function normalizeRequiredStaff(value, enabled) {
+  if (!enabled) return 0;
+  if (value === undefined || value === null || value === "") return 1;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > 99) return 1;
+  return number;
+}
+
 function normalizeMaxStaff(value) {
   if (value === undefined || value === null || value === "") return null;
   const number = Number(value);
@@ -97,6 +106,7 @@ function normalizeDays(days) {
       enabled,
       startTime: enabled ? day.startTime || "08:00" : null,
       endTime: enabled ? day.endTime || "17:00" : null,
+      requiredStaff: normalizeRequiredStaff(day.requiredStaff ?? day.employeesNeeded, enabled),
       maxStaff: enabled ? normalizeMaxStaff(day.maxStaff) : null
     });
   }
@@ -107,6 +117,7 @@ function normalizeDays(days) {
       enabled: false,
       startTime: null,
       endTime: null,
+      requiredStaff: 0,
       maxStaff: null
     }
   ));
@@ -126,6 +137,8 @@ async function loadShiftWithDays(clientOrPool, shiftId, businessId) {
              'enabled', sd.enabled,
              'startTime', to_char(sd.start_time, 'HH24:MI'),
              'endTime', to_char(sd.end_time, 'HH24:MI'),
+             'requiredStaff', sd.required_staff,
+             'employeesNeeded', sd.required_staff,
              'maxStaff', sd.max_staff
            )
            ORDER BY sd.day_of_week
@@ -181,6 +194,8 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
                'enabled', sd.enabled,
                'startTime', to_char(sd.start_time, 'HH24:MI'),
                'endTime', to_char(sd.end_time, 'HH24:MI'),
+             'requiredStaff', sd.required_staff,
+             'employeesNeeded', sd.required_staff,
              'maxStaff', sd.max_staff
              )
              ORDER BY sd.day_of_week
@@ -235,9 +250,9 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
 
     for (const day of normalizeDays(days)) {
       await client.query(
-        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [shiftId, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.maxStaff]
+        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, required_staff, max_staff)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [shiftId, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.requiredStaff, day.maxStaff]
       );
     }
 
@@ -306,9 +321,9 @@ router.put("/:id", requireAuth, requireOwner, async (req, res) => {
 
     for (const day of normalizeDays(days)) {
       await client.query(
-        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.maxStaff]
+        `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, required_staff, max_staff)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, day.dayOfWeek, day.enabled, day.startTime, day.endTime, day.requiredStaff, day.maxStaff]
       );
     }
 
