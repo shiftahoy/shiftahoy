@@ -2881,7 +2881,7 @@ function ensureUltimateAutomationLayout() {
 
   const locationRulesHtml = `
     <section id="locationRulesPanel" class="automationCard managerOnly hidden locationRulesInline">
-      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction locationRulesHeader">
         <div class="dashboardTitleGroup">
           <span class="iconBadge">01B</span>
           <div>
@@ -2889,7 +2889,7 @@ function ensureUltimateAutomationLayout() {
             <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls for <strong id="locationRulesLocationName">${escapeHtml(selectedLocationName())}</strong>.</p>
           </div>
         </div>
-        <div class="inlineToolbar"><button id="createLocationRulesButton" class="button secondary" type="button">Update Rules</button></div>
+        <div class="inlineToolbar rulesHeaderToolbar"><button id="createLocationRulesButton" class="button secondary" type="button">Update Rules</button></div>
       </div>
       <form id="locationRulesForm" class="editorForm automationForm hidden">
         <div class="formGrid twoColumn">
@@ -3078,7 +3078,7 @@ function setLocationRulesEditorOpen(open) {
   const button = $("createLocationRulesButton");
 
   form?.classList.toggle("hidden", !locationRulesEditorOpen);
-  if (button) button.textContent = "Update Rules";
+  if (button) button.textContent = locationRulesEditorOpen ? "Save Rules" : "Update Rules";
 }
 
 
@@ -3200,7 +3200,7 @@ async function saveLocationRules(event) {
     });
     cachedLocationRules = data.rules || DEFAULT_LOCATION_RULES;
     populateLocationRulesForm(cachedLocationRules);
-    setLocationRulesEditorOpen(true);
+    setLocationRulesEditorOpen(false);
     setNotice("locationRulesNotice", "success", data.message || "Rules updated.");
     await Promise.all([loadSchedule(), loadAuditLog()]);
   } catch (err) {
