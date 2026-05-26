@@ -2846,20 +2846,20 @@ function ensureUltimateAutomationLayout() {
             <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls for <strong id="locationRulesLocationName">${escapeHtml(selectedLocationName())}</strong>.</p>
           </div>
         </div>
+        <button id="createLocationRulesButton" class="button primary" type="button">Create Rules</button>
       </div>
-      <form id="locationRulesForm" class="editorForm automationForm">
+      <form id="locationRulesForm" class="editorForm automationForm hidden">
         <div class="formGrid twoColumn">
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" value="08:00" /></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" value="17:00" /></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" value="0" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" /></div>
           <div class="fieldGroup"><label class="fieldLabel" for="ruleMaxEmployees">Max Employees / Day</label><input id="ruleMaxEmployees" type="number" min="1" placeholder="No cap" /></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleDefaultRequired">Default Employees Needed</label><input id="ruleDefaultRequired" type="number" min="0" max="99" value="1" /></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleLaborBudget">Weekly Labor Budget</label><input id="ruleLaborBudget" type="number" min="0" step="0.01" value="0" /></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay">${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
-          <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" value="America/Chicago" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleDefaultRequired">Default Employees Needed</label><input id="ruleDefaultRequired" type="number" min="0" max="99" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleLaborBudget">Weekly Labor Budget</label><input id="ruleLaborBudget" type="number" min="0" step="0.01" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay"><option value="" selected disabled>Select publish day</option>${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" /></div>
         </div>
         <div class="fieldGroup"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
-        <div class="formActions"><button class="button primary" type="submit">Save Rules</button></div>
       </form>
       <div id="locationRulesNotice" class="formNotice hidden"></div>
     </section>
@@ -3014,7 +3014,32 @@ function ensureUltimateAutomationLayout() {
 }
 
 
-function renderRuleOpenDays(openDays = [1, 2, 3, 4, 5]) {
+const DEFAULT_LOCATION_RULES = {
+  open_days: [1, 2, 3, 4, 5],
+  operating_start: "08:00",
+  operating_end: "17:00",
+  min_employees_per_day: 0,
+  max_employees_per_day: null,
+  default_required_staff: 1,
+  labor_budget_cents: 0,
+  schedule_publish_day: 1,
+  time_zone: "America/Chicago"
+};
+
+let locationRulesEditorOpen = false;
+let cachedLocationRules = null;
+
+function setLocationRulesEditorOpen(open) {
+  locationRulesEditorOpen = Boolean(open);
+  const form = $("locationRulesForm");
+  const button = $("createLocationRulesButton");
+
+  form?.classList.toggle("hidden", !locationRulesEditorOpen);
+  if (button) button.textContent = locationRulesEditorOpen ? "Save Rules" : "Create Rules";
+}
+
+
+function renderRuleOpenDays(openDays = []) {
   const selected = new Set(openDays.map(Number));
   const box = $("ruleOpenDays");
   if (!box) return;
@@ -3027,27 +3052,92 @@ function collectRuleOpenDays() {
   return [...document.querySelectorAll("#ruleOpenDays .dotDay.active")].map((button) => Number(button.dataset.day));
 }
 
+function resetLocationRulesForm() {
+  const form = $("locationRulesForm");
+  if (!form) return;
+
+  form.reset();
+  [
+    "ruleOperatingStart",
+    "ruleOperatingEnd",
+    "ruleMinEmployees",
+    "ruleMaxEmployees",
+    "ruleDefaultRequired",
+    "ruleLaborBudget",
+    "rulePublishDay",
+    "ruleTimeZone"
+  ].forEach((id) => {
+    const field = $(id);
+    if (field) field.value = "";
+  });
+  renderRuleOpenDays([]);
+}
+
+function normalizeLocationRulesForForm(rules = {}) {
+  return {
+    ...DEFAULT_LOCATION_RULES,
+    ...rules,
+    open_days: Array.isArray(rules.open_days) && rules.open_days.length
+      ? rules.open_days
+      : DEFAULT_LOCATION_RULES.open_days,
+    operating_start: rules.operating_start || DEFAULT_LOCATION_RULES.operating_start,
+    operating_end: rules.operating_end || DEFAULT_LOCATION_RULES.operating_end,
+    min_employees_per_day: rules.min_employees_per_day ?? DEFAULT_LOCATION_RULES.min_employees_per_day,
+    max_employees_per_day: rules.max_employees_per_day ?? DEFAULT_LOCATION_RULES.max_employees_per_day,
+    default_required_staff: rules.default_required_staff ?? DEFAULT_LOCATION_RULES.default_required_staff,
+    labor_budget_cents: rules.labor_budget_cents ?? DEFAULT_LOCATION_RULES.labor_budget_cents,
+    schedule_publish_day: rules.schedule_publish_day ?? DEFAULT_LOCATION_RULES.schedule_publish_day,
+    time_zone: rules.time_zone || DEFAULT_LOCATION_RULES.time_zone
+  };
+}
+
+function populateLocationRulesForm(rules = {}) {
+  if (!$("locationRulesForm")) return;
+
+  const normalizedRules = normalizeLocationRulesForForm(rules);
+  $("ruleOperatingStart").value = String(normalizedRules.operating_start).slice(0, 5);
+  $("ruleOperatingEnd").value = String(normalizedRules.operating_end).slice(0, 5);
+  $("ruleMinEmployees").value = normalizedRules.min_employees_per_day;
+  $("ruleMaxEmployees").value = normalizedRules.max_employees_per_day ?? "";
+  $("ruleDefaultRequired").value = normalizedRules.default_required_staff;
+  $("ruleLaborBudget").value = (Number(normalizedRules.labor_budget_cents || 0) / 100).toFixed(2);
+  $("rulePublishDay").value = normalizedRules.schedule_publish_day;
+  $("ruleTimeZone").value = normalizedRules.time_zone;
+  renderRuleOpenDays(normalizedRules.open_days);
+}
+
 async function loadLocationRules() {
+  if (!$("locationRulesForm")) return;
+  cachedLocationRules = null;
+  resetLocationRulesForm();
+  setLocationRulesEditorOpen(false);
+  setNotice("locationRulesNotice", "", "");
+}
+
+async function createLocationRules() {
   if (!selectedLocationId || !canManageSchedule() || !$("locationRulesForm")) return;
+
+  if (locationRulesEditorOpen) {
+    await saveLocationRules({ preventDefault() {} });
+    return;
+  }
+
   try {
     const data = await api(`/automation/rules?locationId=${encodeURIComponent(selectedLocationId)}`);
-    const rules = data.rules || {};
-    $("ruleOperatingStart").value = String(rules.operating_start || "08:00").slice(0, 5);
-    $("ruleOperatingEnd").value = String(rules.operating_end || "17:00").slice(0, 5);
-    $("ruleMinEmployees").value = rules.min_employees_per_day ?? 0;
-    $("ruleMaxEmployees").value = rules.max_employees_per_day ?? "";
-    $("ruleDefaultRequired").value = rules.default_required_staff ?? 1;
-    $("ruleLaborBudget").value = ((Number(rules.labor_budget_cents || 0) / 100).toFixed(2));
-    $("rulePublishDay").value = rules.schedule_publish_day ?? 1;
-    $("ruleTimeZone").value = rules.time_zone || "America/Chicago";
-    renderRuleOpenDays(rules.open_days || [1, 2, 3, 4, 5]);
+    cachedLocationRules = data.rules || DEFAULT_LOCATION_RULES;
+    populateLocationRulesForm(cachedLocationRules);
+    setLocationRulesEditorOpen(true);
+    setNotice("locationRulesNotice", "", "");
   } catch (err) {
+    cachedLocationRules = DEFAULT_LOCATION_RULES;
+    populateLocationRulesForm(cachedLocationRules);
+    setLocationRulesEditorOpen(true);
     setNotice("locationRulesNotice", "error", err.message);
   }
 }
 
 async function saveLocationRules(event) {
-  event.preventDefault();
+  event?.preventDefault?.();
   if (!selectedLocationId) return;
   try {
     const data = await api("/automation/rules", {
@@ -3065,6 +3155,9 @@ async function saveLocationRules(event) {
         timeZone: $("ruleTimeZone").value || "America/Chicago"
       })
     });
+    cachedLocationRules = data.rules || DEFAULT_LOCATION_RULES;
+    populateLocationRulesForm(cachedLocationRules);
+    setLocationRulesEditorOpen(true);
     setNotice("locationRulesNotice", "success", data.message || "Rules saved.");
     await Promise.all([loadSchedule(), loadAuditLog()]);
   } catch (err) {
@@ -3262,6 +3355,8 @@ function renderUltimateAutomationPanels() {
 function setupUltimateAutomationEvents() {
   ensureUltimateAutomationLayout();
   renderRuleOpenDays();
+  setLocationRulesEditorOpen(false);
+  $("createLocationRulesButton")?.addEventListener("click", createLocationRules);
   $("locationRulesForm")?.addEventListener("submit", saveLocationRules);
   $("ruleOpenDays")?.addEventListener("click", (event) => {
     const button = event.target.closest(".dotDay");
