@@ -380,9 +380,21 @@ p {
 
 .metricGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 9px;
   margin-top: 22px;
+}
+
+.metricGrid div {
+  grid-column: span 2;
+}
+
+.metricGrid div:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+.metricGrid div:nth-child(5) {
+  grid-column: 4 / span 2;
 }
 
 .metricGrid div {
@@ -1135,6 +1147,12 @@ tbody tr:hover td {
   .metricGrid,
   .formGrid.twoColumn {
     grid-template-columns: 1fr;
+  }
+
+  .metricGrid div,
+  .metricGrid div:nth-child(4),
+  .metricGrid div:nth-child(5) {
+    grid-column: 1 / -1;
   }
 
   .topbar,
