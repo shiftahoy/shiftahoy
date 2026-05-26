@@ -1882,7 +1882,10 @@ async function loadTimeOffSettings() {
   if (!currentUser) return;
 
   try {
-    const data = await api("/time-off/settings");
+    const settingsPath = selectedLocationId
+      ? `/time-off/settings?locationId=${encodeURIComponent(selectedLocationId)}`
+      : "/time-off/settings";
+    const data = await api(settingsPath);
     timeOffSettings = {
       requestsEnabled: data.settings?.requestsEnabled !== false,
       blockedDates: data.blockedDates || [],
