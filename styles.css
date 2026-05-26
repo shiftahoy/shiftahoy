@@ -2889,178 +2889,397 @@ body.theme-dark .appShell { background: var(--page-bg); }
   #scheduleTable td { border: 1px solid #999 !important; padding: 6px !important; }
 }
 
-/* v9 final layout polish: auth language rail, dark auth cards, current plan, and audit cards */
-#authView.authLayout {
+/* v3 polish: dark-auth consistency, non-overlapping language dock, and ChatGPT-style profile settings. */
+.visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.appShell:has(#authView:not(.hidden)) .workspace {
+  max-width: 1540px;
+}
+
+.authLayout {
   position: relative;
-  grid-template-columns: 230px minmax(420px, 1.02fr) minmax(360px, 1.18fr);
-  gap: 14px;
+  grid-template-columns: 176px minmax(300px, 0.78fr) minmax(360px, 1.22fr);
+  gap: 0;
 }
 
-#authLanguageDock.languageDock {
+.languageDock {
   position: static;
-  grid-column: 1;
-  align-self: end;
-  justify-self: start;
-  width: 220px;
-  min-width: 220px;
-  margin: 0 0 20px 0;
-  z-index: 2;
-}
-
-#authView .heroPanel {
-  grid-column: 2;
-  border-radius: var(--radius) 0 0 var(--radius);
-}
-
-#authView .authCards {
-  grid-column: 3;
+  z-index: 1;
   min-width: 0;
+  align-self: end;
+  justify-self: stretch;
+  padding: 0 16px 4px 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.authLayout > .heroPanel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.authLayout > .authCards {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .languageSelectWrap,
 .settingsLanguageSelector .languageSelectWrap {
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
-  min-height: 46px;
-  padding: 9px 11px;
-  border-color: rgba(0, 93, 170, 0.22);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.10);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.settingsLanguageSelector {
-  display: flex;
+.languageSelect,
+.settingsLanguageSelector .languageSelect,
+#appearanceMode {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 900;
+  outline: none;
+}
+
+.languageFlag {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.authUtilityLinks {
+  align-self: end;
   justify-content: flex-start;
+  margin: 4px 0 0;
 }
 
-.languageSelect option {
-  color: #0f172a;
-  background: #ffffff;
+.compactCard {
+  grid-template-rows: auto auto auto auto auto 1fr;
 }
 
 .compactCard #loginButton {
-  margin-top: 12px;
+  margin-top: 4px;
+  align-self: start;
 }
 
 body.theme-dark #authView .card,
-body.theme-dark #authView .formCard,
-body.theme-dark #authView .compactCard {
-  background: #0f172a;
+body.theme-dark .authCards,
+body.theme-dark .formCard,
+body.theme-dark .compactCard {
+  background: var(--surface) !important;
   color: var(--ink);
-  border-color: #203247;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
-}
-
-body.theme-dark #authView .cardTitle h2,
-body.theme-dark #authView .fieldLabel,
-body.theme-dark #authView .fieldStatus,
-body.theme-dark #authView .fieldHelp,
-body.theme-dark #authView .cardTitle p {
-  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
 }
 
 body.theme-dark #authView input,
-body.theme-dark #authView select {
-  background: #111f33;
-  color: var(--ink);
-  border-color: #203247;
+body.theme-dark #authView select,
+body.theme-dark .languageSelect,
+body.theme-dark .languageFlag,
+body.theme-dark #appearanceMode {
+  background: var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
 }
 
-body.theme-dark .languageSelectWrap,
-body.theme-dark .settingsLanguageSelector .languageSelectWrap {
-  background: #111f33;
-  color: var(--ink);
-  border-color: #2b425c;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.30);
+body.theme-dark #authView .fieldHelp,
+body.theme-dark #authView .panelHint,
+body.theme-dark #authView .cardTitle p {
+  color: var(--muted);
 }
 
-body.theme-dark .languageSelect {
+body.theme-dark #authView .fieldLabel,
+body.theme-dark #authView h2,
+body.theme-dark #authView h3 {
   color: var(--ink);
 }
 
-body.theme-dark .languageSelect option {
-  color: #e5edf7;
-  background: #111f33;
+.settingsPanel {
+  max-width: 980px;
+  width: min(980px, calc(100vw - 32px));
+}
+
+.wideSettingsCard {
+  grid-column: 1 / -1;
+}
+
+.profileSettingsCard {
+  gap: 16px;
+}
+
+.profileSettingsRow,
+.profilePortalCard,
+.personalizedListItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profileAvatarFrame {
+  position: relative;
+  width: 86px;
+  height: 86px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--brand), var(--brand-dark));
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 950;
+  font-size: 1.45rem;
+}
+
+.profileAvatarImage,
+.profileAvatarFrame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profileSettingsInfo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profileNameLine {
+  font-weight: 950;
+  font-size: 1.08rem;
+  color: var(--ink);
+}
+
+.profileMetaLine {
+  color: var(--muted);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.profilePictureActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profileUploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profileMiniAvatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(160deg, var(--brand), var(--brand-dark));
+  color: #fff;
+  font-weight: 950;
+  font-size: 0.78rem;
+  border: 1px solid var(--line);
+}
+
+.profileMiniAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profilePortalCard {
+  justify-content: flex-start;
+  background: linear-gradient(180deg, var(--surface), var(--surface-soft));
+}
+
+.profilePortalAvatarSlot .profileMiniAvatar,
+.profileMiniAvatar.embeddedAvatar {
+  width: 54px;
+  height: 54px;
+  font-size: 0.95rem;
+}
+
+.personalizedListItem > [data-profile-avatar] {
+  display: contents;
+}
+
+@media (max-width: 1100px) {
+  .authLayout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    height: auto;
+    max-height: none;
+  }
+  .languageDock,
+  .authLayout > .heroPanel,
+  .authLayout > .authCards {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .languageDock {
+    order: 3;
+    padding: 14px 0 0;
+  }
+  .authLayout > .heroPanel,
+  #authView .card {
+    border-radius: var(--radius);
+  }
+  .authCards {
+    padding: 14px 0 0;
+    overflow: visible;
+  }
+}
+
+
+/* v4 cleanup: initials-only profiles, restored auth panel proportions, compact language selector, dark plan text, and professional audit entries. */
+.appShell:has(#authView:not(.hidden)) .workspace {
+  max-width: 1616px;
+}
+
+.authLayout {
+  grid-template-columns: minmax(300px, 0.78fr) minmax(360px, 1.22fr);
+  width: min(1440px, calc(100% - 176px));
+  margin-left: 176px;
+  overflow: visible;
+}
+
+.languageDock {
+  position: absolute;
+  left: -164px;
+  bottom: 0;
+  width: 148px;
+  padding: 0;
+  z-index: 2;
+}
+
+.authLayout > .heroPanel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.authLayout > .authCards {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.languageSelectWrap,
+.settingsLanguageSelector .languageSelectWrap {
+  display: block;
+}
+
+.languageSelect,
+.settingsLanguageSelector .languageSelect {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 900;
+  box-shadow: none;
+}
+
+.languageFlag {
+  display: none !important;
 }
 
 body.theme-dark .currentPlanText,
 body.theme-dark .currentPlanText strong {
-  color: #ffffff !important;
+  color: #ffffff;
+}
+
+.profileAvatarImage,
+.profilePictureActions,
+.profileUploadButton {
+  display: none !important;
+}
+
+.profileAvatarFrame,
+.profileMiniAvatar {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 #auditLogList {
-  min-width: 0;
+  display: grid;
+  gap: 10px;
   max-width: 100%;
 }
 
-#auditLogList .auditItem,
 .auditItem {
+  align-items: flex-start;
+  justify-content: flex-start;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  align-items: flex-start;
-  overflow: hidden;
 }
 
 .auditItem > div {
   min-width: 0;
-  width: 100%;
   max-width: 100%;
 }
 
-.auditItem strong,
+.auditItem strong {
+  overflow-wrap: anywhere;
+}
+
 .auditItem span {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: normal;
 }
 
-.auditItem .auditDetails {
-  display: block;
-  margin-top: 6px;
+.auditItem span:nth-of-type(1) {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.auditItem span:nth-of-type(2) {
   color: var(--muted);
-  font-size: 0.88rem;
-  line-height: 1.35;
+  font-size: 0.82rem;
 }
 
-.auditItem .auditMeta {
-  display: block;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-body.theme-dark .auditItem .auditDetails,
-body.theme-dark .auditItem .auditMeta {
-  color: #a8b7ca;
-}
-
-@media (max-width: 1180px) {
-  #authView.authLayout {
-    grid-template-columns: 220px minmax(360px, 1fr) minmax(340px, 1.05fr);
-  }
-}
-
-@media (max-width: 980px) {
-  #authView.authLayout {
+@media (max-width: 1100px) {
+  .authLayout {
+    width: 100%;
+    margin-left: 0;
     grid-template-columns: 1fr;
-    gap: 14px;
   }
 
-  #authLanguageDock.languageDock,
-  #authView .heroPanel,
-  #authView .authCards {
+  .languageDock {
+    position: static;
+    width: 100%;
+    padding: 0 0 12px;
+  }
+
+  .authLayout > .heroPanel,
+  .authLayout > .authCards {
     grid-column: 1;
-  }
-
-  #authLanguageDock.languageDock {
-    align-self: start;
-    margin: 0;
-  }
-
-  #authView .heroPanel {
-    border-radius: var(--radius);
+    grid-row: auto;
   }
 }
