@@ -153,20 +153,18 @@
 
               <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
-              <div class="fieldGroup">
+              <div class="fieldGroup loginFieldGroup">
                 <label class="fieldLabel" for="loginValue">Login</label>
                 <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
+                <button id="forgotUsernameButton" class="linkButton fieldUtilityLink" type="button">Forgot username</button>
               </div>
 
-              <div class="fieldGroup">
+              <div class="fieldGroup loginFieldGroup">
                 <label class="fieldLabel" for="loginPassword">Password</label>
                 <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
+                <button id="forgotPasswordButton" class="linkButton fieldUtilityLink" type="button">Forgot password</button>
               </div>
 
-              <div class="authUtilityLinks">
-                <button id="forgotPasswordButton" class="linkButton" type="button">Reset password</button>
-                <button id="forgotUsernameButton" class="linkButton" type="button">Forgot username</button>
-              </div>
               <button id="loginButton" class="button primary">Login</button>
             </section>
           </section>
