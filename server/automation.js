@@ -500,6 +500,28 @@ router.post("/open-shifts/:id/claim", requireAuth, async (req, res) => {
   }
 });
 
+
+async function loadRequestSettings(businessId) {
+  await pool.query(
+    `INSERT INTO time_off_settings (business_id, requests_enabled, shift_swaps_enabled)
+     VALUES ($1, true, true)
+     ON CONFLICT (business_id) DO NOTHING`,
+    [businessId]
+  );
+
+  const result = await pool.query(
+    `SELECT requests_enabled, shift_swaps_enabled
+     FROM time_off_settings
+     WHERE business_id = $1`,
+    [businessId]
+  );
+
+  return {
+    requestsEnabled: result.rows[0]?.requests_enabled !== false,
+    shiftSwapsEnabled: result.rows[0]?.shift_swaps_enabled !== false
+  };
+}
+
 router.get("/shift-swaps", requireAuth, async (req, res) => {
   try {
     const locationId = req.query.locationId || null;
@@ -543,6 +565,11 @@ router.get("/shift-swaps", requireAuth, async (req, res) => {
 
 router.post("/shift-swaps", requireAuth, async (req, res) => {
   try {
+    const settings = await loadRequestSettings(req.user.businessId);
+    if (settings.shiftSwapsEnabled === false) {
+      return res.status(403).json({ error: "Shift cover and swap requests are currently turned off by the owner." });
+    }
+
     const employee = await currentEmployee(req.user);
     if (!employee) return res.status(403).json({ error: "Employee profile required to request shift cover." });
 
