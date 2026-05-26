@@ -1023,7 +1023,7 @@ async function loadSchedule() {
   );
 
   renderSchedule(data.cells || []);
-  renderScheduleWarnings(data.warnings || []);
+  renderScheduleHealth(data.health || null, data.coverage || [], data.warnings || []);
 }
 
 function renderEmptySchedule() {
@@ -1044,20 +1044,55 @@ function renderEmptySchedule() {
   `;
 }
 
-function renderScheduleWarnings(warnings) {
-  const existing = $("scheduleWarnings");
+function renderScheduleHealth(health, coverage = [], warnings = []) {
+  const existing = $("scheduleHealth");
   if (existing) existing.remove();
 
-  if (!Array.isArray(warnings) || !warnings.length) return;
-
   const frame = document.querySelector("#schedulePanel .tableFrame");
-  if (!frame) return;
+  if (!frame || !health) return;
 
-  const notice = document.createElement("div");
-  notice.id = "scheduleWarnings";
-  notice.className = "formNotice warning";
-  notice.innerHTML = `<strong>Coverage warnings:</strong> ${warnings.map((warning) => escapeHtml(warning.message)).join(" ")}`;
-  frame.insertAdjacentElement("afterend", notice);
+  const panel = document.createElement("section");
+  panel.id = "scheduleHealth";
+  panel.className = "scheduleHealthBox";
+
+  const topWarnings = Array.isArray(warnings) ? warnings.slice(0, 5) : [];
+  const coverageItems = Array.isArray(coverage) ? coverage : [];
+
+  panel.innerHTML = `
+    <div class="scheduleHealthHeader">
+      <div>
+        <p class="eyebrow">Schedule Health</p>
+        <h3>${escapeHtml(health.score ?? 0)}% <span>${escapeHtml(health.label || "Forecast")}</span></h3>
+      </div>
+      <div class="healthStats">
+        <span><strong>${escapeHtml(health.coverageAssigned ?? 0)}</strong> assigned</span>
+        <span><strong>${escapeHtml(health.coverageNeeded ?? 0)}</strong> needed</span>
+        <span><strong>${escapeHtml(health.openShiftCount ?? 0)}</strong> open</span>
+      </div>
+    </div>
+    <div class="coverageHeatMap" aria-label="Coverage heat map">
+      ${coverageItems.length
+        ? coverageItems.map((slot) => `
+          <span class="coverageChip ${slot.status === "under" ? "under" : slot.status === "covered" ? "covered" : "closed"}"
+            title="${escapeHtml(slot.dayName)} ${escapeHtml(slot.shiftName)}: ${escapeHtml(slot.assignedCount)}/${escapeHtml(slot.requiredStaff)} assigned">
+            ${escapeHtml(String(slot.dayName || "").slice(0, 3))} ${escapeHtml(slot.shiftName || "Shift")}
+            <strong>${escapeHtml(slot.assignedCount)}/${escapeHtml(slot.requiredStaff)}</strong>
+          </span>`).join("")
+        : `<span class="coverageChip under">No coverage rules yet</span>`}
+    </div>
+    ${topWarnings.length ? `
+      <div class="scheduleWarningsList">
+        <strong>${escapeHtml(health.warningCount)} warning${Number(health.warningCount) === 1 ? "" : "s"}</strong>
+        <ul>${topWarnings.map((warning) => `<li>${escapeHtml(warning.message)}</li>`).join("")}</ul>
+      </div>` : `
+      <div class="scheduleWarningsList success">No schedule health warnings found for this forecast.</div>`}
+  `;
+
+  frame.insertAdjacentElement("beforebegin", panel);
+}
+
+function renderScheduleWarnings(warnings) {
+  renderScheduleHealth(null, [], warnings);
 }
 
 function renderSchedule(cells) {
@@ -1111,6 +1146,7 @@ function renderSchedule(cells) {
                   <td>
                     <strong>${escapeHtml(cell.shift_name || "Shift")}</strong>
                     <span>${escapeHtml((cell.start_time || "").slice(0, 5))}–${escapeHtml((cell.end_time || "").slice(0, 5))}</span>
+                    <small class="assignmentReason" title="${escapeHtml((cell.assignment_reason || []).join(" • "))}">Score ${escapeHtml(cell.fairness_score ?? "—")}</small>
                   </td>
                 `;
               }).join("")}
@@ -1127,6 +1163,7 @@ function defaultShiftDays() {
     enabled: day.value <= 5,
     startTime: day.value <= 5 ? "08:00" : "",
     endTime: day.value <= 5 ? "17:00" : "",
+    requiredStaff: day.value <= 5 ? 1 : 0,
     maxStaff: null
   }));
 }
@@ -1139,7 +1176,9 @@ function renderShiftDayEditor(days = defaultShiftDays()) {
       dayOfWeek: day.value,
       enabled: false,
       startTime: "",
-      endTime: ""
+      endTime: "",
+      requiredStaff: 0,
+      maxStaff: null
     };
 
     return `
@@ -1150,13 +1189,24 @@ function renderShiftDayEditor(days = defaultShiftDays()) {
         </label>
         <input type="time" class="shiftStart" value="${escapeHtml(value.startTime || "")}" />
         <input type="time" class="shiftEnd" value="${escapeHtml(value.endTime || "")}" />
+        <label class="staffNeededLabel">Employees needed
+          <input type="number" class="requiredStaff" min="0" max="99" placeholder="0" value="${escapeHtml(value.requiredStaff ?? value.employeesNeeded ?? (value.enabled ? 1 : 0))}" />
+          <small>Minimum coverage target.</small>
+        </label>
         <label class="staffNeededLabel">Max Staff #
-          <input type="number" class="maxStaff" min="1" max="99" placeholder="Unlimited" value="${escapeHtml(value.maxStaff ?? "")}" />
-          <small>Optional. Leave blank for unlimited.</small>
+          <input type="number" class="maxStaff" min="1" max="99" placeholder="No cap" value="${escapeHtml(value.maxStaff ?? "")}" />
+          <small>Optional cap.</small>
         </label>
       </div>
     `;
   }).join("");
+}
+
+function normalizeRequiredStaff(value) {
+  if (value === undefined || value === null || value === "") return 1;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > 99) return 1;
+  return number;
 }
 
 function normalizeOptionalStaffLimit(value) {
@@ -1175,6 +1225,8 @@ function collectShiftDays() {
       enabled,
       startTime: enabled ? row.querySelector(".shiftStart").value : null,
       endTime: enabled ? row.querySelector(".shiftEnd").value : null,
+      requiredStaff: enabled ? normalizeRequiredStaff(row.querySelector(".requiredStaff")?.value) : 0,
+      employeesNeeded: enabled ? normalizeRequiredStaff(row.querySelector(".requiredStaff")?.value) : 0,
       maxStaff: enabled ? normalizeOptionalStaffLimit(row.querySelector(".maxStaff")?.value) : null
     };
   });
@@ -1270,7 +1322,7 @@ function renderShifts() {
       .filter((day) => day.enabled)
       .map((day) => {
         const label = DAYS.find((item) => item.value === Number(day.dayOfWeek))?.short || day.dayOfWeek;
-        return `${label} ${day.startTime || ""}–${day.endTime || ""} · Max ${day.maxStaff || "Unlimited"}`;
+        return `${label} ${day.startTime || ""}–${day.endTime || ""} · Need ${day.requiredStaff ?? day.employeesNeeded ?? 0} · Max ${day.maxStaff || "No cap"}`;
       })
       .join(", ") || "No active days";
 
