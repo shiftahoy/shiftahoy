@@ -371,6 +371,24 @@
                   <input id="dailyHours" type="number" min="1" step="0.25" value="8" />
                 </div>
                 <div class="fieldGroup">
+                  <label class="fieldLabel" for="payRateDollars">Pay Rate / Hour</label>
+                  <input id="payRateDollars" type="number" min="0" step="0.01" value="0" placeholder="0.00" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="overtimeThresholdHours">Overtime Threshold</label>
+                  <input id="overtimeThresholdHours" type="number" min="1" max="168" step="0.25" value="40" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="fieldLabel" for="minRestHours">Minimum Rest Hours</label>
+                  <input id="minRestHours" type="number" min="0" max="24" step="0.25" value="8" />
+                </div>
+                <div class="fieldGroup">
+                  <label class="checkboxLine">
+                    <input id="overtimeAllowed" type="checkbox" checked />
+                    Overtime allowed
+                  </label>
+                </div>
+                <div class="fieldGroup">
                   <label class="fieldLabel" for="employeePriority">Priority</label>
                   <input id="employeePriority" type="number" min="1" max="25" value="1" />
                 </div>
