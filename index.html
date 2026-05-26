@@ -177,9 +177,9 @@
         </section>
 
         <section id="appView" class="hidden dashboardGrid">
-          <section id="locationsPanel" class="card sideCard">
-            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-              <div class="dashboardTitleGroup">
+          <section id="locationsPanel" class="card sideCard locationPanelCard">
+            <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction locationPanelHeader">
+              <div class="dashboardTitleGroup locationPanelTitleGroup">
                 <span class="iconBadge">01</span>
                 <div>
                   <h2>Location</h2>
@@ -188,7 +188,7 @@
                 </div>
               </div>
 
-              <div id="ownerLocationToolbar" class="inlineToolbar ownerOnly">
+              <div id="ownerLocationToolbar" class="inlineToolbar ownerOnly locationPanelToolbar">
                 <input id="locationFilter" class="searchInput" placeholder="Filter locations" />
                 <button id="showLocationFormButton" class="button secondary" type="button">Add Location</button>
               </div>
@@ -196,7 +196,7 @@
 
             <div id="locationFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
-            <form id="locationForm" class="editorForm ownerOnly hidden">
+            <form id="locationForm" class="editorForm ownerOnly hidden locationPanelForm">
               <input type="hidden" id="locationId" />
               <div class="formGrid twoColumn">
                 <div class="fieldGroup" data-field="locationName">
@@ -217,9 +217,9 @@
               </div>
             </form>
 
-            <div id="locationList" class="locationList"></div>
+            <div id="locationList" class="locationList locationPanelList"></div>
 
-            <div id="locationPager" class="pager hidden">
+            <div id="locationPager" class="pager hidden locationPanelPager">
               <button id="prevLocationPage" class="button ghost">← Previous</button>
               <button id="nextLocationPage" class="button ghost">Next →</button>
               <div id="locationPageLabel" class="pageLabel">Page 1/1</div>
