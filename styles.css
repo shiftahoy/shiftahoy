@@ -4003,3 +4003,127 @@ body.theme-dark .unscheduledEmployeeRow .employeeMetaCell {
     font-size: 7pt !important;
   }
 }
+
+/* Dark-mode validation polish: keep all fields dark when errors or valid states are shown. */
+body.theme-dark {
+  --danger: #f87171;
+  --danger-soft: rgba(127, 29, 29, 0.28);
+  --danger-border: rgba(248, 113, 113, 0.56);
+  --success: #86efac;
+  --success-soft: rgba(20, 83, 45, 0.28);
+  --success-border: rgba(134, 239, 172, 0.52);
+}
+
+body.theme-dark input,
+body.theme-dark select,
+body.theme-dark textarea,
+body.theme-dark .languageSelect,
+body.theme-dark #appearanceMode {
+  background: var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  caret-color: var(--ink);
+}
+
+body.theme-dark input::placeholder,
+body.theme-dark textarea::placeholder {
+  color: rgba(168, 183, 202, 0.72);
+}
+
+body.theme-dark .fieldGroup.is-invalid input,
+body.theme-dark .fieldGroup.is-invalid select,
+body.theme-dark .fieldGroup.is-invalid textarea,
+body.theme-dark input.inputInvalid,
+body.theme-dark select.inputInvalid,
+body.theme-dark textarea.inputInvalid,
+body.theme-dark input:invalid:not(:placeholder-shown),
+body.theme-dark select:invalid,
+body.theme-dark textarea:invalid:not(:placeholder-shown) {
+  background: linear-gradient(0deg, rgba(127, 29, 29, 0.18), rgba(127, 29, 29, 0.18)), var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--danger-border) !important;
+  box-shadow: inset 3px 0 0 rgba(248, 113, 113, 0.78);
+}
+
+body.theme-dark .fieldGroup.is-invalid input:focus,
+body.theme-dark .fieldGroup.is-invalid select:focus,
+body.theme-dark .fieldGroup.is-invalid textarea:focus,
+body.theme-dark input.inputInvalid:focus,
+body.theme-dark select.inputInvalid:focus,
+body.theme-dark textarea.inputInvalid:focus,
+body.theme-dark input:invalid:focus,
+body.theme-dark select:invalid:focus,
+body.theme-dark textarea:invalid:focus {
+  background: linear-gradient(0deg, rgba(127, 29, 29, 0.24), rgba(127, 29, 29, 0.24)), var(--surface-soft) !important;
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18), inset 3px 0 0 rgba(248, 113, 113, 0.88) !important;
+}
+
+body.theme-dark .fieldGroup.is-valid input,
+body.theme-dark .fieldGroup.is-valid select,
+body.theme-dark .fieldGroup.is-valid textarea {
+  background: linear-gradient(0deg, rgba(20, 83, 45, 0.12), rgba(20, 83, 45, 0.12)), var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--success-border) !important;
+}
+
+body.theme-dark .fieldGroup.is-valid input:focus,
+body.theme-dark .fieldGroup.is-valid select:focus,
+body.theme-dark .fieldGroup.is-valid textarea:focus {
+  border-color: var(--success) !important;
+  box-shadow: 0 0 0 3px rgba(134, 239, 172, 0.16) !important;
+}
+
+body.theme-dark .fieldGroup.is-invalid .fieldStatus,
+body.theme-dark .fieldGroup.is-invalid .fieldHelp,
+body.theme-dark .fieldGroup.is-invalid .fieldLabel {
+  color: #fca5a5 !important;
+}
+
+body.theme-dark .fieldGroup.is-valid .fieldStatus {
+  color: var(--success) !important;
+}
+
+body.theme-dark .formNotice.error,
+body.theme-dark .notice.error,
+body.theme-dark .dashboardStatus,
+body.theme-dark .scheduleWarningsList,
+body.theme-dark .timeOffBlockedDate,
+body.theme-dark .calendarDay.blocked {
+  background: linear-gradient(0deg, rgba(127, 29, 29, 0.22), rgba(127, 29, 29, 0.22)), var(--surface-soft) !important;
+  color: #fca5a5 !important;
+  border-color: var(--danger-border) !important;
+}
+
+body.theme-dark .formNotice.success,
+body.theme-dark .notice.success,
+body.theme-dark .dashboardStatus.success,
+body.theme-dark .scheduleWarningsList.success {
+  background: linear-gradient(0deg, rgba(20, 83, 45, 0.18), rgba(20, 83, 45, 0.18)), var(--surface-soft) !important;
+  color: #bbf7d0 !important;
+  border-color: var(--success-border) !important;
+}
+
+body.theme-dark .formNotice.warning,
+body.theme-dark .notice.warning,
+body.theme-dark .calendarDay.holiday,
+body.theme-dark .timeOffHolidayDate {
+  background: linear-gradient(0deg, rgba(120, 53, 15, 0.24), rgba(120, 53, 15, 0.24)), var(--surface-soft) !important;
+  color: #fde68a !important;
+  border-color: rgba(251, 191, 36, 0.48) !important;
+}
+
+body.theme-dark input:-webkit-autofill,
+body.theme-dark input:-webkit-autofill:hover,
+body.theme-dark input:-webkit-autofill:focus,
+body.theme-dark textarea:-webkit-autofill,
+body.theme-dark textarea:-webkit-autofill:hover,
+body.theme-dark textarea:-webkit-autofill:focus,
+body.theme-dark select:-webkit-autofill,
+body.theme-dark select:-webkit-autofill:hover,
+body.theme-dark select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink) !important;
+  caret-color: var(--ink) !important;
+  box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
+  border-color: var(--line) !important;
+}
