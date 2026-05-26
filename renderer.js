@@ -936,6 +936,7 @@ async function login(event) {
     await loadLocations({ resetPage: true });
     await loadOwnerSecuritySettings().catch(() => {});
     renderUltimateAutomationPanels();
+    showMessage("Login successful.", "success");
   } catch (err) {
     accessToken = null;
     currentUser = null;
@@ -2861,15 +2862,139 @@ function renderAuditLog() {
 }
 
 
-function printSchedule() {
+function scheduleSummaryStatsHtml() {
+  const health = lastSchedulePayload.health || {};
+  const warnings = Array.isArray(lastSchedulePayload.warnings) ? lastSchedulePayload.warnings : [];
+  const coverage = Array.isArray(lastSchedulePayload.coverage) ? lastSchedulePayload.coverage : [];
+  const assigned = health.coverageAssigned ?? coverage.reduce((sum, item) => sum + Number(item.assignedCount || 0), 0);
+  const needed = health.coverageNeeded ?? coverage.reduce((sum, item) => sum + Number(item.requiredStaff || 0), 0);
+  const open = health.openShiftCount ?? coverage.reduce((sum, item) => sum + Math.max(0, Number(item.requiredStaff || 0) - Number(item.assignedCount || 0)), 0);
+
+  return `
+    <section class="schedulePreviewStats" aria-label="Schedule summary">
+      <article><strong>${escapeHtml(health.score ?? "—")}${health.score === undefined || health.score === null ? "" : "%"}</strong><span>health score</span></article>
+      <article><strong>${escapeHtml(assigned)}</strong><span>assigned</span></article>
+      <article><strong>${escapeHtml(needed)}</strong><span>needed</span></article>
+      <article><strong>${escapeHtml(open)}</strong><span>open slots</span></article>
+      <article><strong>${escapeHtml(warnings.length)}</strong><span>warnings</span></article>
+    </section>
+  `;
+}
+
+function scheduleCoveragePreviewHtml() {
+  const coverage = Array.isArray(lastSchedulePayload.coverage) ? lastSchedulePayload.coverage : [];
+  if (!coverage.length) return `<div class="scheduleWarningsList success">No coverage rules are available for this forecast yet.</div>`;
+
+  return `
+    <div class="coverageHeatMap schedulePreviewCoverage" aria-label="Coverage summary">
+      ${coverage.map((slot) => `
+        <span class="coverageChip ${slot.status === "under" ? "under" : slot.status === "covered" ? "covered" : "closed"}">
+          ${escapeHtml(String(slot.dayName || "").slice(0, 3))} ${escapeHtml(slot.shiftName || "Shift")}
+          <strong>${escapeHtml(slot.assignedCount)}/${escapeHtml(slot.requiredStaff)}</strong>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function scheduleWarningsPreviewHtml() {
+  const warnings = Array.isArray(lastSchedulePayload.warnings) ? lastSchedulePayload.warnings : [];
+  if (!warnings.length) return `<div class="scheduleWarningsList success">No schedule health warnings found for this forecast.</div>`;
+
+  return `
+    <div class="scheduleWarningsList">
+      <strong>${escapeHtml(warnings.length)} warning${warnings.length === 1 ? "" : "s"}</strong>
+      <ul>${warnings.map((warning) => `<li>${escapeHtml(warning.message || warning)}</li>`).join("")}</ul>
+    </div>
+  `;
+}
+
+function schedulePreviewTableHtml() {
+  const table = $("scheduleTable");
+  if (!table) return `<div class="emptyState compactEmpty">Schedule table is unavailable.</div>`;
+  return table.outerHTML.replace('id="scheduleTable"', 'id="schedulePreviewTable" class="schedulePreviewTable"');
+}
+
+function buildSchedulePreviewHtml() {
+  const weekEnd = addDays(currentWeekStart, 6);
+  const title = `${selectedLocationName()} · Week of ${formatDateForLabel(currentWeekStart)}`;
+
+  return `
+    <article class="schedulePreviewSheet">
+      <header class="schedulePreviewTitleBlock">
+        <div>
+          <p class="eyebrow">Shift Ahoy Schedule</p>
+          <h1>${escapeHtml(selectedLocationName())}</h1>
+          <p>${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))}</p>
+        </div>
+        <div class="schedulePreviewMeta">
+          <span>Generated ${escapeHtml(new Date().toLocaleString())}</span>
+          <span>${escapeHtml(lastSchedulePayload.cells?.length || 0)} assigned shift${Number(lastSchedulePayload.cells?.length || 0) === 1 ? "" : "s"}</span>
+        </div>
+      </header>
+
+      ${scheduleSummaryStatsHtml()}
+
+      <section class="schedulePreviewSection">
+        <h2>Coverage</h2>
+        ${scheduleCoveragePreviewHtml()}
+      </section>
+
+      <section class="schedulePreviewSection">
+        <h2>Warnings</h2>
+        ${scheduleWarningsPreviewHtml()}
+      </section>
+
+      <section class="schedulePreviewSection schedulePreviewTableSection">
+        <h2>Weekly Schedule</h2>
+        <div class="tableFrame schedulePreviewTableFrame">
+          ${schedulePreviewTableHtml()}
+        </div>
+      </section>
+    </article>
+  `;
+}
+
+function openSchedulePreview() {
+  if (!lastSchedulePayload.cells?.length) {
+    showMessage("Load a schedule before previewing or printing.");
+    return;
+  }
+
+  const dialog = $("schedulePreviewDialog");
+  const content = $("schedulePreviewContent");
+  if (!dialog || !content) {
+    printScheduleNow();
+    return;
+  }
+
+  lastPrintedScheduleTitle = `${selectedLocationName()} · Week of ${formatDateForLabel(currentWeekStart)}`;
+  content.innerHTML = buildSchedulePreviewHtml();
+  dialog.showModal();
+}
+
+function closeSchedulePreview() {
+  $("schedulePreviewDialog")?.close();
+}
+
+function printScheduleNow() {
   if (!lastSchedulePayload.cells?.length) {
     showMessage("Load a schedule before printing.");
     return;
   }
+
   lastPrintedScheduleTitle = `${selectedLocationName()} · Week of ${formatDateForLabel(currentWeekStart)}`;
   document.title = `Shift Ahoy Schedule - ${lastPrintedScheduleTitle}`;
+  document.body.classList.add("printingSchedulePreview");
   window.print();
-  window.setTimeout(() => { document.title = "Shift Ahoy"; }, 250);
+  window.setTimeout(() => {
+    document.body.classList.remove("printingSchedulePreview");
+    document.title = "Shift Ahoy";
+  }, 250);
+}
+
+function printSchedule() {
+  openSchedulePreview();
 }
 
 function setupEvents() {
@@ -2948,6 +3073,11 @@ function setupEvents() {
   });
 
   $("printScheduleButton").addEventListener("click", printSchedule);
+  $("printPreviewNowButton")?.addEventListener("click", printScheduleNow);
+  $("closeSchedulePreviewButton")?.addEventListener("click", closeSchedulePreview);
+  $("schedulePreviewDialog")?.addEventListener("click", (event) => {
+    if (event.target === $("schedulePreviewDialog")) closeSchedulePreview();
+  });
 
   $("showShiftFormButton").addEventListener("click", showShiftForm);
   $("shiftForm").addEventListener("submit", saveShift);
@@ -3632,7 +3762,11 @@ async function loadEmployeeSchedule() {
     const timeOff = data.timeOff || [];
     const openShifts = data.openShifts || [];
     list.innerHTML = `
-      <article class="automationSummary"><strong>${cells.length}</strong><span>published shifts this week</span></article>
+      <section class="automationMetrics employeeScheduleMetrics">
+        <article><strong>${escapeHtml(cells.length)}</strong><span>published shifts this week</span></article>
+        <article><strong>${escapeHtml(timeOff.length)}</strong><span>time off</span></article>
+        <article><strong>${escapeHtml(openShifts.length)}</strong><span>open shifts</span></article>
+      </section>
       ${cells.length ? cells.map((cell) => `
         <article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
       `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
