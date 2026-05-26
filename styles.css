@@ -2195,3 +2195,94 @@ tbody tr:hover td {
     justify-content: flex-start;
   }
 }
+
+/* Ultimate automation panels */
+.automationCard,
+.automationSummary,
+.automationMetrics article {
+  border: 1px solid rgba(0, 93, 170, 0.16);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(0, 93, 170, 0.08);
+}
+
+.automationCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.automationCard h3 {
+  margin: 4px 0 4px;
+  color: var(--brand);
+  font-size: 1.15rem;
+}
+
+.wrapToolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.automationForm {
+  margin-top: 14px;
+}
+
+.automationSummary {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  color: var(--brand);
+}
+
+.automationSummary strong {
+  font-size: 1.85rem;
+  line-height: 1;
+}
+
+.automationSummary span,
+.automationMetrics span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.automationDivider {
+  margin: 16px 0 8px;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.automationMetrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.automationMetrics article {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+
+.automationMetrics strong {
+  color: var(--brand);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .automationCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wrapToolbar {
+    justify-content: flex-start;
+  }
+}
