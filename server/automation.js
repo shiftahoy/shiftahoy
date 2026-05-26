@@ -33,6 +33,25 @@ function hoursBetween(startTime, endTime) {
   return Math.max(0, end - start) / 60;
 }
 
+function dayListLabel(openDays = []) {
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const days = Array.isArray(openDays) ? openDays.map(Number).filter((day) => day >= 1 && day <= 7) : [];
+  return days.length ? days.map((day) => labels[day - 1]).join(", ") : "No open days";
+}
+
+function formatRuleAuditSummary(rules) {
+  const start = String(rules.operating_start || rules.operatingStart || "08:00").slice(0, 5);
+  const end = String(rules.operating_end || rules.operatingEnd || "17:00").slice(0, 5);
+  const defaultStaff = Number(rules.default_required_staff ?? rules.defaultRequiredStaff ?? 1);
+  const minStaff = Number(rules.min_employees_per_day ?? rules.minEmployeesPerDay ?? 0);
+  const maxStaff = rules.max_employees_per_day ?? rules.maxEmployeesPerDay;
+  const laborBudgetCents = Number(rules.labor_budget_cents ?? rules.laborBudgetCents ?? 0);
+  const budgetText = laborBudgetCents > 0 ? `$${(laborBudgetCents / 100).toFixed(2)} weekly budget` : "No weekly labor budget";
+  const maxText = maxStaff === null || maxStaff === undefined ? "no max cap" : `${maxStaff} max/day`;
+
+  return `Open ${dayListLabel(rules.open_days || rules.openDays)} · ${start}–${end} · ${defaultStaff} default staff · ${minStaff} min/day · ${maxText} · ${budgetText}`;
+}
+
 async function assignedLocationIds(user) {
   const result = await pool.query(
     `SELECT DISTINCT location_id
@@ -181,7 +200,9 @@ router.put("/rules", requireAuth, requireScheduleManager, async (req, res) => {
       action: "Updated location schedule rules",
       entityType: "location_schedule_rules",
       entityId: result.rows[0].id,
-      details: result.rows[0]
+      details: {
+        summary: formatRuleAuditSummary(result.rows[0])
+      }
     });
 
     res.json({ rules: result.rows[0], message: "Location schedule rules saved." });
@@ -555,7 +576,9 @@ router.post("/shift-swaps", requireAuth, async (req, res) => {
       action: "Employee requested shift cover/swap",
       entityType: "shift_swap_request",
       entityId: result.rows[0].id,
-      details: result.rows[0]
+      details: {
+        summary: formatRuleAuditSummary(result.rows[0])
+      }
     });
 
     res.json({ request: result.rows[0], message: "Shift cover/swap request submitted." });
@@ -653,7 +676,9 @@ router.post("/shift-swaps/:id/decision", requireAuth, requireScheduleManager, as
       action: approved ? "Approved shift cover/swap request" : "Denied shift cover/swap request",
       entityType: "shift_swap_request",
       entityId: req.params.id,
-      details: result.rows[0]
+      details: {
+        summary: formatRuleAuditSummary(result.rows[0])
+      }
     });
 
     await client.query("COMMIT");
