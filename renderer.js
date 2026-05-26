@@ -2880,7 +2880,7 @@ function ensureUltimateAutomationLayout() {
   }
 
   const locationRulesHtml = `
-    <section id="locationRulesPanel" class="automationCard managerOnly hidden locationRulesInline">
+    <section id="locationRulesPanel" class="portalSubcard managerOnly hidden locationRulesInline">
       <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction locationRulesHeader">
         <div class="dashboardTitleGroup">
           <span class="iconBadge">01B</span>
@@ -2908,8 +2908,23 @@ function ensureUltimateAutomationLayout() {
     </section>
   `;
 
-  if (!$("locationRulesPanel")) {
-    locationsPanel.insertAdjacentHTML("beforeend", locationRulesHtml);
+  const portalsPanel = $("portalsPanel");
+  const employeePortalPanel = $("employeePortalPanel");
+
+  if (!$(("locationRulesPanel"))) {
+    if (portalsPanel && employeePortalPanel) {
+      employeePortalPanel.insertAdjacentHTML("beforebegin", locationRulesHtml);
+    } else if (portalsPanel) {
+      portalsPanel.insertAdjacentHTML("beforeend", locationRulesHtml);
+    } else {
+      locationsPanel.insertAdjacentHTML("afterend", locationRulesHtml);
+    }
+  } else if (portalsPanel) {
+    const locationRulesPanel = $("locationRulesPanel");
+    const currentEmployeePortalPanel = $("employeePortalPanel");
+    if (locationRulesPanel && locationRulesPanel.parentElement !== portalsPanel) {
+      portalsPanel.insertBefore(locationRulesPanel, currentEmployeePortalPanel || null);
+    }
   }
 
   if ($("publishScheduleBar")) {
