@@ -216,6 +216,7 @@ function renderLanguageSelector(targetId) {
   const selected = currentLanguageOption();
   target.innerHTML = `
     <label class="languageSelectWrap" for="${targetId}Select">
+      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
       <select id="${targetId}Select" class="languageSelect" aria-label="Language">
         ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
       </select>
@@ -428,32 +429,17 @@ function sectionDocumentBottom(section) {
   return section.getBoundingClientRect().bottom + window.scrollY;
 }
 
-const NAV_SECTION_SCROLL_TARGETS = {
-  locationsPanel: "page-top",
-  portalsPanel: "panel-top",
-  schedulePanel: "panel-top",
-  shiftsPanel: "panel-top",
-  employeesPanel: "panel-top",
-  auditPanel: "panel-top"
-};
-
-function scrollToViewportTop(targetY, behavior = "smooth") {
-  const safeTargetY = Math.max(0, Math.round(Number(targetY) || 0));
-  window.scrollTo({ top: safeTargetY, behavior });
-}
-
-function scrollToSectionForNav(sectionId, behavior = "smooth") {
-  if (!sectionId) return;
-
-  if (NAV_SECTION_SCROLL_TARGETS[sectionId] === "page-top") {
-    scrollToViewportTop(0, behavior);
-    return;
-  }
-
+function scrollToSectionForNav(sectionId) {
   const section = $(sectionId);
   if (!section) return;
 
-  scrollToViewportTop(sectionDocumentTop(section), behavior);
+  if (sectionId === "locationsPanel") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+
+  const topOffset = Math.max(0, sectionDocumentTop(section));
+  window.scrollTo({ top: topOffset, behavior: "smooth" });
 }
 
 function updateActiveNavigationFromScroll() {
@@ -807,106 +793,6 @@ function validateSignupField(inputId, showEmptyErrors = false) {
 
 function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
-}
-
-
-function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
-  const button = $(buttonId);
-  if (!button) return;
-
-  if (busy) {
-    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || "";
-    button.textContent = busyText;
-    button.disabled = true;
-    return;
-  }
-
-  button.textContent = button.dataset.originalText || button.textContent || "Submit";
-  button.disabled = false;
-}
-
-async function signup(event) {
-  event?.preventDefault?.();
-  setNotice("signupFormMessage", "", "");
-  setNotice("loginFormMessage", "", "");
-
-  if (!validateSignupForm(true)) {
-    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating the account.");
-    return;
-  }
-
-  const payload = {
-    firstName: $("signupFirstName")?.value?.trim() || "",
-    lastName: $("signupLastName")?.value?.trim() || "",
-    businessName: $("signupBusinessName")?.value?.trim() || "",
-    email: $("signupEmail")?.value?.trim() || "",
-    username: cleanUsernameInput($("signupUsername")?.value || ""),
-    password: normalizePasswordInput($("signupPassword")?.value || "")
-  };
-
-  setAuthButtonBusy("signupButton", true, "Creating...");
-
-  try {
-    const data = await api("/auth/signup", {
-      method: "POST",
-      skipRefresh: true,
-      body: JSON.stringify(payload)
-    });
-
-    setNotice("signupFormMessage", "success", data.message || "Owner account created.");
-
-    if ($("loginValue") && data.fullLogin) $("loginValue").value = data.fullLogin;
-    if ($("loginPassword")) $("loginPassword").value = "";
-    setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
-  } catch (err) {
-    setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
-  } finally {
-    setAuthButtonBusy("signupButton", false);
-  }
-}
-
-async function login(event) {
-  event?.preventDefault?.();
-  setNotice("loginFormMessage", "", "");
-  showMessage("");
-
-  const loginValue = $("loginValue")?.value?.trim() || "";
-  const password = normalizePasswordInput($("loginPassword")?.value || "");
-
-  if (!loginValue || !password) {
-    setNotice("loginFormMessage", "error", "Enter your login and password.");
-    return;
-  }
-
-  setAuthButtonBusy("loginButton", true, "Logging in...");
-
-  try {
-    const data = await api("/auth/login", {
-      method: "POST",
-      skipRefresh: true,
-      body: JSON.stringify({ login: loginValue, password })
-    });
-
-    accessToken = data.accessToken;
-    currentUser = data.user;
-
-    if (!accessToken || !currentUser) {
-      throw new Error("Login succeeded, but the server did not return a session.");
-    }
-
-    applyRoleUI();
-    await loadPlans(false).catch(() => {});
-    await loadLocations({ resetPage: true });
-    await loadOwnerSecuritySettings().catch(() => {});
-    renderUltimateAutomationPanels();
-    showMessage("Login successful.", "success");
-  } catch (err) {
-    accessToken = null;
-    currentUser = null;
-    setNotice("loginFormMessage", "error", err.message || "Login failed.");
-  } finally {
-    setAuthButtonBusy("loginButton", false);
-  }
 }
 
 async function refreshSession() {
@@ -2738,17 +2624,88 @@ async function loadAuditLog() {
   }
 }
 
-function formatAuditDetails(details, fallback = "Action recorded") {
-  if (!details) return fallback;
+function formatTimeForAudit(value) {
+  const text = String(value || "").slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(text)) return text || "Not set";
+  const [hourText, minuteText] = text.split(":");
+  let hour = Number(hourText);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${minuteText} ${suffix}`;
+}
 
-  if (typeof details === "string") return details;
+function dayListForAudit(openDays = []) {
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const days = Array.isArray(openDays) ? openDays.map(Number).filter((day) => day >= 1 && day <= 7) : [];
+  return days.length ? days.map((day) => labels[day - 1]).join(", ") : "No open days";
+}
 
-  if (details.summary) return details.summary;
-  if (details.message) return details.message;
-  if (details.reason) return details.reason;
+function formatLocationRulesAudit(details) {
+  const openDays = details.open_days || details.openDays || [];
+  const start = details.operating_start || details.operatingStart || "08:00";
+  const end = details.operating_end || details.operatingEnd || "17:00";
+  const defaultStaff = Number(details.default_required_staff ?? details.defaultRequiredStaff ?? 1);
+  const minStaff = Number(details.min_employees_per_day ?? details.minEmployeesPerDay ?? 0);
+  const maxStaff = details.max_employees_per_day ?? details.maxEmployeesPerDay;
+  const laborBudgetCents = Number(details.labor_budget_cents ?? details.laborBudgetCents ?? 0);
+  const timeZone = details.time_zone || details.timeZone;
+  const budgetText = laborBudgetCents > 0 ? `$${(laborBudgetCents / 100).toFixed(2)} weekly labor budget` : "No weekly labor budget";
+  const maxText = maxStaff === null || maxStaff === undefined || maxStaff === "" ? "No max" : `${maxStaff} max/day`;
+  const zoneText = timeZone ? ` · ${timeZone}` : "";
 
-  return Object.entries(details)
-    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+  return `Open ${dayListForAudit(openDays)} · ${formatTimeForAudit(start)}–${formatTimeForAudit(end)} · ${defaultStaff} default staff · ${minStaff} min/day · ${maxText} · ${budgetText}${zoneText}`;
+}
+
+function parseAuditDetails(details) {
+  if (!details) return null;
+  if (typeof details === "object") return details;
+  if (typeof details !== "string") return null;
+
+  const trimmed = details.trim();
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
+
+function formatAuditDetails(details, fallback = "Action recorded", entry = {}) {
+  const parsed = parseAuditDetails(details);
+  if (!parsed) return fallback;
+
+  if (typeof parsed === "string") {
+    return parsed.startsWith("{") || parsed.startsWith("[") ? fallback : parsed;
+  }
+
+  if (parsed.summary) return parsed.summary;
+  if (parsed.message) return parsed.message;
+  if (parsed.reason) return parsed.reason;
+
+  const actionText = String(entry.action || fallback || "").toLowerCase();
+  const entityText = String(entry.entity_type || "").toLowerCase();
+
+  if (
+    actionText.includes("location schedule rules") ||
+    entityText.includes("location_schedule_rules") ||
+    Object.prototype.hasOwnProperty.call(parsed, "open_days") ||
+    Object.prototype.hasOwnProperty.call(parsed, "operating_start")
+  ) {
+    return formatLocationRulesAudit(parsed);
+  }
+
+  const hiddenKeys = new Set(["id", "business_id", "location_id", "entity_id", "actor_user_id", "created_at", "updated_at"]);
+  const cleanEntries = Object.entries(parsed).filter(([key, value]) => (
+    !hiddenKeys.has(key) &&
+    value !== null &&
+    value !== undefined &&
+    value !== "" &&
+    typeof value !== "object"
+  ));
+
+  return cleanEntries
+    .map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`)
     .join(" · ") || fallback;
 }
 
@@ -2767,8 +2724,8 @@ function renderAuditLog() {
       <article class="listItem auditItem">
         <div>
           <strong>${escapeHtml(entry.action)}</strong>
-          <span>${escapeHtml(formatAuditDetails(entry.details, entry.entity_type || "Action recorded"))}</span>
-          <span>${escapeHtml(actor)} · ${escapeHtml(date)}</span>
+          <span class="auditDetails">${escapeHtml(formatAuditDetails(entry.details, entry.entity_type || "Action recorded", entry))}</span>
+          <span class="auditMeta">${escapeHtml(actor)} · ${escapeHtml(date)}</span>
         </div>
       </article>
     `;
