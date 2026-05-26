@@ -475,13 +475,20 @@ function scrollToSectionForNav(sectionId) {
   const section = $(sectionId);
   if (!section) return;
 
-  if (sectionId === "locationsPanel") {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    return;
-  }
+  const scrollToExactPanelStart = () => {
+    const topOffset = sectionId === "locationsPanel"
+      ? 0
+      : Math.max(0, Math.round(sectionDocumentTop(section)));
 
-  const topOffset = Math.max(0, sectionDocumentTop(section));
-  window.scrollTo({ top: topOffset, behavior: "smooth" });
+    window.scrollTo({ top: topOffset, behavior: "smooth" });
+  };
+
+  window.history.replaceState(null, "", `#${sectionId}`);
+  scrollToExactPanelStart();
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(scrollToExactPanelStart);
+  });
 }
 
 function updateActiveNavigationFromScroll() {
@@ -495,13 +502,13 @@ function updateActiveNavigationFromScroll() {
     return;
   }
 
-  const viewportBottomY = window.scrollY + window.innerHeight;
+  const viewportTopY = window.scrollY;
   let activeSection = sections[0];
 
   for (const section of sections) {
     const activationY = sectionDocumentTop(section);
 
-    if (viewportBottomY >= activationY + 1) {
+    if (viewportTopY >= activationY - 1) {
       activeSection = section;
     }
   }
