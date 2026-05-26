@@ -216,7 +216,6 @@ function renderLanguageSelector(targetId) {
   const selected = currentLanguageOption();
   target.innerHTML = `
     <label class="languageSelectWrap" for="${targetId}Select">
-      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
       <select id="${targetId}Select" class="languageSelect" aria-label="Language">
         ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
       </select>
@@ -232,6 +231,49 @@ function setLanguage(code) {
   document.documentElement.lang = normalized;
   renderLanguageSelector("authLanguageDock");
   renderLanguageSelector("settingsLanguageSelector");
+}
+
+function userDisplayName() {
+  const first = currentUser?.firstName || currentUser?.first_name || "";
+  const last = currentUser?.lastName || currentUser?.last_name || "";
+  return `${first} ${last}`.trim() || currentUser?.username || currentUser?.email || "Shift Ahoy User";
+}
+
+function userInitials() {
+  const name = userDisplayName();
+  const parts = name.split(/\s+/).filter(Boolean);
+  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2);
+  return initials.toUpperCase();
+}
+
+function profileAvatarHtml(extraClass = "") {
+  const initials = escapeHtml(userInitials());
+  return `<span class="profileMiniAvatar ${extraClass}" aria-label="${escapeHtml(userDisplayName())}">${initials}</span>`;
+}
+
+function renderProfileSettings() {
+  const name = userDisplayName();
+  const username = currentUser?.fullLogin || currentUser?.username || "Username unavailable";
+  const email = currentUser?.email || "Email unavailable";
+
+  if ($("settingsProfileName")) $("settingsProfileName").textContent = name;
+  if ($("settingsProfileUsername")) $("settingsProfileUsername").textContent = username;
+  if ($("settingsProfileEmail")) $("settingsProfileEmail").textContent = email;
+  if ($("settingsProfileInitials")) {
+    $("settingsProfileInitials").textContent = userInitials();
+    $("settingsProfileInitials").classList.remove("hidden");
+  }
+}
+
+function updateProfileAvatars() {
+  document.querySelectorAll("[data-profile-avatar]").forEach((slot) => {
+    slot.innerHTML = profileAvatarHtml("embeddedAvatar");
+  });
+}
+
+function applyAccountVisibility() {
+  const employeeOnly = currentUser?.role === "employee";
+  document.querySelectorAll(".nonEmployeeOnly").forEach((el) => el.classList.toggle("hidden", employeeOnly));
 }
 
 function applyAppearanceMode(mode = localStorage.getItem("shiftAhoyAppearance") || "system") {
@@ -795,6 +837,108 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
+function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
+  const button = $(buttonId);
+  if (!button) return;
+
+  if (busy) {
+    button.dataset.originalText = button.textContent || "";
+    button.textContent = busyText;
+    button.disabled = true;
+    return;
+  }
+
+  button.textContent = button.dataset.originalText || button.textContent || "Submit";
+  button.disabled = false;
+}
+
+async function signup(event) {
+  event?.preventDefault?.();
+  setNotice("signupFormMessage", "", "");
+  setNotice("loginFormMessage", "", "");
+
+  if (!validateSignupForm(true)) {
+    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating the account.");
+    return;
+  }
+
+  const payload = {
+    firstName: $("signupFirstName")?.value?.trim() || "",
+    lastName: $("signupLastName")?.value?.trim() || "",
+    businessName: $("signupBusinessName")?.value?.trim() || "",
+    email: $("signupEmail")?.value?.trim() || "",
+    username: cleanUsernameInput($("signupUsername")?.value || ""),
+    password: normalizePasswordInput($("signupPassword")?.value || "")
+  };
+
+  setAuthButtonBusy("signupButton", true, "Creating...");
+
+  try {
+    const data = await api("/auth/signup", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify(payload)
+    });
+
+    setNotice("signupFormMessage", "success", data.message || "Owner account created.");
+
+    if ($("loginValue") && data.fullLogin) $("loginValue").value = data.fullLogin;
+    if ($("loginPassword")) $("loginPassword").value = "";
+    setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
+  } catch (err) {
+    setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
+  } finally {
+    setAuthButtonBusy("signupButton", false);
+  }
+}
+
+async function login(event) {
+  event?.preventDefault?.();
+  setNotice("loginFormMessage", "", "");
+  showMessage("");
+
+  const loginValue = $("loginValue")?.value?.trim() || "";
+  const password = normalizePasswordInput($("loginPassword")?.value || "");
+
+  if (!loginValue || !password) {
+    setNotice("loginFormMessage", "error", "Enter your login and password.");
+    return;
+  }
+
+  setAuthButtonBusy("loginButton", true, "Logging in...");
+
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify({ login: loginValue, password })
+    });
+
+    accessToken = data.accessToken;
+    currentUser = data.user;
+
+    renderProfileSettings();
+    updateProfileAvatars();
+
+    if (!accessToken || !currentUser) {
+      throw new Error("Login succeeded, but the server did not return a session.");
+    }
+
+    applyRoleUI();
+    await loadPlans(false).catch(() => {});
+    await loadLocations({ resetPage: true });
+    await loadOwnerSecuritySettings().catch(() => {});
+    renderUltimateAutomationPanels();
+    showMessage("Login successful.", "success");
+  } catch (err) {
+    accessToken = null;
+    currentUser = null;
+    setNotice("loginFormMessage", "error", err.message || "Login failed.");
+  } finally {
+    setAuthButtonBusy("loginButton", false);
+  }
+}
+
 async function refreshSession() {
   const res = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST",
@@ -810,6 +954,8 @@ async function refreshSession() {
 
   accessToken = data.accessToken;
   currentUser = data.user || currentUser;
+  renderProfileSettings();
+  updateProfileAvatars();
   return data;
 }
 
@@ -857,9 +1003,10 @@ function applyRoleUI() {
   const employeeOnly = currentUser?.role === "employee";
 
   document.body.classList.toggle("employeePortalOnly", employeeOnly);
+  applyAccountVisibility();
   $("upgradeButton").classList.toggle("hidden", !owner || employeeOnly);
   $("currentPlanText").classList.toggle("hidden", !owner || employeeOnly);
-  $("settingsButton").classList.toggle("hidden", !owner);
+  $("settingsButton").classList.toggle("hidden", !currentUser);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     if (el.classList.contains("editorForm")) {
@@ -880,6 +1027,10 @@ function applyRoleUI() {
   document.querySelectorAll(".nonManagerOnly").forEach((el) => {
     el.classList.toggle("hidden", canManage);
   });
+
+  applyAccountVisibility();
+  renderProfileSettings();
+  updateProfileAvatars();
 
   document.querySelectorAll(".managerOnly").forEach((el) => {
     el.classList.toggle("hidden", !canManage || employeeOnly);
@@ -2624,89 +2775,60 @@ async function loadAuditLog() {
   }
 }
 
-function formatTimeForAudit(value) {
-  const text = String(value || "").slice(0, 5);
-  if (!/^\d{2}:\d{2}$/.test(text)) return text || "Not set";
-  const [hourText, minuteText] = text.split(":");
-  let hour = Number(hourText);
-  const suffix = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12 || 12;
-  return `${hour}:${minuteText} ${suffix}`;
-}
-
-function dayListForAudit(openDays = []) {
+function auditDayListLabel(openDays = []) {
   const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const days = Array.isArray(openDays) ? openDays.map(Number).filter((day) => day >= 1 && day <= 7) : [];
   return days.length ? days.map((day) => labels[day - 1]).join(", ") : "No open days";
 }
 
-function formatLocationRulesAudit(details) {
-  const openDays = details.open_days || details.openDays || [];
-  const start = details.operating_start || details.operatingStart || "08:00";
-  const end = details.operating_end || details.operatingEnd || "17:00";
-  const defaultStaff = Number(details.default_required_staff ?? details.defaultRequiredStaff ?? 1);
-  const minStaff = Number(details.min_employees_per_day ?? details.minEmployeesPerDay ?? 0);
-  const maxStaff = details.max_employees_per_day ?? details.maxEmployeesPerDay;
-  const laborBudgetCents = Number(details.labor_budget_cents ?? details.laborBudgetCents ?? 0);
-  const timeZone = details.time_zone || details.timeZone;
-  const budgetText = laborBudgetCents > 0 ? `$${(laborBudgetCents / 100).toFixed(2)} weekly labor budget` : "No weekly labor budget";
-  const maxText = maxStaff === null || maxStaff === undefined || maxStaff === "" ? "No max" : `${maxStaff} max/day`;
-  const zoneText = timeZone ? ` · ${timeZone}` : "";
-
-  return `Open ${dayListForAudit(openDays)} · ${formatTimeForAudit(start)}–${formatTimeForAudit(end)} · ${defaultStaff} default staff · ${minStaff} min/day · ${maxText} · ${budgetText}${zoneText}`;
+function formatAuditTime(value) {
+  const text = String(value || "").slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(text)) return "";
+  const [hoursText, minutes] = text.split(":");
+  const hours = Number(hoursText);
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 || 12;
+  return `${displayHour}:${minutes} ${suffix}`;
 }
 
-function parseAuditDetails(details) {
-  if (!details) return null;
-  if (typeof details === "object") return details;
-  if (typeof details !== "string") return null;
+function formatAuditDetails(details, fallback = "Action recorded") {
+  if (!details) return fallback;
 
-  const trimmed = details.trim();
-  if (!trimmed) return null;
-
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return trimmed;
-  }
-}
-
-function formatAuditDetails(details, fallback = "Action recorded", entry = {}) {
-  const parsed = parseAuditDetails(details);
-  if (!parsed) return fallback;
-
+  let parsed = details;
   if (typeof parsed === "string") {
-    return parsed.startsWith("{") || parsed.startsWith("[") ? fallback : parsed;
+    const trimmed = parsed.trim();
+    if (!trimmed) return fallback;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
+    }
   }
 
-  if (parsed.summary) return parsed.summary;
-  if (parsed.message) return parsed.message;
-  if (parsed.reason) return parsed.reason;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) return fallback;
 
-  const actionText = String(entry.action || fallback || "").toLowerCase();
-  const entityText = String(entry.entity_type || "").toLowerCase();
+  if (parsed.summary) return String(parsed.summary);
+  if (parsed.message) return String(parsed.message);
+  if (parsed.reason) return String(parsed.reason);
 
-  if (
-    actionText.includes("location schedule rules") ||
-    entityText.includes("location_schedule_rules") ||
-    Object.prototype.hasOwnProperty.call(parsed, "open_days") ||
-    Object.prototype.hasOwnProperty.call(parsed, "operating_start")
-  ) {
-    return formatLocationRulesAudit(parsed);
+  const hasScheduleRuleFields = ["open_days", "operating_start", "operating_end", "default_required_staff", "labor_budget_cents", "time_zone"].some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
+  if (hasScheduleRuleFields) {
+    const openDays = auditDayListLabel(parsed.open_days);
+    const start = formatAuditTime(parsed.operating_start);
+    const end = formatAuditTime(parsed.operating_end);
+    const staff = Number(parsed.default_required_staff || 0);
+    const min = Number(parsed.min_employees_per_day || 0);
+    const max = parsed.max_employees_per_day === null || parsed.max_employees_per_day === undefined ? "No max" : `${parsed.max_employees_per_day} max`;
+    const budget = Number(parsed.labor_budget_cents || 0) > 0 ? `$${(Number(parsed.labor_budget_cents) / 100).toFixed(2)} weekly budget` : "No weekly labor budget";
+    return `Open ${openDays} · ${start}–${end} · ${staff} default staff · ${min} min/day · ${max} · ${budget}`;
   }
 
-  const hiddenKeys = new Set(["id", "business_id", "location_id", "entity_id", "actor_user_id", "created_at", "updated_at"]);
-  const cleanEntries = Object.entries(parsed).filter(([key, value]) => (
-    !hiddenKeys.has(key) &&
-    value !== null &&
-    value !== undefined &&
-    value !== "" &&
-    typeof value !== "object"
-  ));
+  const allowedKeys = ["status", "employeeName", "shiftName", "workDate", "startDate", "endDate", "planCode", "fromPlan", "toPlan"];
+  const parts = allowedKeys
+    .filter((key) => parsed[key] !== undefined && parsed[key] !== null && parsed[key] !== "")
+    .map((key) => `${key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}: ${parsed[key]}`);
 
-  return cleanEntries
-    .map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`)
-    .join(" · ") || fallback;
+  return parts.length ? parts.join(" · ") : fallback;
 }
 
 function renderAuditLog() {
@@ -2724,8 +2846,8 @@ function renderAuditLog() {
       <article class="listItem auditItem">
         <div>
           <strong>${escapeHtml(entry.action)}</strong>
-          <span class="auditDetails">${escapeHtml(formatAuditDetails(entry.details, entry.entity_type || "Action recorded", entry))}</span>
-          <span class="auditMeta">${escapeHtml(actor)} · ${escapeHtml(date)}</span>
+          <span>${escapeHtml(formatAuditDetails(entry.details, entry.entity_type || "Action recorded"))}</span>
+          <span>${escapeHtml(actor)} · ${escapeHtml(date)}</span>
         </div>
       </article>
     `;
@@ -2961,7 +3083,12 @@ function setupEvents() {
   });
 
   $("upgradeButton").addEventListener("click", openPlanDialog);
-  $("settingsButton").addEventListener("click", async () => { await loadOwnerSecuritySettings(); $("settingsDialog").showModal(); });
+  $("settingsButton").addEventListener("click", async () => {
+    renderProfileSettings();
+    applyAccountVisibility();
+    if (isOwner()) await loadOwnerSecuritySettings();
+    $("settingsDialog").showModal();
+  });
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
@@ -2977,6 +3104,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setLanguage(detectDeviceLanguage());
   renderLanguageSelector("authLanguageDock");
   renderLanguageSelector("settingsLanguageSelector");
+  renderProfileSettings();
   applyAppearanceMode();
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => applyAppearanceMode());
   setupSectionNavigationHighlighting();
@@ -3011,6 +3139,7 @@ function syncAutomationRoleVisibility() {
   const employeeOnly = currentUser?.role === "employee";
 
   document.body.classList.toggle("employeePortalOnly", employeeOnly);
+  applyAccountVisibility();
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     if (el.classList.contains("editorForm")) {
@@ -3155,6 +3284,24 @@ function ensureUltimateAutomationLayout() {
 
   const employeePortalContent = $("employeePortalContent");
   const managerPortalContent = $("managerPortalContent");
+
+  if (employeePortalContent && !$("employeePortalIdentity")) {
+    employeePortalContent.insertAdjacentHTML("afterbegin", `
+      <section id="employeePortalIdentity" class="portalSubcard profilePortalCard">
+        <div data-profile-avatar class="profilePortalAvatarSlot">${profileAvatarHtml("embeddedAvatar")}</div>
+        <div>
+          <h3>${escapeHtml(userDisplayName())}</h3>
+          <p class="panelHint">${escapeHtml(currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee")}</p>
+        </div>
+      </section>
+    `);
+  } else if ($("employeePortalIdentity")) {
+    const title = $("employeePortalIdentity")?.querySelector("h3");
+    const meta = $("employeePortalIdentity")?.querySelector(".panelHint");
+    if (title) title.textContent = userDisplayName();
+    if (meta) meta.textContent = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee";
+  }
+  updateProfileAvatars();
 
   if (employeePortalContent && !$("employeeSchedulePanel")) {
     employeePortalContent.insertAdjacentHTML("beforeend", `
@@ -3481,13 +3628,14 @@ async function loadEmployeeSchedule() {
     list.innerHTML = `
       <article class="automationSummary"><strong>${cells.length}</strong><span>published shifts this week</span></article>
       ${cells.length ? cells.map((cell) => `
-        <article class="listItem"><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
+        <article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
       `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
       <div class="automationDivider">Request status</div>
-      ${timeOff.length ? timeOff.map((request) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
+      ${timeOff.length ? timeOff.map((request) => `<article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
       <div class="automationDivider">Open shifts at your location</div>
-      ${openShifts.length ? openShifts.slice(0, 5).map((shift) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open</span></div><button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button></article>`).join("") : `<div class="emptyState compactEmpty">No open shifts available.</div>`}
+      ${openShifts.length ? openShifts.slice(0, 5).map((shift) => `<article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open</span></div><button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button></article>`).join("") : `<div class="emptyState compactEmpty">No open shifts available.</div>`}
     `;
+    updateProfileAvatars();
   } catch (err) {
     list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
   }
