@@ -369,6 +369,10 @@ function cleanUsernameInput(value) {
     .slice(0, 30);
 }
 
+function isValidUsernameInput(value) {
+  return /^[a-z0-9]{3,30}$/.test(String(value || ""));
+}
+
 function normalizePasswordInput(value) {
   return String(value || "").normalize("NFKC");
 }
@@ -842,6 +846,49 @@ function validateSignupField(inputId, showEmptyErrors = false) {
 
 function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
+}
+
+function validateEmployeeCredentialField(inputId, showEmptyErrors = false) {
+  const input = $(inputId);
+  if (!input) return true;
+
+  if (inputId === "employeeUsername") {
+    const cleaned = cleanUsernameInput(input.value);
+    if (input.value !== cleaned) input.value = cleaned;
+
+    if (!isValidUsernameInput(cleaned)) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "3–30 lowercase letters or numbers");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Username works");
+    return true;
+  }
+
+  if (inputId === "employeePassword") {
+    const normalizedPassword = normalizePasswordInput(input.value);
+    const editingExistingEmployee = Boolean($("employeeId")?.value);
+
+    if (!normalizedPassword && editingExistingEmployee) {
+      resetFieldState(inputId, "Optional while editing · 12–128 characters");
+      return true;
+    }
+
+    if (!normalizedPassword && !editingExistingEmployee) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required for new employees");
+      return false;
+    }
+
+    if (!isValidPasswordInput(normalizedPassword)) {
+      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "12–128 characters");
+      return false;
+    }
+
+    setFieldState(inputId, "valid", "Password length works");
+    return true;
+  }
+
+  return true;
 }
 
 function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
@@ -1772,8 +1819,8 @@ function resetEmployeeForm() {
   employeeDaysOff = new Set();
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
-  resetFieldState("employeePassword", "Required for new");
+  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
+  resetFieldState("employeePassword", "12–128 characters");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
   populatePreferredShiftSelect();
@@ -1845,8 +1892,8 @@ function editEmployee(employeeId) {
   $("employeeForm").classList.remove("hidden");
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
-  resetFieldState("employeePassword", "Optional while editing");
+  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
+  resetFieldState("employeePassword", "Optional while editing · 12–128 characters");
   $("employeeId").value = employee.id;
   $("employeeCode").value = employee.employee_code || "";
   $("employeeTitle").value = employee.title || "";
@@ -1875,8 +1922,8 @@ async function saveEmployee(event) {
   event.preventDefault();
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
-  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required for new");
+  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
+  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing · 12–128 characters" : "12–128 characters");
 
   if (!selectedLocationId) {
     setNotice("employeeFormMessage", "error", "Select a location first.");
@@ -1916,11 +1963,11 @@ async function saveEmployee(event) {
     setFieldState("employeeCode", "valid", "Looks good");
   }
 
-  if (!body.username) {
-    setFieldState("employeeUsername", "invalid", "Required");
-    isValid = false;
-  } else if (body.username.length < 3) {
-    setFieldState("employeeUsername", "invalid", "3–30 letters or numbers");
+  const usernameInput = $("employeeUsername");
+  if (usernameInput && usernameInput.value !== body.username) usernameInput.value = body.username;
+
+  if (!isValidUsernameInput(body.username)) {
+    setFieldState("employeeUsername", "invalid", "3–30 lowercase letters or numbers");
     isValid = false;
   } else {
     setFieldState("employeeUsername", "valid", "Username works");
@@ -1935,7 +1982,7 @@ async function saveEmployee(event) {
   } else if (body.password) {
     setFieldState("employeePassword", "valid", "Password length works");
   } else {
-    resetFieldState("employeePassword", "Optional while editing");
+    resetFieldState("employeePassword", "Optional while editing · 12–128 characters");
   }
 
   if (!isValid) return;
@@ -2970,6 +3017,14 @@ function setupEvents() {
     if (input) {
       input.addEventListener("input", () => validateSignupField(id, false));
       input.addEventListener("blur", () => validateSignupField(id, true));
+    }
+  });
+
+  ["employeeUsername", "employeePassword"].forEach((id) => {
+    const input = $(id);
+    if (input) {
+      input.addEventListener("input", () => validateEmployeeCredentialField(id, false));
+      input.addEventListener("blur", () => validateEmployeeCredentialField(id, true));
     }
   });
 
