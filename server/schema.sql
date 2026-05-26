@@ -191,27 +191,66 @@ CREATE TABLE IF NOT EXISTS time_off_settings (
 CREATE TABLE IF NOT EXISTS time_off_blocked_dates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE CASCADE,
   blocked_date DATE NOT NULL,
   reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (business_id, blocked_date)
+  UNIQUE (business_id, location_id, blocked_date)
 );
 
-CREATE INDEX IF NOT EXISTS time_off_blocked_dates_business_date_idx
-ON time_off_blocked_dates (business_id, blocked_date);
+ALTER TABLE time_off_blocked_dates
+ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id) ON DELETE CASCADE;
 
+ALTER TABLE time_off_blocked_dates
+DROP CONSTRAINT IF EXISTS time_off_blocked_dates_business_id_blocked_date_key;
+
+UPDATE time_off_blocked_dates t
+SET location_id = (
+  SELECT id
+  FROM locations
+  WHERE business_id = t.business_id
+  ORDER BY created_at ASC NULLS LAST, name ASC
+  LIMIT 1
+)
+WHERE t.location_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS time_off_blocked_dates_business_location_date_unique
+ON time_off_blocked_dates (business_id, location_id, blocked_date);
+
+CREATE INDEX IF NOT EXISTS time_off_blocked_dates_business_location_date_idx
+ON time_off_blocked_dates (business_id, location_id, blocked_date);
 
 CREATE TABLE IF NOT EXISTS time_off_holiday_dates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE CASCADE,
   holiday_date DATE NOT NULL,
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (business_id, holiday_date)
+  UNIQUE (business_id, location_id, holiday_date)
 );
 
-CREATE INDEX IF NOT EXISTS time_off_holiday_dates_business_date_idx
-ON time_off_holiday_dates (business_id, holiday_date);
+ALTER TABLE time_off_holiday_dates
+ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id) ON DELETE CASCADE;
+
+ALTER TABLE time_off_holiday_dates
+DROP CONSTRAINT IF EXISTS time_off_holiday_dates_business_id_holiday_date_key;
+
+UPDATE time_off_holiday_dates t
+SET location_id = (
+  SELECT id
+  FROM locations
+  WHERE business_id = t.business_id
+  ORDER BY created_at ASC NULLS LAST, name ASC
+  LIMIT 1
+)
+WHERE t.location_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS time_off_holiday_dates_business_location_date_unique
+ON time_off_holiday_dates (business_id, location_id, holiday_date);
+
+CREATE INDEX IF NOT EXISTS time_off_holiday_dates_business_location_date_idx
+ON time_off_holiday_dates (business_id, location_id, holiday_date);
 
 CREATE TABLE IF NOT EXISTS schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
