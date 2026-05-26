@@ -3498,3 +3498,92 @@ body.theme-dark .permissionCheck {
     grid-template-columns: 1fr;
   }
 }
+
+/* Login panel consistency update: match Create Owner Account spacing without oversized recovery links. */
+.compactCard {
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto;
+  align-content: stretch;
+  gap: 6px;
+  padding: 14px 18px 12px !important;
+}
+
+.compactCard .cardTitle {
+  margin-bottom: 0;
+}
+
+.compactCard #loginFormMessage {
+  margin: 0;
+}
+
+.compactCard .loginFieldGroup {
+  position: relative;
+  gap: 3px;
+  padding-bottom: 11px;
+  margin: 0;
+  min-width: 0;
+}
+
+.compactCard .loginFieldGroup .fieldLabel,
+.compactCard .loginFieldGroup input {
+  min-width: 0;
+}
+
+.compactCard .fieldUtilityLink {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  justify-self: auto;
+  align-self: auto;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand);
+  font-size: 0.61rem;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: 0.005em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compactCard .fieldUtilityLink:hover {
+  color: var(--brand-dark);
+  text-decoration: underline;
+  background: transparent;
+}
+
+.compactCard #loginButton {
+  align-self: end;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+body.theme-dark .compactCard .fieldUtilityLink {
+  color: #93c5fd;
+}
+
+body.theme-dark .compactCard .fieldUtilityLink:hover {
+  color: #bfdbfe;
+}
+
+@media (max-height: 760px) {
+  .compactCard {
+    gap: 5px;
+    padding-bottom: 10px !important;
+  }
+
+  .compactCard .loginFieldGroup {
+    padding-bottom: 9px;
+  }
+
+  .compactCard .fieldUtilityLink {
+    font-size: 0.58rem;
+  }
+}
