@@ -2889,397 +2889,138 @@ body.theme-dark .appShell { background: var(--page-bg); }
   #scheduleTable td { border: 1px solid #999 !important; padding: 6px !important; }
 }
 
-/* v3 polish: dark-auth consistency, non-overlapping language dock, and ChatGPT-style profile settings. */
-.visuallyHidden {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  margin: -1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-}
-
-.appShell:has(#authView:not(.hidden)) .workspace {
-  max-width: 1540px;
-}
-
-.authLayout {
-  position: relative;
-  grid-template-columns: 176px minmax(300px, 0.78fr) minmax(360px, 1.22fr);
-  gap: 0;
-}
-
-.languageDock {
-  position: static;
-  z-index: 1;
-  min-width: 0;
-  align-self: end;
-  justify-self: stretch;
-  padding: 0 16px 4px 0;
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.authLayout > .heroPanel {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.authLayout > .authCards {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.languageSelectWrap,
-.settingsLanguageSelector .languageSelectWrap {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.languageSelect,
-.settingsLanguageSelector .languageSelect,
-#appearanceMode {
-  width: 100%;
-  min-height: 42px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
+/* v5 dark-mode polish: upgrade modal and schedule health */
+body.theme-dark .modalCard {
+  background:
+    linear-gradient(180deg, rgba(17, 31, 51, 0.98), rgba(15, 23, 42, 0.98));
   color: var(--ink);
-  font-weight: 900;
-  outline: none;
+  border-color: rgba(184, 216, 244, 0.18);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.45);
 }
 
-.languageFlag {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
+body.theme-dark .modalCard::backdrop {
+  background: rgba(2, 8, 23, 0.72);
+  backdrop-filter: blur(8px);
 }
 
-.authUtilityLinks {
-  align-self: end;
-  justify-content: flex-start;
-  margin: 4px 0 0;
+body.theme-dark .modalCard .sectionHeader,
+body.theme-dark #planDialog .sectionHeader,
+body.theme-dark #settingsDialog .sectionHeader {
+  border-bottom: 1px solid rgba(184, 216, 244, 0.12);
+  padding-bottom: 14px;
+  margin-bottom: 12px;
 }
 
-.compactCard {
-  grid-template-rows: auto auto auto auto auto 1fr;
-}
-
-.compactCard #loginButton {
-  margin-top: 4px;
-  align-self: start;
-}
-
-body.theme-dark #authView .card,
-body.theme-dark .authCards,
-body.theme-dark .formCard,
-body.theme-dark .compactCard {
-  background: var(--surface) !important;
-  color: var(--ink);
-  border-color: var(--line);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-}
-
-body.theme-dark #authView input,
-body.theme-dark #authView select,
-body.theme-dark .languageSelect,
-body.theme-dark .languageFlag,
-body.theme-dark #appearanceMode {
-  background: var(--surface-soft) !important;
-  color: var(--ink) !important;
-  border-color: var(--line) !important;
-}
-
-body.theme-dark #authView .fieldHelp,
-body.theme-dark #authView .panelHint,
-body.theme-dark #authView .cardTitle p {
+body.theme-dark #planDialog .panelHint,
+body.theme-dark #planDialog .planActionMeta,
+body.theme-dark #settingsDialog .panelHint {
   color: var(--muted);
 }
 
-body.theme-dark #authView .fieldLabel,
-body.theme-dark #authView h2,
-body.theme-dark #authView h3 {
+body.theme-dark #planDialog .planGrid {
+  align-items: stretch;
+}
+
+body.theme-dark .planCard {
+  background:
+    linear-gradient(180deg, rgba(17, 31, 51, 0.96), rgba(15, 23, 42, 0.98));
+  color: var(--ink);
+  border-color: rgba(184, 216, 244, 0.15);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+}
+
+body.theme-dark .planCard:hover {
+  border-color: rgba(184, 216, 244, 0.32);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.36);
+}
+
+body.theme-dark .planCard.active {
+  border-color: #5fb3ff;
+  outline: 3px solid rgba(95, 179, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(95, 179, 255, 0.16), 0 22px 52px rgba(0, 0, 0, 0.36);
+}
+
+body.theme-dark .planCard h3,
+body.theme-dark .planPrice,
+body.theme-dark .planCard ul,
+body.theme-dark .planCard li {
   color: var(--ink);
 }
 
-.settingsPanel {
-  max-width: 980px;
-  width: min(980px, calc(100vw - 32px));
-}
-
-.wideSettingsCard {
-  grid-column: 1 / -1;
-}
-
-.profileSettingsCard {
-  gap: 16px;
-}
-
-.profileSettingsRow,
-.profilePortalCard,
-.personalizedListItem {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.profileAvatarFrame {
-  position: relative;
-  width: 86px;
-  height: 86px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: linear-gradient(160deg, var(--brand), var(--brand-dark));
-  display: grid;
-  place-items: center;
-  color: #fff;
-  font-weight: 950;
-  font-size: 1.45rem;
-}
-
-.profileAvatarImage,
-.profileAvatarFrame img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profileSettingsInfo {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.profileNameLine {
-  font-weight: 950;
-  font-size: 1.08rem;
-  color: var(--ink);
-}
-
-.profileMetaLine {
+body.theme-dark .planPrice span {
   color: var(--muted);
-  font-size: 0.92rem;
-  overflow-wrap: anywhere;
 }
 
-.profilePictureActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.profileUploadButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.profileMiniAvatar {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 999px;
-  background: linear-gradient(160deg, var(--brand), var(--brand-dark));
-  color: #fff;
-  font-weight: 950;
-  font-size: 0.78rem;
-  border: 1px solid var(--line);
-}
-
-.profileMiniAvatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profilePortalCard {
-  justify-content: flex-start;
-  background: linear-gradient(180deg, var(--surface), var(--surface-soft));
-}
-
-.profilePortalAvatarSlot .profileMiniAvatar,
-.profileMiniAvatar.embeddedAvatar {
-  width: 54px;
-  height: 54px;
-  font-size: 0.95rem;
-}
-
-.personalizedListItem > [data-profile-avatar] {
-  display: contents;
-}
-
-@media (max-width: 1100px) {
-  .authLayout {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
-    height: auto;
-    max-height: none;
-  }
-  .languageDock,
-  .authLayout > .heroPanel,
-  .authLayout > .authCards {
-    grid-column: 1;
-    grid-row: auto;
-  }
-  .languageDock {
-    order: 3;
-    padding: 14px 0 0;
-  }
-  .authLayout > .heroPanel,
-  #authView .card {
-    border-radius: var(--radius);
-  }
-  .authCards {
-    padding: 14px 0 0;
-    overflow: visible;
-  }
-}
-
-
-/* v4 cleanup: initials-only profiles, restored auth panel proportions, compact language selector, dark plan text, and professional audit entries. */
-.appShell:has(#authView:not(.hidden)) .workspace {
-  max-width: 1616px;
-}
-
-.authLayout {
-  grid-template-columns: minmax(300px, 0.78fr) minmax(360px, 1.22fr);
-  width: min(1440px, calc(100% - 176px));
-  margin-left: 176px;
-  overflow: visible;
-}
-
-.languageDock {
-  position: absolute;
-  left: -164px;
-  bottom: 0;
-  width: 148px;
-  padding: 0;
-  z-index: 2;
-}
-
-.authLayout > .heroPanel {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.authLayout > .authCards {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.languageSelectWrap,
-.settingsLanguageSelector .languageSelectWrap {
-  display: block;
-}
-
-.languageSelect,
-.settingsLanguageSelector .languageSelect {
-  min-height: 42px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
+body.theme-dark #planDialog .button.ghost,
+body.theme-dark #settingsDialog .button.ghost {
   color: var(--ink);
-  font-weight: 900;
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(184, 216, 244, 0.16);
 }
 
-.languageFlag {
-  display: none !important;
+body.theme-dark #planDialog .button.ghost:hover,
+body.theme-dark #settingsDialog .button.ghost:hover {
+  background: rgba(95, 179, 255, 0.14);
+  border-color: rgba(95, 179, 255, 0.28);
 }
 
-body.theme-dark .currentPlanText,
-body.theme-dark .currentPlanText strong {
-  color: #ffffff;
-}
-
-.profileAvatarImage,
-.profilePictureActions,
-.profileUploadButton {
-  display: none !important;
-}
-
-.profileAvatarFrame,
-.profileMiniAvatar {
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-#auditLogList {
-  display: grid;
-  gap: 10px;
-  max-width: 100%;
-}
-
-.auditItem {
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.auditItem > div {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.auditItem strong {
-  overflow-wrap: anywhere;
-}
-
-.auditItem span {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-.auditItem span:nth-of-type(1) {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.auditItem span:nth-of-type(2) {
+body.theme-dark #planDialog .button.secondary,
+body.theme-dark #planDialog .button:disabled {
   color: var(--muted);
-  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(184, 216, 244, 0.12);
 }
 
-@media (max-width: 1100px) {
-  .authLayout {
-    width: 100%;
-    margin-left: 0;
-    grid-template-columns: 1fr;
-  }
+body.theme-dark .scheduleHealthBox {
+  background:
+    linear-gradient(180deg, rgba(17, 31, 51, 0.98), rgba(15, 23, 42, 0.98));
+  color: var(--ink);
+  border-color: rgba(184, 216, 244, 0.18);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+}
 
-  .languageDock {
-    position: static;
-    width: 100%;
-    padding: 0 0 12px;
-  }
+body.theme-dark .scheduleHealthHeader h3,
+body.theme-dark .scheduleHealthHeader h3 span {
+  color: var(--ink);
+}
 
-  .authLayout > .heroPanel,
-  .authLayout > .authCards {
-    grid-column: 1;
-    grid-row: auto;
-  }
+body.theme-dark .healthStats span,
+body.theme-dark .coverageChip {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--ink);
+  border-color: rgba(184, 216, 244, 0.14);
+}
+
+body.theme-dark .coverageChip.covered {
+  color: #86efac;
+  background: rgba(21, 128, 61, 0.16);
+  border-color: rgba(134, 239, 172, 0.22);
+}
+
+body.theme-dark .coverageChip.under {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.22);
+  border-color: rgba(253, 230, 138, 0.24);
+}
+
+body.theme-dark .coverageChip.closed {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(184, 216, 244, 0.1);
+}
+
+body.theme-dark .scheduleWarningsList {
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.2);
+  border-color: rgba(253, 230, 138, 0.22);
+}
+
+body.theme-dark .scheduleWarningsList.success {
+  color: #86efac;
+  background: rgba(21, 128, 61, 0.16);
+  border-color: rgba(134, 239, 172, 0.2);
+}
+
+body.theme-dark .assignmentReason {
+  color: var(--muted);
 }
