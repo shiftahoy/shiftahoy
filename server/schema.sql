@@ -101,23 +101,22 @@ CREATE TABLE IF NOT EXISTS shift_days (
   enabled BOOLEAN NOT NULL DEFAULT false,
   start_time TIME,
   end_time TIME,
+  required_staff INTEGER NOT NULL DEFAULT 1 CHECK (required_staff >= 0 AND required_staff <= 99),
   max_staff INTEGER CHECK (max_staff IS NULL OR (max_staff >= 1 AND max_staff <= 99)),
   UNIQUE (shift_id, day_of_week)
 );
 
+ALTER TABLE shift_days ADD COLUMN IF NOT EXISTS required_staff INTEGER NOT NULL DEFAULT 1 CHECK (required_staff >= 0 AND required_staff <= 99);
 ALTER TABLE shift_days ADD COLUMN IF NOT EXISTS max_staff INTEGER CHECK (max_staff IS NULL OR (max_staff >= 1 AND max_staff <= 99));
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_name = 'shift_days'
-      AND column_name = 'required_staff'
-  ) THEN
-    EXECUTE 'UPDATE shift_days SET max_staff = NULLIF(required_staff, 0) WHERE max_staff IS NULL';
-  END IF;
-END $$;
+
+UPDATE shift_days
+SET required_staff = CASE
+  WHEN enabled = false THEN 0
+  WHEN COALESCE(required_staff, 0) = 0 AND max_staff IS NOT NULL THEN max_staff
+  WHEN COALESCE(required_staff, 0) = 0 THEN 1
+  ELSE required_staff
+END;
 
 CREATE TABLE IF NOT EXISTS employees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -330,13 +329,14 @@ BEGIN
   VALUES (NEW.business_id, NEW.id, 'Standard', 1)
   RETURNING id INTO new_shift_id;
 
-  INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
+  INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, required_staff, max_staff)
   SELECT
     new_shift_id,
     day_number,
     day_number BETWEEN 1 AND 5,
     CASE WHEN day_number BETWEEN 1 AND 5 THEN '08:00'::time ELSE NULL END,
     CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END,
+    CASE WHEN day_number BETWEEN 1 AND 5 THEN 1 ELSE 0 END,
     NULL
   FROM generate_series(1, 7) AS day_number;
 
@@ -370,13 +370,14 @@ BEGIN
     VALUES (location_row.business_id, location_row.id, 'Standard', 1)
     RETURNING id INTO new_shift_id;
 
-    INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, max_staff)
+    INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, required_staff, max_staff)
     SELECT
       new_shift_id,
       day_number,
       day_number BETWEEN 1 AND 5,
       CASE WHEN day_number BETWEEN 1 AND 5 THEN '08:00'::time ELSE NULL END,
       CASE WHEN day_number BETWEEN 1 AND 5 THEN '17:00'::time ELSE NULL END,
+      CASE WHEN day_number BETWEEN 1 AND 5 THEN 1 ELSE 0 END,
       NULL
     FROM generate_series(1, 7) AS day_number;
   END LOOP;
