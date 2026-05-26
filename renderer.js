@@ -216,7 +216,6 @@ function renderLanguageSelector(targetId) {
   const selected = currentLanguageOption();
   target.innerHTML = `
     <label class="languageSelectWrap" for="${targetId}Select">
-      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
       <select id="${targetId}Select" class="languageSelect" aria-label="Language">
         ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
       </select>
