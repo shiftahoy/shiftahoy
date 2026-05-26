@@ -338,16 +338,18 @@
                 <div class="fieldGroup" data-field="employeeUsername">
                   <label class="fieldLabel" for="employeeUsername">
                     Username
-                    <span id="employeeUsernameStatus" class="fieldStatus">Required</span>
+                    <span id="employeeUsernameStatus" class="fieldStatus">3–30</span>
                   </label>
-                  <input id="employeeUsername" autocomplete="username" placeholder="Username" />
+                  <input id="employeeUsername" autocomplete="username" placeholder="Username" minlength="3" maxlength="30" pattern="[a-z0-9]{3,30}" required />
+                  <small class="fieldHelp">Letters and numbers only, matching owner account usernames.</small>
                 </div>
                 <div class="fieldGroup" data-field="employeePassword">
                   <label class="fieldLabel" for="employeePassword">
                     Password <span class="optionalText editPasswordHint">(required for new employees)</span>
-                    <span id="employeePasswordStatus" class="fieldStatus">Required for new</span>
+                    <span id="employeePasswordStatus" class="fieldStatus">12–128</span>
                   </label>
-                  <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
+                  <input id="employeePassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Password" />
+                  <small class="fieldHelp">Spaces and symbols allowed, matching owner account passwords.</small>
                 </div>
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employmentType">Employment Type</label>
