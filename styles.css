@@ -2286,3 +2286,94 @@ tbody tr:hover td {
     justify-content: flex-start;
   }
 }
+
+
+/* Portal organization layer */
+.portalHubCard {
+  display: grid;
+  gap: 18px;
+}
+
+.selectedLocationHint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.portalSection {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.portalSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.portalSectionHeader h3 {
+  margin: 0;
+  color: var(--brand);
+  font-size: 1.08rem;
+  letter-spacing: -0.025em;
+}
+
+.portalSectionHeader p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.portalBadge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--brand);
+  box-shadow: 0 8px 18px rgba(0, 93, 170, 0.18);
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+}
+
+.portalContent {
+  display: grid;
+  gap: 14px;
+}
+
+.portalSubcard,
+.locationRulesInline {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(0, 93, 170, 0.14);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(0, 93, 170, 0.08);
+}
+
+.portalSubcard.card,
+.portalSubcard.panelCard {
+  box-shadow: 0 12px 30px rgba(0, 93, 170, 0.08);
+}
+
+.portalSubcard .cardTitle,
+.locationRulesInline .cardTitle {
+  margin-bottom: 0;
+}
+
+.portalSubcard .iconBadge,
+.locationRulesInline .iconBadge {
+  min-width: 54px;
+  width: auto;
+  padding: 0 10px;
+}
