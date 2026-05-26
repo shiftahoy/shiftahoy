@@ -47,14 +47,14 @@ async function employeeForUser(user) {
 
 async function loadSettings(businessId, locationId = null) {
   await pool.query(
-    `INSERT INTO time_off_settings (business_id, requests_enabled)
-     VALUES ($1, true)
+    `INSERT INTO time_off_settings (business_id, requests_enabled, shift_swaps_enabled)
+     VALUES ($1, true, true)
      ON CONFLICT (business_id) DO NOTHING`,
     [businessId]
   );
 
   const settingsResult = await pool.query(
-    `SELECT requests_enabled
+    `SELECT requests_enabled, shift_swaps_enabled
      FROM time_off_settings
      WHERE business_id = $1`,
     [businessId]
@@ -86,7 +86,8 @@ async function loadSettings(businessId, locationId = null) {
 
   return {
     settings: {
-      requestsEnabled: settingsResult.rows[0]?.requests_enabled !== false
+      requestsEnabled: settingsResult.rows[0]?.requests_enabled !== false,
+      shiftSwapsEnabled: settingsResult.rows[0]?.shift_swaps_enabled !== false
     },
     blockedDates: blockedResult.rows,
     holidayDates: holidayResult.rows
@@ -204,6 +205,7 @@ router.get("/settings", requireAuth, async (req, res) => {
 
 router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
   const requestsEnabled = req.body.requestsEnabled !== false;
+  const shiftSwapsEnabled = req.body.shiftSwapsEnabled !== false;
   const auditLocationId = await safeOwnerLocationId(req.user, req.body.locationId);
   const verified = await verifyActorPassword(req.user.id, req.body.actorPassword);
 
@@ -213,20 +215,26 @@ router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO time_off_settings (business_id, requests_enabled, updated_at)
-       VALUES ($1, $2, now())
+      `INSERT INTO time_off_settings (business_id, requests_enabled, shift_swaps_enabled, updated_at)
+       VALUES ($1, $2, $3, now())
        ON CONFLICT (business_id)
-       DO UPDATE SET requests_enabled = EXCLUDED.requests_enabled, updated_at = now()`,
-      [req.user.businessId, requestsEnabled]
+       DO UPDATE SET
+         requests_enabled = EXCLUDED.requests_enabled,
+         shift_swaps_enabled = EXCLUDED.shift_swaps_enabled,
+         updated_at = now()`,
+      [req.user.businessId, requestsEnabled, shiftSwapsEnabled]
     );
 
     await logAudit({
       businessId: req.user.businessId,
       actorUserId: req.user.id,
       locationId: auditLocationId,
-      action: requestsEnabled ? "Time off requests turned on" : "Time off requests turned off",
-      entityType: "time_off_settings",
-      details: requestsEnabled ? "Employees can submit time off requests." : "Employees cannot submit time off requests."
+      action: "Request settings updated",
+      entityType: "request_settings",
+      details: {
+        timeOffRequests: requestsEnabled ? "on" : "off",
+        shiftCoverSwapRequests: shiftSwapsEnabled ? "on" : "off"
+      }
     });
 
     res.json(await loadSettings(req.user.businessId, auditLocationId));
