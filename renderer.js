@@ -3517,9 +3517,16 @@ function ensureUltimateAutomationLayout() {
     }
 
     const badge = overridePanel.querySelector(".iconBadge");
-    const title = overridePanel.querySelector("h3");
+    const title = overridePanel.querySelector("h2, h3");
     if (badge) badge.textContent = "MP-04";
-    if (title) title.textContent = "Override";
+    if (title) {
+      title.textContent = "Override";
+      if (title.tagName === "H3") {
+        const heading = document.createElement("h2");
+        heading.textContent = title.textContent;
+        title.replaceWith(heading);
+      }
+    }
     managerPortalContent.appendChild(overridePanel);
   }
 
