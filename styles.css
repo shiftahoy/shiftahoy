@@ -3413,3 +3413,80 @@ body.theme-dark .emptyState {
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--line);
 }
+
+/* Login recovery links: keep them compact so the login button aligns with the signup button. */
+.loginFieldGroup {
+  gap: 2px;
+}
+
+.compactCard .fieldUtilityLink {
+  justify-self: end;
+  align-self: end;
+  min-height: 0;
+  margin-top: -1px;
+  padding: 0;
+  font-size: 0.68rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.compactCard #loginButton {
+  margin-top: auto;
+}
+
+/* Employee permissions section */
+.permissionsSection {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.permissionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.permissionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.permissionCheck {
+  min-height: 44px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 93, 170, 0.16);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.permissionCheck input {
+  flex: 0 0 auto;
+}
+
+.permissionCheck span {
+  line-height: 1.1;
+}
+
+body.theme-dark .permissionsSection {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+
+body.theme-dark .permissionCheck {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .permissionsGrid {
+    grid-template-columns: 1fr;
+  }
+}
