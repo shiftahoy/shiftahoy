@@ -3513,7 +3513,7 @@ function ensureUltimateAutomationLayout() {
     const badge = overridePanel.querySelector(".iconBadge");
     const title = overridePanel.querySelector("h3");
     if (badge) badge.textContent = "MP-04";
-    if (title) title.textContent = "Time-Off Override";
+    if (title) title.textContent = "Override";
     managerPortalContent.appendChild(overridePanel);
   }
 
