@@ -301,6 +301,10 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     employmentType,
     weeklyHours,
     dailyHours,
+    payRateCents = 0,
+    overtimeAllowed = true,
+    overtimeThresholdHours = 40,
+    minRestHours = 8,
     orientationStart,
     preferredShiftId,
     availability,
@@ -353,6 +357,11 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
   if (!Number.isFinite(safeDailyHours) || safeDailyHours <= 0) {
     return res.status(400).json({ error: "Daily hours must be greater than 0." });
   }
+
+  const safePayRateCents = Math.max(0, Math.round(Number(payRateCents) || 0));
+  const safeOvertimeAllowed = overtimeAllowed !== false;
+  const safeOvertimeThresholdHours = Math.max(1, Math.min(168, Number(overtimeThresholdHours) || 40));
+  const safeMinRestHours = Math.max(0, Math.min(24, Number(minRestHours) || 8));
 
   try {
     await assertLocationAccess(req.user, locationId);
@@ -413,10 +422,14 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
          employment_type,
          weekly_hours,
          daily_hours,
+         pay_rate_cents,
+         overtime_allowed,
+         overtime_threshold_hours,
+         min_rest_hours,
          orientation_start,
          preferred_shift_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id`,
       [
         req.user.businessId,
@@ -428,6 +441,10 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
         safeEmploymentType,
         safeWeeklyHours,
         safeDailyHours,
+        safePayRateCents,
+        safeOvertimeAllowed,
+        safeOvertimeThresholdHours,
+        safeMinRestHours,
         orientationStart || null,
         preferredShiftId || null
       ]
@@ -493,6 +510,10 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
     employmentType,
     weeklyHours,
     dailyHours,
+    payRateCents = 0,
+    overtimeAllowed = true,
+    overtimeThresholdHours = 40,
+    minRestHours = 8,
     orientationStart,
     preferredShiftId,
     availability,
@@ -539,6 +560,11 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   if (!Number.isFinite(safeDailyHours) || safeDailyHours <= 0) {
     return res.status(400).json({ error: "Daily hours must be greater than 0." });
   }
+
+  const safePayRateCents = Math.max(0, Math.round(Number(payRateCents) || 0));
+  const safeOvertimeAllowed = overtimeAllowed !== false;
+  const safeOvertimeThresholdHours = Math.max(1, Math.min(168, Number(overtimeThresholdHours) || 40));
+  const safeMinRestHours = Math.max(0, Math.min(24, Number(minRestHours) || 8));
 
   const normalizedUsername = normalizeUsername(username);
 
@@ -623,11 +649,15 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
            employment_type = $4,
            weekly_hours = $5,
            daily_hours = $6,
-           orientation_start = $7,
-           preferred_shift_id = $8,
+           pay_rate_cents = $7,
+           overtime_allowed = $8,
+           overtime_threshold_hours = $9,
+           min_rest_hours = $10,
+           orientation_start = $11,
+           preferred_shift_id = $12,
            updated_at = now()
-       WHERE id = $9
-         AND business_id = $10`,
+       WHERE id = $13
+         AND business_id = $14`,
       [
         safePriority,
         safeEmployeeCode,
@@ -635,6 +665,10 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
         safeEmploymentType,
         safeWeeklyHours,
         safeDailyHours,
+        safePayRateCents,
+        safeOvertimeAllowed,
+        safeOvertimeThresholdHours,
+        safeMinRestHours,
         orientationStart || null,
         preferredShiftId || null,
         id,
