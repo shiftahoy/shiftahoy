@@ -1,8 +1,25 @@
 const express = require("express");
 const pool = require("./db");
+const argon2 = require("argon2");
+const { logAudit } = require("./audit");
 const { requireAuth, requireOwner } = require("./middleware");
 
 const router = express.Router();
+
+async function verifyActorPassword(userId, password) {
+  if (!password) return false;
+
+  const result = await pool.query(
+    `SELECT password_hash
+     FROM users
+     WHERE id = $1
+       AND active = true`,
+    [userId]
+  );
+
+  if (result.rows.length === 0) return false;
+  return argon2.verify(result.rows[0].password_hash, String(password || "").normalize("NFKC"));
+}
 
 router.get("/", requireAuth, async (req, res) => {
   try {
@@ -30,15 +47,20 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 router.post("/change", requireAuth, requireOwner, async (req, res) => {
-  const { planCode } = req.body;
+  const { planCode, actorPassword } = req.body;
 
   if (!planCode) {
     return res.status(400).json({ error: "Plan code is required." });
   }
 
   try {
+    const passwordOk = await verifyActorPassword(req.user.id, actorPassword);
+    if (!passwordOk) {
+      return res.status(403).json({ error: "Wrong owner password." });
+    }
+
     const planResult = await pool.query(
-      `SELECT code, employee_limit
+      `SELECT code, name, monthly_price_cents, employee_limit
        FROM plans
        WHERE code = $1`,
       [planCode]
@@ -50,21 +72,13 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
 
     const plan = planResult.rows[0];
 
-    const employeeCountResult = await pool.query(
-      `SELECT count(*)::int AS count
-       FROM employees
-       WHERE business_id = $1
-         AND active = true`,
+    const currentResult = await pool.query(
+      `SELECT plan_code
+       FROM businesses
+       WHERE id = $1`,
       [req.user.businessId]
     );
-
-    const employeeCount = employeeCountResult.rows[0].count;
-
-    if (plan.employee_limit !== null && employeeCount > plan.employee_limit) {
-      return res.status(409).json({
-        error: `You currently have ${employeeCount} employees. This plan only allows ${plan.employee_limit}.`
-      });
-    }
+    const previousPlanCode = currentResult.rows[0]?.plan_code || "free";
 
     await pool.query(
       `UPDATE businesses
@@ -75,7 +89,20 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
       [plan.code, plan.employee_limit, req.user.businessId]
     );
 
-    res.json({ message: "Plan updated immediately.", currentPlan: plan.code });
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      action: "plan_changed",
+      entityType: "plan",
+      entityId: plan.code,
+      details: { summary: `Plan changed from ${previousPlanCode} to ${plan.code}. Employee records were preserved; display and scheduling limits are applied by plan.` }
+    });
+
+    res.json({
+      message: "Plan updated immediately. Employee records were not deleted.",
+      currentPlan: plan.code,
+      employeeLimit: plan.employee_limit
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Plan change failed." });
