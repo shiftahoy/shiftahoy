@@ -216,7 +216,6 @@ function renderLanguageSelector(targetId) {
   const selected = currentLanguageOption();
   target.innerHTML = `
     <label class="languageSelectWrap" for="${targetId}Select">
-      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
       <select id="${targetId}Select" class="languageSelect" aria-label="Language">
         ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
       </select>
@@ -247,38 +246,8 @@ function userInitials() {
   return initials.toUpperCase();
 }
 
-function profilePictureStorageKey() {
-  return currentUser?.id ? `shiftAhoyProfilePicture:${currentUser.id}` : "shiftAhoyProfilePicture:guest";
-}
-
-function getProfilePicture() {
-  try {
-    return localStorage.getItem(profilePictureStorageKey()) || "";
-  } catch {
-    return "";
-  }
-}
-
-function setProfilePicture(dataUrl) {
-  try {
-    if (dataUrl) {
-      localStorage.setItem(profilePictureStorageKey(), dataUrl);
-    } else {
-      localStorage.removeItem(profilePictureStorageKey());
-    }
-  } catch {
-    setNotice("ownerSecurityNotice", "error", "The selected profile picture is too large for local storage.");
-  }
-  renderProfileSettings();
-  updateProfileAvatars();
-}
-
 function profileAvatarHtml(extraClass = "") {
-  const src = getProfilePicture();
   const initials = escapeHtml(userInitials());
-  if (src) {
-    return `<span class="profileMiniAvatar ${extraClass}"><img src="${escapeHtml(src)}" alt="${escapeHtml(userDisplayName())} profile picture" /></span>`;
-  }
   return `<span class="profileMiniAvatar ${extraClass}" aria-label="${escapeHtml(userDisplayName())}">${initials}</span>`;
 }
 
@@ -286,43 +255,20 @@ function renderProfileSettings() {
   const name = userDisplayName();
   const username = currentUser?.fullLogin || currentUser?.username || "Username unavailable";
   const email = currentUser?.email || "Email unavailable";
-  const picture = getProfilePicture();
 
   if ($("settingsProfileName")) $("settingsProfileName").textContent = name;
   if ($("settingsProfileUsername")) $("settingsProfileUsername").textContent = username;
   if ($("settingsProfileEmail")) $("settingsProfileEmail").textContent = email;
   if ($("settingsProfileInitials")) {
     $("settingsProfileInitials").textContent = userInitials();
-    $("settingsProfileInitials").classList.toggle("hidden", !!picture);
+    $("settingsProfileInitials").classList.remove("hidden");
   }
-  if ($("settingsProfileImage")) {
-    $("settingsProfileImage").src = picture || "";
-    $("settingsProfileImage").classList.toggle("hidden", !picture);
-  }
-  if ($("removeProfilePictureButton")) $("removeProfilePictureButton").disabled = !picture;
 }
 
 function updateProfileAvatars() {
   document.querySelectorAll("[data-profile-avatar]").forEach((slot) => {
     slot.innerHTML = profileAvatarHtml("embeddedAvatar");
   });
-}
-
-function handleProfilePictureChange(event) {
-  const file = event.target?.files?.[0];
-  if (!file) return;
-  if (!file.type?.startsWith("image/")) {
-    setNotice("ownerSecurityNotice", "error", "Choose an image file for your profile picture.");
-    return;
-  }
-  if (file.size > 1024 * 1024) {
-    setNotice("ownerSecurityNotice", "error", "Choose an image under 1 MB for local storage.");
-    return;
-  }
-  const reader = new FileReader();
-  reader.addEventListener("load", () => setProfilePicture(String(reader.result || "")));
-  reader.addEventListener("error", () => setNotice("ownerSecurityNotice", "error", "Could not read that image."));
-  reader.readAsDataURL(file);
 }
 
 function applyAccountVisibility() {
@@ -2829,18 +2775,60 @@ async function loadAuditLog() {
   }
 }
 
+function auditDayListLabel(openDays = []) {
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const days = Array.isArray(openDays) ? openDays.map(Number).filter((day) => day >= 1 && day <= 7) : [];
+  return days.length ? days.map((day) => labels[day - 1]).join(", ") : "No open days";
+}
+
+function formatAuditTime(value) {
+  const text = String(value || "").slice(0, 5);
+  if (!/^\d{2}:\d{2}$/.test(text)) return "";
+  const [hoursText, minutes] = text.split(":");
+  const hours = Number(hoursText);
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 || 12;
+  return `${displayHour}:${minutes} ${suffix}`;
+}
+
 function formatAuditDetails(details, fallback = "Action recorded") {
   if (!details) return fallback;
 
-  if (typeof details === "string") return details;
+  let parsed = details;
+  if (typeof parsed === "string") {
+    const trimmed = parsed.trim();
+    if (!trimmed) return fallback;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
+    }
+  }
 
-  if (details.summary) return details.summary;
-  if (details.message) return details.message;
-  if (details.reason) return details.reason;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) return fallback;
 
-  return Object.entries(details)
-    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
-    .join(" · ") || fallback;
+  if (parsed.summary) return String(parsed.summary);
+  if (parsed.message) return String(parsed.message);
+  if (parsed.reason) return String(parsed.reason);
+
+  const hasScheduleRuleFields = ["open_days", "operating_start", "operating_end", "default_required_staff", "labor_budget_cents", "time_zone"].some((key) => Object.prototype.hasOwnProperty.call(parsed, key));
+  if (hasScheduleRuleFields) {
+    const openDays = auditDayListLabel(parsed.open_days);
+    const start = formatAuditTime(parsed.operating_start);
+    const end = formatAuditTime(parsed.operating_end);
+    const staff = Number(parsed.default_required_staff || 0);
+    const min = Number(parsed.min_employees_per_day || 0);
+    const max = parsed.max_employees_per_day === null || parsed.max_employees_per_day === undefined ? "No max" : `${parsed.max_employees_per_day} max`;
+    const budget = Number(parsed.labor_budget_cents || 0) > 0 ? `$${(Number(parsed.labor_budget_cents) / 100).toFixed(2)} weekly budget` : "No weekly labor budget";
+    return `Open ${openDays} · ${start}–${end} · ${staff} default staff · ${min} min/day · ${max} · ${budget}`;
+  }
+
+  const allowedKeys = ["status", "employeeName", "shiftName", "workDate", "startDate", "endDate", "planCode", "fromPlan", "toPlan"];
+  const parts = allowedKeys
+    .filter((key) => parsed[key] !== undefined && parsed[key] !== null && parsed[key] !== "")
+    .map((key) => `${key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}: ${parsed[key]}`);
+
+  return parts.length ? parts.join(" · ") : fallback;
 }
 
 function renderAuditLog() {
@@ -2890,8 +2878,6 @@ function setupEvents() {
   $("cancelRecoveryX")?.addEventListener("click", () => $("recoveryDialog")?.close());
   $("appearanceMode")?.addEventListener("change", () => applyAppearanceMode($("appearanceMode").value));
   $("ownerTwoFactorEnabled")?.addEventListener("change", saveOwnerSecuritySettings);
-  $("profilePictureInput")?.addEventListener("change", handleProfilePictureChange);
-  $("removeProfilePictureButton")?.addEventListener("click", () => setProfilePicture(""));
 
   signupFieldIds.forEach((id) => {
     const input = $(id);
