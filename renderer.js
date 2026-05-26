@@ -41,7 +41,7 @@ let shiftTotalPages = 1;
 let currentPlanCode = "free";
 let employeeDaysOff = new Set();
 let timeOffRequests = [];
-let timeOffSettings = { requestsEnabled: true, blockedDates: [], holidayDates: [] };
+let timeOffSettings = { requestsEnabled: true, shiftSwapsEnabled: true, blockedDates: [], holidayDates: [] };
 let timeOffCalendarMonth = startOfMonth(new Date());
 let timeOffRangeStart = null;
 let timeOffRangeEnd = null;
@@ -54,7 +54,7 @@ let currentPlanRecord = null;
 let pendingRecoveryMode = "password";
 let ownerSecuritySettings = { twoFactorEnabled: false };
 let lastPrintedScheduleTitle = "Shift Ahoy Schedule";
-let lastSchedulePayload = { cells: [], employees: [], coverage: [], warnings: [], health: null };
+let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
 
 const message = document.getElementById("message");
 
@@ -72,8 +72,8 @@ function $(id) {
 }
 
 function dashboardWelcomeText() {
-  const login = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "";
-  return login ? `Welcome aboard, ${login}` : "Welcome aboard";
+  const name = userDisplayName();
+  return name ? `Welcome aboard, ${name}` : "Welcome aboard";
 }
 
 function setDashboardWelcome(text) {
@@ -86,16 +86,15 @@ function setDashboardWelcome(text) {
 
 function showMessage(text, type = "error") {
   const status = $("dashboardStatus");
-  if (!status) return;
-
-  if (!text) {
+  if (status) {
     status.className = "dashboardStatus hidden";
     status.textContent = "";
-    return;
   }
 
-  status.className = `dashboardStatus ${type}`;
-  status.textContent = text;
+  if (text) {
+    const logger = type === "error" ? console.warn : console.info;
+    logger.call(console, text);
+  }
 }
 
 function isOwner() {
@@ -367,10 +366,6 @@ function cleanUsernameInput(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
     .slice(0, 30);
-}
-
-function isValidUsernameInput(value) {
-  return /^[a-z0-9]{3,30}$/.test(String(value || ""));
 }
 
 function normalizePasswordInput(value) {
@@ -848,49 +843,6 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
-function validateEmployeeCredentialField(inputId, showEmptyErrors = false) {
-  const input = $(inputId);
-  if (!input) return true;
-
-  if (inputId === "employeeUsername") {
-    const cleaned = cleanUsernameInput(input.value);
-    if (input.value !== cleaned) input.value = cleaned;
-
-    if (!isValidUsernameInput(cleaned)) {
-      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "3–30 lowercase letters or numbers");
-      return false;
-    }
-
-    setFieldState(inputId, "valid", "Username works");
-    return true;
-  }
-
-  if (inputId === "employeePassword") {
-    const normalizedPassword = normalizePasswordInput(input.value);
-    const editingExistingEmployee = Boolean($("employeeId")?.value);
-
-    if (!normalizedPassword && editingExistingEmployee) {
-      resetFieldState(inputId, "Optional while editing · 12–128 characters");
-      return true;
-    }
-
-    if (!normalizedPassword && !editingExistingEmployee) {
-      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "Required for new employees");
-      return false;
-    }
-
-    if (!isValidPasswordInput(normalizedPassword)) {
-      setFieldState(inputId, showEmptyErrors ? "invalid" : "neutral", "12–128 characters");
-      return false;
-    }
-
-    setFieldState(inputId, "valid", "Password length works");
-    return true;
-  }
-
-  return true;
-}
-
 function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
   const button = $(buttonId);
   if (!button) return;
@@ -1326,13 +1278,12 @@ async function loadSchedule() {
 
   lastSchedulePayload = {
     cells: data.cells || [],
-    employees: data.employees || [],
     coverage: data.coverage || [],
     warnings: data.warnings || [],
     health: data.health || null,
     skipped: data.skipped || []
   };
-  renderSchedule(lastSchedulePayload.cells, lastSchedulePayload.employees);
+  renderSchedule(lastSchedulePayload.cells);
   renderScheduleHealth(lastSchedulePayload.health, lastSchedulePayload.coverage, lastSchedulePayload.warnings);
   renderUltimateAutomationPanels();
 }
@@ -1406,38 +1357,17 @@ function renderScheduleWarnings(warnings) {
   renderScheduleHealth(null, [], warnings);
 }
 
-function renderSchedule(cells, employeeRows = []) {
+function renderSchedule(cells) {
   const table = $("scheduleTable");
   const grouped = new Map();
-  const safeEmployees = Array.isArray(employeeRows) ? employeeRows : [];
-  const safeCells = Array.isArray(cells) ? cells : [];
 
-  for (const employee of safeEmployees) {
-    const employeeId = employee.employee_id || employee.id;
-    if (!employeeId || grouped.has(employeeId)) continue;
-
-    grouped.set(employeeId, {
-      employeeId,
-      priority: Number(employee.priority || 0),
-      employeeCode: employee.employee_code || "—",
-      employee: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.username || "Employee",
-      title: employee.title || "—",
-      employmentType: employee.employment_type || "",
-      weeklyHours: Number(employee.weekly_hours || 0),
-      days: {}
-    });
-  }
-
-  for (const cell of safeCells) {
+  for (const cell of cells) {
     if (!grouped.has(cell.employee_id)) {
       grouped.set(cell.employee_id, {
-        employeeId: cell.employee_id,
         priority: Number(cell.priority || 0),
         employeeCode: cell.employee_code || "—",
         employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.username || "Employee",
         title: cell.title || "—",
-        employmentType: cell.employment_type || "",
-        weeklyHours: Number(cell.weekly_hours || 0),
         days: {}
       });
     }
@@ -1452,14 +1382,13 @@ function renderSchedule(cells, employeeRows = []) {
   ));
 
   const weekEnd = addDays(currentWeekStart, 6);
-  const totalCells = safeCells.length;
-  const totalEmployees = rows.length;
-  const assignedEmployees = rows.filter((row) => Object.keys(row.days).length > 0).length;
+  const totalCells = Array.isArray(cells) ? cells.length : 0;
+  const scheduledEmployees = rows.length;
 
   table.innerHTML = `
     <caption class="scheduleCaption">
       <strong>Schedule Forecast</strong>
-      <span>${escapeHtml(selectedLocationName())} · ${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))} · ${escapeHtml(totalCells)} shift assignment${totalCells === 1 ? "" : "s"} · ${escapeHtml(assignedEmployees)}/${escapeHtml(totalEmployees)} employee${totalEmployees === 1 ? "" : "s"} scheduled</span>
+      <span>${escapeHtml(selectedLocationName())} · ${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))} · ${escapeHtml(totalCells)} shift assignment${totalCells === 1 ? "" : "s"} across ${escapeHtml(scheduledEmployees)} employee${scheduledEmployees === 1 ? "" : "s"}</span>
     </caption>
     <thead>
       <tr>
@@ -1476,15 +1405,12 @@ function renderSchedule(cells, employeeRows = []) {
     <tbody>
       ${
         rows.length === 0
-          ? `<tr><td colspan="11" class="emptyScheduleCell">No active employees found for this location. Add employees before generating a schedule forecast.</td></tr>`
+          ? `<tr><td colspan="11" class="emptyScheduleCell">No forecasted schedule for this week. Add a location, shifts, and employees with available days.</td></tr>`
           : rows.map((row) => `
-            <tr class="${Object.keys(row.days).length ? "" : "unscheduledEmployeeRow"}">
+            <tr>
               <td class="employeeMetaCell">${escapeHtml(row.priority || "—")}</td>
               <td class="employeeMetaCell">${escapeHtml(row.employeeCode)}</td>
-              <th scope="row" class="employeeNameCell">
-                ${escapeHtml(row.employee)}
-                ${Object.keys(row.days).length ? "" : `<span class="employeeRowNote">No shifts this week</span>`}
-              </th>
+              <th scope="row" class="employeeNameCell">${escapeHtml(row.employee)}</th>
               <td class="employeeMetaCell">${escapeHtml(row.title)}</td>
               ${DAYS.map((day, index) => {
                 const current = dateOnly(addDays(currentWeekStart, index));
@@ -1819,8 +1745,8 @@ function resetEmployeeForm() {
   employeeDaysOff = new Set();
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
-  resetFieldState("employeePassword", "12–128 characters");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", "Required for new");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
   populatePreferredShiftSelect();
@@ -1892,8 +1818,8 @@ function editEmployee(employeeId) {
   $("employeeForm").classList.remove("hidden");
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
-  resetFieldState("employeePassword", "Optional while editing · 12–128 characters");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", "Optional while editing");
   $("employeeId").value = employee.id;
   $("employeeCode").value = employee.employee_code || "";
   $("employeeTitle").value = employee.title || "";
@@ -1922,8 +1848,8 @@ async function saveEmployee(event) {
   event.preventDefault();
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "3–30 lowercase letters or numbers");
-  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing · 12–128 characters" : "12–128 characters");
+  resetFieldState("employeeUsername", "Required");
+  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required for new");
 
   if (!selectedLocationId) {
     setNotice("employeeFormMessage", "error", "Select a location first.");
@@ -1963,11 +1889,11 @@ async function saveEmployee(event) {
     setFieldState("employeeCode", "valid", "Looks good");
   }
 
-  const usernameInput = $("employeeUsername");
-  if (usernameInput && usernameInput.value !== body.username) usernameInput.value = body.username;
-
-  if (!isValidUsernameInput(body.username)) {
-    setFieldState("employeeUsername", "invalid", "3–30 lowercase letters or numbers");
+  if (!body.username) {
+    setFieldState("employeeUsername", "invalid", "Required");
+    isValid = false;
+  } else if (body.username.length < 3) {
+    setFieldState("employeeUsername", "invalid", "3–30 letters or numbers");
     isValid = false;
   } else {
     setFieldState("employeeUsername", "valid", "Username works");
@@ -1982,7 +1908,7 @@ async function saveEmployee(event) {
   } else if (body.password) {
     setFieldState("employeePassword", "valid", "Password length works");
   } else {
-    resetFieldState("employeePassword", "Optional while editing · 12–128 characters");
+    resetFieldState("employeePassword", "Optional while editing");
   }
 
   if (!isValid) return;
@@ -2331,12 +2257,13 @@ async function loadTimeOffSettings() {
     const data = await api(settingsPath);
     timeOffSettings = {
       requestsEnabled: data.settings?.requestsEnabled !== false,
+      shiftSwapsEnabled: data.settings?.shiftSwapsEnabled !== false,
       blockedDates: data.blockedDates || [],
       holidayDates: data.holidayDates || []
     };
     renderTimeOffSettings();
   } catch (err) {
-    timeOffSettings = { requestsEnabled: true, blockedDates: [], holidayDates: [] };
+    timeOffSettings = { requestsEnabled: true, shiftSwapsEnabled: true, blockedDates: [], holidayDates: [] };
     renderTimeOffSettings();
   }
 }
@@ -2430,13 +2357,18 @@ function showTimeOffRequestForm() {
 
 function renderTimeOffSettings() {
   const enabledInput = $("timeOffRequestsEnabled");
+  const shiftSwapsInput = $("shiftSwapsEnabled");
   const requestForm = $("timeOffRequestForm");
   const disabledNotice = $("timeOffDisabledNotice");
   const requestButton = $("showTimeOffRequestFormButton");
+  const swapButton = $("showSwapRequestButton");
+  const swapForm = $("swapRequestForm");
+  const swapDisabledNotice = $("shiftSwapsDisabledNotice");
   const blockedList = $("blockedDateList");
   const holidayList = $("holidayDateList");
 
   if (enabledInput) enabledInput.checked = timeOffSettings.requestsEnabled !== false;
+  if (shiftSwapsInput) shiftSwapsInput.checked = timeOffSettings.shiftSwapsEnabled !== false;
 
   if (requestButton) {
     requestButton.disabled = timeOffSettings.requestsEnabled === false;
@@ -2448,6 +2380,18 @@ function renderTimeOffSettings() {
 
   if (disabledNotice) {
     disabledNotice.classList.toggle("hidden", timeOffSettings.requestsEnabled !== false || canManageSchedule());
+  }
+
+  if (swapButton) {
+    swapButton.disabled = timeOffSettings.shiftSwapsEnabled === false;
+  }
+
+  if (swapForm && timeOffSettings.shiftSwapsEnabled === false && !canManageSchedule()) {
+    swapForm.classList.add("hidden");
+  }
+
+  if (swapDisabledNotice) {
+    swapDisabledNotice.classList.toggle("hidden", timeOffSettings.shiftSwapsEnabled !== false || canManageSchedule());
   }
 
   if (holidayList) {
@@ -2484,26 +2428,47 @@ function renderTimeOffSettings() {
 async function saveTimeOffSettings(event) {
   if (!isOwner()) return;
 
+  const target = event?.target;
+  const isShiftSwapToggle = target?.id === "shiftSwapsEnabled";
   const enabledInput = $("timeOffRequestsEnabled");
-  const nextValue = enabledInput?.checked !== false;
-  const previousValue = timeOffSettings.requestsEnabled !== false;
+  const shiftSwapsInput = $("shiftSwapsEnabled");
+  const previousRequestsValue = timeOffSettings.requestsEnabled !== false;
+  const previousShiftSwapsValue = timeOffSettings.shiftSwapsEnabled !== false;
+  const nextRequestsValue = isShiftSwapToggle ? previousRequestsValue : enabledInput?.checked !== false;
+  const nextShiftSwapsValue = isShiftSwapToggle ? shiftSwapsInput?.checked !== false : previousShiftSwapsValue;
 
-  if (enabledInput) enabledInput.checked = previousValue;
+  if (enabledInput) enabledInput.checked = previousRequestsValue;
+  if (shiftSwapsInput) shiftSwapsInput.checked = previousShiftSwapsValue;
+
+  const title = isShiftSwapToggle
+    ? (nextShiftSwapsValue ? "Turn On Shift Cover / Swap" : "Turn Off Shift Cover / Swap")
+    : (nextRequestsValue ? "Turn On Time Off Requests" : "Turn Off Time Off Requests");
+  const message = isShiftSwapToggle
+    ? `Enter your owner password to ${nextShiftSwapsValue ? "turn on" : "turn off"} employee shift cover and swap requests.`
+    : `Enter your owner password to ${nextRequestsValue ? "turn on" : "turn off"} employee time off requests.`;
 
   const updated = await runOwnerCredentialAction({
-    title: nextValue ? "Turn On Time Off Requests" : "Turn Off Time Off Requests",
-    message: `Enter your owner password to ${nextValue ? "turn on" : "turn off"} employee time off requests.`,
-    confirmLabel: nextValue ? "Turn On" : "Turn Off",
+    title,
+    message,
+    confirmLabel: isShiftSwapToggle
+      ? (nextShiftSwapsValue ? "Turn On" : "Turn Off")
+      : (nextRequestsValue ? "Turn On" : "Turn Off"),
     onConfirm: (actorPassword) =>
       api("/time-off/settings/toggle", {
         method: "POST",
         skipRefresh: true,
-        body: JSON.stringify({ requestsEnabled: nextValue, actorPassword, locationId: selectedLocationId })
+        body: JSON.stringify({
+          requestsEnabled: nextRequestsValue,
+          shiftSwapsEnabled: nextShiftSwapsValue,
+          actorPassword,
+          locationId: selectedLocationId
+        })
       })
   });
 
   if (!updated) {
-    if (enabledInput) enabledInput.checked = previousValue;
+    if (enabledInput) enabledInput.checked = previousRequestsValue;
+    if (shiftSwapsInput) shiftSwapsInput.checked = previousShiftSwapsValue;
     return;
   }
 
@@ -3020,14 +2985,6 @@ function setupEvents() {
     }
   });
 
-  ["employeeUsername", "employeePassword"].forEach((id) => {
-    const input = $(id);
-    if (input) {
-      input.addEventListener("input", () => validateEmployeeCredentialField(id, false));
-      input.addEventListener("blur", () => validateEmployeeCredentialField(id, true));
-    }
-  });
-
   $("showLocationFormButton").addEventListener("click", () => showLocationForm());
   $("locationForm").addEventListener("submit", saveLocation);
   $("cancelLocationButton").addEventListener("click", () => {
@@ -3174,6 +3131,7 @@ function setupEvents() {
     selectTimeOffCalendarDate(button.dataset.date);
   });
   $("timeOffRequestsEnabled")?.addEventListener("change", saveTimeOffSettings);
+  $("shiftSwapsEnabled")?.addEventListener("change", saveTimeOffSettings);
   $("showHolidayDateFormButton")?.addEventListener("click", showHolidayDateForm);
   $("cancelHolidayDateButton")?.addEventListener("click", hideHolidayDateForm);
   $("holidayDateForm")?.addEventListener("submit", addHolidayDate);
@@ -3826,6 +3784,10 @@ async function loadShiftSwaps() {
 
 async function submitSwapRequest(event) {
   event.preventDefault();
+  if (timeOffSettings.shiftSwapsEnabled === false) {
+    setNotice("timeOffFormMessage", "error", "Shift cover and swap requests are currently turned off by the owner.");
+    return;
+  }
   try {
     await api("/automation/shift-swaps", {
       method: "POST",
@@ -3927,7 +3889,13 @@ function setupUltimateAutomationEvents() {
   $("refreshLaborButton")?.addEventListener("click", loadLaborForecast);
   $("refreshApprovalQueueButton")?.addEventListener("click", loadApprovalQueue);
   $("managerForecastShortcutButton")?.addEventListener("click", () => scrollToSectionForNav("schedulePanel"));
-  $("showSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.remove("hidden"));
+  $("showSwapRequestButton")?.addEventListener("click", () => {
+    if (timeOffSettings.shiftSwapsEnabled === false) {
+      setNotice("timeOffFormMessage", "error", "Shift cover and swap requests are currently turned off by the owner.");
+      return;
+    }
+    $("swapRequestForm")?.classList.remove("hidden");
+  });
   $("cancelSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.add("hidden"));
   $("swapRequestForm")?.addEventListener("submit", submitSwapRequest);
   document.addEventListener("click", async (event) => {
