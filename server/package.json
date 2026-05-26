@@ -20,5 +20,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
-  }
+  },
+  "license": "CC0-1.0"
 }
