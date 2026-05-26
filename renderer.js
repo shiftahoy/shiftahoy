@@ -3510,6 +3510,12 @@ function ensureUltimateAutomationLayout() {
   if (managerPortalContent && overridePanel && overridePanel.parentElement !== managerPortalContent) {
     overridePanel.classList.add("portalSubcard", "managerOnly");
     overridePanel.classList.remove("settingsInlineCard", "ownerOnly");
+    const titleContainer = overridePanel.querySelector(".sectionHeader > div:first-child");
+    if (titleContainer && !titleContainer.classList.contains("dashboardTitleGroup")) {
+      titleContainer.classList.add("dashboardTitleGroup");
+      titleContainer.innerHTML = `<span class="iconBadge">MP-04</span><div>${titleContainer.innerHTML}</div>`;
+    }
+
     const badge = overridePanel.querySelector(".iconBadge");
     const title = overridePanel.querySelector("h3");
     if (badge) badge.textContent = "MP-04";
