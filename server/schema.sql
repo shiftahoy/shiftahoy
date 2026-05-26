@@ -404,3 +404,105 @@ ON audit_logs (business_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS audit_logs_business_location_created_idx
 ON audit_logs (business_id, location_id, created_at DESC);
+
+-- Ultimate automation upgrade: publishing, open shifts, swaps, labor rules, and location rules.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS pay_rate_cents INTEGER NOT NULL DEFAULT 0 CHECK (pay_rate_cents >= 0);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS overtime_allowed BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS overtime_threshold_hours NUMERIC(5,2) NOT NULL DEFAULT 40;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS min_rest_hours NUMERIC(5,2) NOT NULL DEFAULT 8;
+
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'forecast' CHECK (status IN ('forecast', 'draft', 'published', 'revised', 'archived'));
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS published_by UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS revision_number INTEGER NOT NULL DEFAULT 1 CHECK (revision_number >= 1);
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS notes TEXT;
+
+ALTER TABLE schedule_cells ADD COLUMN IF NOT EXISTS assignment_reason JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE schedule_cells ADD COLUMN IF NOT EXISTS fairness_score INTEGER;
+ALTER TABLE schedule_cells ADD COLUMN IF NOT EXISTS estimated_cost_cents INTEGER NOT NULL DEFAULT 0 CHECK (estimated_cost_cents >= 0);
+ALTER TABLE schedule_cells ADD COLUMN IF NOT EXISTS revised_from_cell_id UUID REFERENCES schedule_cells(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS location_schedule_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE UNIQUE,
+  open_days INTEGER[] NOT NULL DEFAULT ARRAY[1,2,3,4,5],
+  operating_start TIME NOT NULL DEFAULT '08:00',
+  operating_end TIME NOT NULL DEFAULT '17:00',
+  min_employees_per_day INTEGER NOT NULL DEFAULT 0 CHECK (min_employees_per_day >= 0),
+  max_employees_per_day INTEGER CHECK (max_employees_per_day IS NULL OR max_employees_per_day >= 1),
+  default_required_staff INTEGER NOT NULL DEFAULT 1 CHECK (default_required_staff >= 0 AND default_required_staff <= 99),
+  manager_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+  time_zone TEXT NOT NULL DEFAULT 'America/Chicago',
+  labor_budget_cents INTEGER NOT NULL DEFAULT 0 CHECK (labor_budget_cents >= 0),
+  schedule_publish_day INTEGER NOT NULL DEFAULT 1 CHECK (schedule_publish_day BETWEEN 1 AND 7),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS location_schedule_rules_business_location_idx
+ON location_schedule_rules (business_id, location_id);
+
+CREATE TABLE IF NOT EXISTS open_shifts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  schedule_id UUID REFERENCES schedules(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  work_date DATE NOT NULL,
+  shift_id UUID REFERENCES shifts(id) ON DELETE SET NULL,
+  shift_name TEXT NOT NULL DEFAULT 'Open Shift',
+  start_time TIME,
+  end_time TIME,
+  slots_open INTEGER NOT NULL DEFAULT 1 CHECK (slots_open >= 0),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'filled', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS open_shifts_business_location_week_idx
+ON open_shifts (business_id, location_id, week_start, status);
+
+CREATE TABLE IF NOT EXISTS open_shift_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  open_shift_id UUID NOT NULL REFERENCES open_shifts(id) ON DELETE CASCADE,
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'cancelled')),
+  decided_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (open_shift_id, employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS shift_swap_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+  schedule_cell_id UUID REFERENCES schedule_cells(id) ON DELETE SET NULL,
+  from_employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  to_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+  work_date DATE NOT NULL,
+  shift_id UUID REFERENCES shifts(id) ON DELETE SET NULL,
+  request_type TEXT NOT NULL DEFAULT 'cover' CHECK (request_type IN ('cover', 'swap')),
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending_employee' CHECK (status IN ('pending_employee', 'pending_manager', 'approved', 'denied', 'cancelled')),
+  accepted_at TIMESTAMPTZ,
+  manager_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  manager_decision_at TIMESTAMPTZ,
+  decision_reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS shift_swap_requests_business_location_status_idx
+ON shift_swap_requests (business_id, location_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS shift_swap_requests_employee_idx
+ON shift_swap_requests (business_id, from_employee_id, to_employee_id, created_at DESC);
+
+INSERT INTO location_schedule_rules (business_id, location_id)
+SELECT business_id, id
+FROM locations
+ON CONFLICT (location_id) DO NOTHING;
