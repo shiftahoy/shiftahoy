@@ -11,6 +11,19 @@ const DAYS = [
   { value: 7, short: "Sun", long: "Sunday" }
 ];
 
+const LANGUAGE_OPTIONS = [
+  { code: "af-ZA", native: "Afrikaans", flag: "🇿🇦" }, { code: "sq-AL", native: "Shqip", flag: "🇦🇱" }, { code: "am-ET", native: "አማርኛ", flag: "🇪🇹" }, { code: "ar-SA", native: "العربية", flag: "🇸🇦" }, { code: "hy-AM", native: "Հայերեն", flag: "🇦🇲" }, { code: "az-AZ", native: "Azərbaycan", flag: "🇦🇿" },
+  { code: "eu-ES", native: "Euskara", flag: "🇪🇸" }, { code: "bn-BD", native: "বাংলা", flag: "🇧🇩" }, { code: "bs-BA", native: "Bosanski", flag: "🇧🇦" }, { code: "bg-BG", native: "Български", flag: "🇧🇬" }, { code: "ca-ES", native: "Català", flag: "🇪🇸" }, { code: "zh-CN", native: "简体中文", flag: "🇨🇳" }, { code: "zh-TW", native: "繁體中文", flag: "🇹🇼" },
+  { code: "hr-HR", native: "Hrvatski", flag: "🇭🇷" }, { code: "cs-CZ", native: "Čeština", flag: "🇨🇿" }, { code: "da-DK", native: "Dansk", flag: "🇩🇰" }, { code: "nl-NL", native: "Nederlands", flag: "🇳🇱" }, { code: "en-US", native: "English", flag: "🇺🇸" }, { code: "et-EE", native: "Eesti", flag: "🇪🇪" },
+  { code: "fi-FI", native: "Suomi", flag: "🇫🇮" }, { code: "fr-FR", native: "Français", flag: "🇫🇷" }, { code: "gl-ES", native: "Galego", flag: "🇪🇸" }, { code: "ka-GE", native: "ქართული", flag: "🇬🇪" }, { code: "de-DE", native: "Deutsch", flag: "🇩🇪" }, { code: "el-GR", native: "Ελληνικά", flag: "🇬🇷" }, { code: "gu-IN", native: "ગુજરાતી", flag: "🇮🇳" },
+  { code: "he-IL", native: "עברית", flag: "🇮🇱" }, { code: "hi-IN", native: "हिन्दी", flag: "🇮🇳" }, { code: "hu-HU", native: "Magyar", flag: "🇭🇺" }, { code: "is-IS", native: "Íslenska", flag: "🇮🇸" }, { code: "id-ID", native: "Bahasa Indonesia", flag: "🇮🇩" }, { code: "ga-IE", native: "Gaeilge", flag: "🇮🇪" }, { code: "it-IT", native: "Italiano", flag: "🇮🇹" },
+  { code: "ja-JP", native: "日本語", flag: "🇯🇵" }, { code: "kn-IN", native: "ಕನ್ನಡ", flag: "🇮🇳" }, { code: "kk-KZ", native: "Қазақ", flag: "🇰🇿" }, { code: "ko-KR", native: "한국어", flag: "🇰🇷" }, { code: "lv-LV", native: "Latviešu", flag: "🇱🇻" }, { code: "lt-LT", native: "Lietuvių", flag: "🇱🇹" },
+  { code: "ms-MY", native: "Bahasa Melayu", flag: "🇲🇾" }, { code: "ml-IN", native: "മലയാളം", flag: "🇮🇳" }, { code: "mr-IN", native: "मराठी", flag: "🇮🇳" }, { code: "ne-NP", native: "नेपाली", flag: "🇳🇵" }, { code: "no-NO", native: "Norsk", flag: "🇳🇴" }, { code: "fa-IR", native: "فارسی", flag: "🇮🇷" }, { code: "pl-PL", native: "Polski", flag: "🇵🇱" },
+  { code: "pt-BR", native: "Português", flag: "🇧🇷" }, { code: "pa-IN", native: "ਪੰਜਾਬੀ", flag: "🇮🇳" }, { code: "ro-RO", native: "Română", flag: "🇷🇴" }, { code: "ru-RU", native: "Русский", flag: "🇷🇺" }, { code: "sr-RS", native: "Српски", flag: "🇷🇸" }, { code: "sk-SK", native: "Slovenčina", flag: "🇸🇰" }, { code: "sl-SI", native: "Slovenščina", flag: "🇸🇮" },
+  { code: "es-ES", native: "Español", flag: "🇪🇸" }, { code: "sw-KE", native: "Kiswahili", flag: "🇰🇪" }, { code: "sv-SE", native: "Svenska", flag: "🇸🇪" }, { code: "ta-IN", native: "தமிழ்", flag: "🇮🇳" }, { code: "te-IN", native: "తెలుగు", flag: "🇮🇳" }, { code: "th-TH", native: "ไทย", flag: "🇹🇭" }, { code: "tr-TR", native: "Türkçe", flag: "🇹🇷" },
+  { code: "uk-UA", native: "Українська", flag: "🇺🇦" }, { code: "ur-PK", native: "اردو", flag: "🇵🇰" }, { code: "vi-VN", native: "Tiếng Việt", flag: "🇻🇳" }, { code: "cy-GB", native: "Cymraeg", flag: "🏴" }, { code: "zu-ZA", native: "isiZulu", flag: "🇿🇦" }
+];
+
 let accessToken = null;
 let currentUser = null;
 let selectedLocationId = null;
@@ -33,6 +46,14 @@ let timeOffCalendarMonth = startOfMonth(new Date());
 let timeOffRangeStart = null;
 let timeOffRangeEnd = null;
 let auditLogs = [];
+let auditPage = 1;
+let auditTotalPages = 1;
+let auditTotal = 0;
+let allPlans = [];
+let currentPlanRecord = null;
+let pendingRecoveryMode = "password";
+let ownerSecuritySettings = { twoFactorEnabled: false };
+let lastPrintedScheduleTitle = "Shift Ahoy Schedule";
 let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
 
 const message = document.getElementById("message");
@@ -167,6 +188,138 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+
+function normalizeLanguageCode(code) {
+  const text = String(code || "").trim();
+  if (!text) return "en-US";
+  const exact = LANGUAGE_OPTIONS.find((language) => language.code.toLowerCase() === text.toLowerCase());
+  if (exact) return exact.code;
+  const base = text.split("-")[0].toLowerCase();
+  return LANGUAGE_OPTIONS.find((language) => language.code.toLowerCase().startsWith(`${base}-`))?.code || "en-US";
+}
+
+function detectDeviceLanguage() {
+  const saved = localStorage.getItem("shiftAhoyLanguage");
+  if (saved) return normalizeLanguageCode(saved);
+  const candidates = Array.isArray(navigator.languages) && navigator.languages.length ? navigator.languages : [navigator.language];
+  return normalizeLanguageCode(candidates[0]);
+}
+
+function currentLanguageOption() {
+  const code = normalizeLanguageCode(localStorage.getItem("shiftAhoyLanguage") || detectDeviceLanguage());
+  return LANGUAGE_OPTIONS.find((language) => language.code === code) || LANGUAGE_OPTIONS.find((language) => language.code === "en-US");
+}
+
+function renderLanguageSelector(targetId) {
+  const target = $(targetId);
+  if (!target) return;
+  const selected = currentLanguageOption();
+  target.innerHTML = `
+    <label class="languageSelectWrap" for="${targetId}Select">
+      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
+      <select id="${targetId}Select" class="languageSelect" aria-label="Language">
+        ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+  const select = $(`${targetId}Select`);
+  select?.addEventListener("change", () => setLanguage(select.value));
+}
+
+function setLanguage(code) {
+  const normalized = normalizeLanguageCode(code);
+  localStorage.setItem("shiftAhoyLanguage", normalized);
+  document.documentElement.lang = normalized;
+  renderLanguageSelector("authLanguageDock");
+  renderLanguageSelector("settingsLanguageSelector");
+}
+
+function applyAppearanceMode(mode = localStorage.getItem("shiftAhoyAppearance") || "system") {
+  const safeMode = ["system", "light", "dark"].includes(mode) ? mode : "system";
+  localStorage.setItem("shiftAhoyAppearance", safeMode);
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+  document.body.classList.toggle("theme-dark", safeMode === "dark" || (safeMode === "system" && prefersDark));
+  if ($("appearanceMode")) $("appearanceMode").value = safeMode;
+}
+
+async function loadOwnerSecuritySettings() {
+  if (!accessToken || !isOwner()) return;
+  try {
+    const data = await api("/auth/settings");
+    ownerSecuritySettings = data.settings || ownerSecuritySettings;
+    if ($("ownerTwoFactorEnabled")) $("ownerTwoFactorEnabled").checked = !!ownerSecuritySettings.twoFactorEnabled;
+  } catch (err) {
+    setNotice("ownerSecurityNotice", "error", err.message);
+  }
+}
+
+async function saveOwnerSecuritySettings() {
+  if (!isOwner()) return;
+  const enabled = !!$("ownerTwoFactorEnabled")?.checked;
+  const saved = await runOwnerCredentialAction({
+    title: enabled ? "Enable Owner 2FA" : "Disable Owner 2FA",
+    message: "Enter your owner password to update the owner security setting.",
+    confirmLabel: enabled ? "Enable 2FA" : "Disable 2FA",
+    onConfirm: (actorPassword) => api("/auth/settings", {
+      method: "PUT",
+      body: JSON.stringify({ twoFactorEnabled: enabled, actorPassword })
+    })
+  });
+  if (saved) {
+    ownerSecuritySettings.twoFactorEnabled = enabled;
+    setNotice("ownerSecurityNotice", "success", "Owner security setting saved.");
+  } else if ($("ownerTwoFactorEnabled")) {
+    $("ownerTwoFactorEnabled").checked = !!ownerSecuritySettings.twoFactorEnabled;
+  }
+}
+
+function openRecoveryDialog(mode) {
+  pendingRecoveryMode = mode === "username" ? "username" : "password";
+  if ($("recoveryTitle")) $("recoveryTitle").textContent = pendingRecoveryMode === "username" ? "Forgot Username" : "Reset Password";
+  if ($("recoveryMessage")) $("recoveryMessage").textContent = pendingRecoveryMode === "username" ? "Enter the verified email on your account and we will send your login name." : "Enter the verified email on your account and we will send a password-reset link.";
+  if ($("submitRecoveryButton")) $("submitRecoveryButton").textContent = pendingRecoveryMode === "username" ? "Send Username" : "Send Reset Link";
+  if ($("recoveryEmail")) $("recoveryEmail").value = currentUser?.email || $("loginValue")?.value || "";
+  setNotice("recoveryNotice", "", "");
+  $("recoveryDialog")?.showModal();
+}
+
+async function submitRecovery(event) {
+  event.preventDefault();
+  const email = $("recoveryEmail")?.value?.trim();
+  const endpoint = pendingRecoveryMode === "username" ? "/auth/forgot-username" : "/auth/forgot-password";
+  try {
+    const data = await api(endpoint, { method: "POST", body: JSON.stringify({ email }) });
+    setNotice("recoveryNotice", "success", data.message || "If that email exists, instructions have been sent.");
+  } catch (err) {
+    setNotice("recoveryNotice", "error", err.message);
+  }
+}
+
+function setupEnterToSubmit() {
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.defaultPrevented || event.isComposing) return;
+    const control = event.target;
+    if (!(control instanceof HTMLElement)) return;
+    const tag = control.tagName.toLowerCase();
+    if (!["input", "select", "textarea"].includes(tag) || tag === "textarea") return;
+    const form = control.closest("form");
+    if (form) {
+      event.preventDefault();
+      form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      return;
+    }
+    const fallbackMap = {
+      signupFirstName: "signupButton", signupLastName: "signupButton", signupBusinessName: "signupButton", signupEmail: "signupButton", signupUsername: "signupButton", signupPassword: "signupButton",
+      loginValue: "loginButton", loginPassword: "loginButton", employeeFilter: null, locationFilter: null, shiftFilter: null
+    };
+    const buttonId = fallbackMap[control.id];
+    if (buttonId && $(buttonId)) {
+      event.preventDefault();
+      $(buttonId).click();
+    }
+  });
+}
+
 function cleanUsernameInput(value) {
   return String(value || "")
     .toLowerCase()
@@ -280,21 +433,13 @@ function scrollToSectionForNav(sectionId) {
   const section = $(sectionId);
   if (!section) return;
 
-  let targetY = sectionDocumentTop(section);
-
   if (sectionId === "locationsPanel") {
-    targetY = 0;
-  } else if (sectionId === "portalsPanel") {
-    targetY = Math.max(0, sectionDocumentTop(section) - 14);
-  } else if (sectionId === "employeesPanel") {
-    targetY = Math.max(0, sectionDocumentTop(section) - 14);
-  } else if (sectionId === "schedulePanel") {
-    targetY = Math.max(0, sectionDocumentTop(section) - 14);
-  } else if (sectionId === "shiftsPanel") {
-    targetY = Math.max(0, sectionDocumentBottom(section) - window.innerHeight + 18);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
   }
 
-  window.scrollTo({ top: targetY, behavior: "smooth" });
+  const topOffset = Math.max(0, sectionDocumentTop(section));
+  window.scrollTo({ top: topOffset, behavior: "smooth" });
 }
 
 function updateActiveNavigationFromScroll() {
@@ -650,6 +795,105 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
+function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
+  const button = $(buttonId);
+  if (!button) return;
+
+  if (busy) {
+    button.dataset.originalText = button.textContent || "";
+    button.textContent = busyText;
+    button.disabled = true;
+    return;
+  }
+
+  button.textContent = button.dataset.originalText || button.textContent || "Submit";
+  button.disabled = false;
+}
+
+async function signup(event) {
+  event?.preventDefault?.();
+  setNotice("signupFormMessage", "", "");
+  setNotice("loginFormMessage", "", "");
+
+  if (!validateSignupForm(true)) {
+    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating the account.");
+    return;
+  }
+
+  const payload = {
+    firstName: $("signupFirstName")?.value?.trim() || "",
+    lastName: $("signupLastName")?.value?.trim() || "",
+    businessName: $("signupBusinessName")?.value?.trim() || "",
+    email: $("signupEmail")?.value?.trim() || "",
+    username: cleanUsernameInput($("signupUsername")?.value || ""),
+    password: normalizePasswordInput($("signupPassword")?.value || "")
+  };
+
+  setAuthButtonBusy("signupButton", true, "Creating...");
+
+  try {
+    const data = await api("/auth/signup", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify(payload)
+    });
+
+    setNotice("signupFormMessage", "success", data.message || "Owner account created.");
+
+    if ($("loginValue") && data.fullLogin) $("loginValue").value = data.fullLogin;
+    if ($("loginPassword")) $("loginPassword").value = "";
+    setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
+  } catch (err) {
+    setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
+  } finally {
+    setAuthButtonBusy("signupButton", false);
+  }
+}
+
+async function login(event) {
+  event?.preventDefault?.();
+  setNotice("loginFormMessage", "", "");
+  showMessage("");
+
+  const loginValue = $("loginValue")?.value?.trim() || "";
+  const password = normalizePasswordInput($("loginPassword")?.value || "");
+
+  if (!loginValue || !password) {
+    setNotice("loginFormMessage", "error", "Enter your login and password.");
+    return;
+  }
+
+  setAuthButtonBusy("loginButton", true, "Logging in...");
+
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify({ login: loginValue, password })
+    });
+
+    accessToken = data.accessToken;
+    currentUser = data.user;
+
+    if (!accessToken || !currentUser) {
+      throw new Error("Login succeeded, but the server did not return a session.");
+    }
+
+    applyRoleUI();
+    await loadPlans(false).catch(() => {});
+    await loadLocations({ resetPage: true });
+    await loadOwnerSecuritySettings().catch(() => {});
+    renderUltimateAutomationPanels();
+    showMessage("Login successful.", "success");
+  } catch (err) {
+    accessToken = null;
+    currentUser = null;
+    setNotice("loginFormMessage", "error", err.message || "Login failed.");
+  } finally {
+    setAuthButtonBusy("loginButton", false);
+  }
+}
+
 async function refreshSession() {
   const res = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST",
@@ -709,9 +953,11 @@ function applyRoleUI() {
 
   const owner = isOwner();
   const canManage = canManageSchedule();
+  const employeeOnly = currentUser?.role === "employee";
 
-  $("upgradeButton").classList.toggle("hidden", !owner);
-  $("currentPlanText").classList.toggle("hidden", !owner);
+  document.body.classList.toggle("employeePortalOnly", employeeOnly);
+  $("upgradeButton").classList.toggle("hidden", !owner || employeeOnly);
+  $("currentPlanText").classList.toggle("hidden", !owner || employeeOnly);
   $("settingsButton").classList.toggle("hidden", !owner);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
@@ -719,7 +965,6 @@ function applyRoleUI() {
       if (!owner) el.classList.add("hidden");
       return;
     }
-
     el.classList.toggle("hidden", !owner);
   });
 
@@ -736,74 +981,22 @@ function applyRoleUI() {
   });
 
   document.querySelectorAll(".managerOnly").forEach((el) => {
-    el.classList.toggle("hidden", !canManage);
+    el.classList.toggle("hidden", !canManage || employeeOnly);
   });
 
   document.querySelectorAll(".employeeOnlyHidden").forEach((el) => {
-    el.classList.toggle("hidden", currentUser?.role === "employee");
+    el.classList.toggle("hidden", employeeOnly);
   });
+
+  if (employeeOnly) {
+    ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel", "auditPanel", "managerPortalPanel"].forEach((id) => $(id)?.classList.add("hidden"));
+    $("portalsPanel")?.classList.remove("hidden");
+    setActiveNavigation("portalsPanel");
+  }
 
   setDashboardWelcome(dashboardWelcomeText());
   showMessage("");
   updateActiveNavigationFromScroll();
-}
-
-async function signup() {
-  setNotice("signupFormMessage", "", "");
-
-  if (!validateSignupForm(true)) {
-    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating your account.");
-    const firstInvalid = document.querySelector(".fieldGroup.is-invalid input");
-    if (firstInvalid) firstInvalid.focus();
-    return;
-  }
-
-  const body = {
-    firstName: $("signupFirstName").value.trim(),
-    lastName: $("signupLastName").value.trim(),
-    businessName: $("signupBusinessName").value.trim(),
-    email: $("signupEmail").value.trim(),
-    username: cleanUsernameInput($("signupUsername").value),
-    password: normalizePasswordInput($("signupPassword").value)
-  };
-
-  try {
-    const data = await api("/auth/signup", {
-      method: "POST",
-      body: JSON.stringify(body)
-    });
-
-    setNotice(
-      "signupFormMessage",
-      "success",
-      `Account created. Your login is ${data.fullLogin}. Use this exact login with your password to sign in.`
-    );
-  } catch (err) {
-    setNotice("signupFormMessage", "error", err.message);
-  }
-}
-
-async function login() {
-  setNotice("loginFormMessage", "", "");
-
-  try {
-    const data = await api("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        login: $("loginValue").value,
-        password: normalizePasswordInput($("loginPassword").value)
-      })
-    });
-
-    accessToken = data.accessToken;
-    currentUser = data.user;
-
-    applyRoleUI();
-    await loadPlans(false);
-    await loadLocations();
-  } catch (err) {
-    setNotice("loginFormMessage", "error", err.message);
-  }
 }
 
 async function loadLocations({ resetPage = false } = {}) {
@@ -941,6 +1134,7 @@ async function loadSelectedLocationData({ resetPages = false } = {}) {
     employees = [];
     renderShifts();
     renderEmployees();
+    await Promise.all([loadEmployeeSchedule(), loadOpenShifts(), loadShiftSwaps()]);
   }
 }
 
@@ -1491,8 +1685,9 @@ async function loadEmployees() {
 
   const filter = $("employeeFilter").value.trim();
 
+  const planCap = currentPlanRecord?.employee_limit === null || filter ? 5 : Math.max(1, Math.min(5, Number(currentPlanRecord?.employee_limit || 5)));
   const data = await api(
-    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=5&filter=${encodeURIComponent(filter)}`
+    `/employees?locationId=${encodeURIComponent(selectedLocationId)}&page=${employeePage}&pageSize=${planCap}&filter=${encodeURIComponent(filter)}`
   );
 
   employees = data.employees || [];
@@ -1505,12 +1700,17 @@ async function loadEmployees() {
 function renderEmployees() {
   const list = $("employeeList");
 
+  const filterText = $("employeeFilter")?.value?.trim() || "";
+  const capNote = currentPlanRecord?.employee_limit !== null && !filterText
+    ? `<div class="formNotice success">${escapeHtml(currentPlanRecord?.name || "Current")} plan displays up to ${escapeHtml(currentPlanRecord?.employee_limit)} scheduled employee${Number(currentPlanRecord?.employee_limit) === 1 ? "" : "s"} by default. Use search to find any active employee.</div>`
+    : "";
+
   if (!employees.length) {
-    list.innerHTML = `<div class="emptyState">No employees found for this location.</div>`;
+    list.innerHTML = `${capNote}<div class="emptyState">No employees found for this location.</div>`;
     return;
   }
 
-  list.innerHTML = employees.map((employee) => {
+  list.innerHTML = capNote + employees.map((employee) => {
     const availability = Array.isArray(employee.availability) ? employee.availability : [];
     const availableDays = availability
       .filter((day) => day.available)
@@ -1681,12 +1881,13 @@ async function loadPlans(renderDialog = true) {
 
   try {
     const data = await api("/plans");
+    allPlans = data.plans || [];
     currentPlanCode = data.currentPlan || "free";
-    const current = (data.plans || []).find((plan) => plan.code === currentPlanCode);
-    $("currentPlanText").innerHTML = `Current Plan: <strong>${escapeHtml(current?.name || "Free")}</strong>`;
+    currentPlanRecord = allPlans.find((plan) => plan.code === currentPlanCode) || null;
+    $("currentPlanText").innerHTML = `Current Plan: <strong>${escapeHtml(currentPlanRecord?.name || "Free")}</strong>`;
 
     if (renderDialog) {
-      renderPlans(data.plans || [], currentPlanCode);
+      renderPlans(allPlans, currentPlanCode);
     }
   } catch (err) {
     showMessage(err.message);
@@ -1694,15 +1895,26 @@ async function loadPlans(renderDialog = true) {
 }
 
 function planFeatures(plan) {
-  const employeeLimit = plan.employee_limit === null ? "Unlimited employees" : `${plan.employee_limit} employee${plan.employee_limit === 1 ? "" : "s"}`;
+  const employeeLimit = plan.employee_limit === null ? "Unlimited employees" : `${plan.employee_limit} scheduled employee${plan.employee_limit === 1 ? "" : "s"}`;
   const featureMap = {
-    free: ["Forever schedule forecast", employeeLimit, "Single location starter tools"],
-    plus: ["Everything in Free", employeeLimit, "Manager-assisted scheduling"],
-    premium: ["Everything in Plus", employeeLimit, "Multi-location growth support"],
+    free: ["Local desktop scheduling", employeeLimit, "Owner workspace"],
+    plus: ["Everything in Free", employeeLimit, "Manager approvals and portals"],
+    premium: ["Everything in Plus", employeeLimit, "Labor forecasting and warnings"],
     pro: ["Everything in Premium", employeeLimit, "Full business scheduling scale"]
   };
 
   return featureMap[plan.code] || [employeeLimit, "Automatic scheduling", "Clean desktop dashboard"];
+}
+
+function planRank(plan) {
+  return Number(plan?.monthly_price_cents || 0);
+}
+
+function planActionLabel(plan) {
+  if (!currentPlanRecord || plan.code === currentPlanCode) return "Current Plan";
+  if (planRank(plan) > planRank(currentPlanRecord)) return `Upgrade to ${plan.name}`;
+  if (planRank(plan) < planRank(currentPlanRecord)) return `Downgrade to ${plan.name}`;
+  return `Switch to ${plan.name}`;
 }
 
 function renderPlans(plans, currentPlan) {
@@ -1714,19 +1926,22 @@ function renderPlans(plans, currentPlan) {
       : `$${(plan.monthly_price_cents / 100).toFixed(0)}`;
 
     const active = plan.code === currentPlan;
+    const actionLabel = planActionLabel(plan);
+    const meta = plan.employee_limit === null ? "No employee display cap." : `Shows ${plan.employee_limit} scheduled employee${plan.employee_limit === 1 ? "" : "s"} by default; search still reaches all employees.`;
 
     return `
       <article class="planCard ${active ? "active" : ""}">
         <div>
-          <p class="eyebrow">${active ? "Current plan" : "Upgrade option"}</p>
+          <p class="eyebrow">${active ? "Current plan" : (planRank(plan) > planRank(currentPlanRecord) ? "Upgrade option" : "Downgrade option")}</p>
           <h3>${escapeHtml(plan.name)}</h3>
           <div class="planPrice">${price}<span>/month</span></div>
+          <p class="planActionMeta">${escapeHtml(meta)}</p>
         </div>
         <ul>
           ${planFeatures(plan).map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}
         </ul>
         <button class="button ${active ? "secondary" : "primary"}" data-action="select-plan" data-code="${escapeHtml(plan.code)}" ${active ? "disabled" : ""}>
-          ${active ? "Current Plan" : `Choose ${escapeHtml(plan.name)}`}
+          ${escapeHtml(actionLabel)}
         </button>
       </article>
     `;
@@ -1739,18 +1954,25 @@ async function openPlanDialog() {
 }
 
 async function changePlan(planCode) {
-  try {
-    await api("/plans/change", {
+  const selectedPlan = allPlans.find((plan) => plan.code === planCode);
+  if (!selectedPlan || selectedPlan.code === currentPlanCode) return;
+  const actionWord = planRank(selectedPlan) > planRank(currentPlanRecord) ? "upgrade" : planRank(selectedPlan) < planRank(currentPlanRecord) ? "downgrade" : "switch";
+  const confirmed = await runOwnerCredentialAction({
+    title: `${actionWord[0].toUpperCase()}${actionWord.slice(1)} Plan`,
+    message: `Are you sure you want to ${actionWord} from ${currentPlanRecord?.name || currentPlanCode} to ${selectedPlan.name}? Enter the owner password to continue.`,
+    confirmLabel: `${actionWord[0].toUpperCase()}${actionWord.slice(1)} Plan`,
+    onConfirm: (actorPassword) => api("/plans/change", {
       method: "POST",
-      body: JSON.stringify({ planCode })
-    });
+      body: JSON.stringify({ planCode, actorPassword })
+    })
+  });
 
-    await loadPlans(true);
-    await loadEmployees();
-  } catch (err) {
-    showMessage(err.message);
-  }
+  if (!confirmed) return;
+  await loadPlans(true);
+  await loadEmployees();
+  showMessage(`Plan ${actionWord} saved. Employee search still includes all active employees.`, "success");
 }
+
 
 function formatRequestDate(value) {
   return String(value || "").slice(0, 10);
@@ -2479,73 +2701,47 @@ async function decideTimeOffRequest(id, decision) {
 }
 
 async function loadAuditLog() {
-  const list = $("auditLogList");
-  if (!list || !currentUser || !canManageSchedule()) return;
+  if (!selectedLocationId || !canManageSchedule()) return;
 
   try {
-    if (currentUser.role === "employee" || !selectedLocationId) {
-      auditLogs = [];
-      renderAuditLog();
+    const data = await api(`/audit?locationId=${encodeURIComponent(selectedLocationId)}&page=${auditPage}&pageSize=5`);
+    auditLogs = data.logs || [];
+    auditPage = data.page || auditPage;
+    auditTotalPages = data.totalPages || 1;
+    auditTotal = data.total || auditLogs.length;
+
+    if (!auditLogs.length && auditPage > 1) {
+      auditPage = Math.max(1, auditPage - 1);
+      await loadAuditLog();
       return;
     }
 
-    const data = await api(`/audit?locationId=${encodeURIComponent(selectedLocationId)}`);
-    auditLogs = data.logs || [];
     renderAuditLog();
+    updatePager("audit", auditPage, auditTotalPages);
   } catch (err) {
-    list.innerHTML = `<div class="emptyState">Audit log could not be loaded.</div>`;
+    $("auditLogList").innerHTML = `<div class="emptyState">${escapeHtml(err.message)}</div>`;
   }
 }
 
 function formatAuditDetails(details, fallback = "Action recorded") {
   if (!details) return fallback;
 
-  if (typeof details === "string") {
-    const trimmed = details.trim();
-    if (!trimmed) return fallback;
+  if (typeof details === "string") return details;
 
-    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
-      try {
-        return formatAuditDetails(JSON.parse(trimmed), fallback);
-      } catch {
-        return fallback;
-      }
-    }
+  if (details.summary) return details.summary;
+  if (details.message) return details.message;
+  if (details.reason) return details.reason;
 
-    return trimmed;
-  }
-
-  if (typeof details === "object") {
-    if (typeof details.summary === "string" && details.summary.trim()) return details.summary.trim();
-    if (typeof details.message === "string" && details.message.trim()) return details.message.trim();
-
-    const openDays = Array.isArray(details.open_days) ? details.open_days : Array.isArray(details.openDays) ? details.openDays : null;
-    const operatingStart = details.operating_start || details.operatingStart;
-    const operatingEnd = details.operating_end || details.operatingEnd;
-    const defaultStaff = details.default_required_staff ?? details.defaultRequiredStaff;
-    const publishDay = details.schedule_publish_day ?? details.schedulePublishDay;
-
-    if (openDays || operatingStart || operatingEnd || defaultStaff !== undefined || publishDay !== undefined) {
-      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const openText = openDays?.length ? openDays.map((day) => dayNames[Number(day) - 1]).filter(Boolean).join(", ") : "No open days";
-      const timeText = operatingStart && operatingEnd ? `${String(operatingStart).slice(0, 5)}–${String(operatingEnd).slice(0, 5)}` : "Hours not set";
-      const staffText = defaultStaff !== undefined ? `${defaultStaff} default staff` : "Default staff not set";
-      const publishText = publishDay ? `publish day ${publishDay}` : "publish day not set";
-      return `${openText} · ${timeText} · ${staffText} · ${publishText}`;
-    }
-
-    return fallback;
-  }
-
-  return String(details || fallback);
+  return Object.entries(details)
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+    .join(" · ") || fallback;
 }
 
 function renderAuditLog() {
   const list = $("auditLogList");
-  if (!list) return;
 
   if (!auditLogs.length) {
-    list.innerHTML = `<div class="emptyState">No audit log entries yet.</div>`;
+    list.innerHTML = `<div class="emptyState">No audit log entries for this location yet.</div>`;
     return;
   }
 
@@ -2564,13 +2760,30 @@ function renderAuditLog() {
   }).join("");
 }
 
+
 function printSchedule() {
+  if (!lastSchedulePayload.cells?.length) {
+    showMessage("Load a schedule before printing.");
+    return;
+  }
+  lastPrintedScheduleTitle = `${selectedLocationName()} · Week of ${formatDateForLabel(currentWeekStart)}`;
+  document.title = `Shift Ahoy Schedule - ${lastPrintedScheduleTitle}`;
   window.print();
+  window.setTimeout(() => { document.title = "Shift Ahoy"; }, 250);
 }
 
 function setupEvents() {
   $("signupButton").addEventListener("click", signup);
   $("loginButton").addEventListener("click", login);
+  $("forgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
+  $("forgotUsernameButton")?.addEventListener("click", () => openRecoveryDialog("username"));
+  $("settingsForgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
+  $("settingsForgotUsernameButton")?.addEventListener("click", () => openRecoveryDialog("username"));
+  $("recoveryForm")?.addEventListener("submit", submitRecovery);
+  $("cancelRecoveryButton")?.addEventListener("click", () => $("recoveryDialog")?.close());
+  $("cancelRecoveryX")?.addEventListener("click", () => $("recoveryDialog")?.close());
+  $("appearanceMode")?.addEventListener("change", () => applyAppearanceMode($("appearanceMode").value));
+  $("ownerTwoFactorEnabled")?.addEventListener("change", saveOwnerSecuritySettings);
 
   signupFieldIds.forEach((id) => {
     const input = $(id);
@@ -2765,8 +2978,18 @@ function setupEvents() {
     await loadEmployees();
   });
 
+  $("prevAuditPage")?.addEventListener("click", async () => {
+    auditPage = Math.max(1, auditPage - 1);
+    await loadAuditLog();
+  });
+
+  $("nextAuditPage")?.addEventListener("click", async () => {
+    auditPage += 1;
+    await loadAuditLog();
+  });
+
   $("upgradeButton").addEventListener("click", openPlanDialog);
-  $("settingsButton").addEventListener("click", () => $("settingsDialog").showModal());
+  $("settingsButton").addEventListener("click", async () => { await loadOwnerSecuritySettings(); $("settingsDialog").showModal(); });
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
@@ -2778,6 +3001,12 @@ function setupEvents() {
 
 document.addEventListener("DOMContentLoaded", () => {
   setupEvents();
+  setupEnterToSubmit();
+  setLanguage(detectDeviceLanguage());
+  renderLanguageSelector("authLanguageDock");
+  renderLanguageSelector("settingsLanguageSelector");
+  applyAppearanceMode();
+  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => applyAppearanceMode());
   setupSectionNavigationHighlighting();
   resetLocationForm();
   $("locationForm").classList.add("hidden");
@@ -2807,13 +3036,15 @@ function moneyFromCents(cents) {
 function syncAutomationRoleVisibility() {
   const owner = isOwner();
   const canManage = canManageSchedule();
+  const employeeOnly = currentUser?.role === "employee";
+
+  document.body.classList.toggle("employeePortalOnly", employeeOnly);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     if (el.classList.contains("editorForm")) {
       if (!owner) el.classList.add("hidden");
       return;
     }
-
     el.classList.toggle("hidden", !owner);
   });
 
@@ -2822,12 +3053,17 @@ function syncAutomationRoleVisibility() {
   });
 
   document.querySelectorAll(".managerOnly").forEach((el) => {
-    el.classList.toggle("hidden", !canManage);
+    el.classList.toggle("hidden", !canManage || employeeOnly);
   });
 
   document.querySelectorAll(".employeeOnlyHidden").forEach((el) => {
-    el.classList.toggle("hidden", currentUser?.role === "employee");
+    el.classList.toggle("hidden", employeeOnly);
   });
+
+  if (employeeOnly) {
+    ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel", "auditPanel", "managerPortalPanel"].forEach((id) => $(id)?.classList.add("hidden"));
+    $("portalsPanel")?.classList.remove("hidden");
+  }
 }
 
 function ensureUltimateAutomationLayout() {
@@ -3050,6 +3286,17 @@ function ensureUltimateAutomationLayout() {
     `);
   } else if (managerPortalContent && $("laborPanel") && $("laborPanel").parentElement !== managerPortalContent) {
     managerPortalContent.appendChild($("laborPanel"));
+  }
+
+  const overridePanel = $("timeOffSettingsCard");
+  if (managerPortalContent && overridePanel && overridePanel.parentElement !== managerPortalContent) {
+    overridePanel.classList.add("portalSubcard", "managerOnly");
+    overridePanel.classList.remove("settingsInlineCard", "ownerOnly");
+    const badge = overridePanel.querySelector(".iconBadge");
+    const title = overridePanel.querySelector("h3");
+    if (badge) badge.textContent = "MP-04";
+    if (title) title.textContent = "Time-Off Override";
+    managerPortalContent.appendChild(overridePanel);
   }
 
   if (shiftsPanel) {
