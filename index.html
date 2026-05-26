@@ -163,11 +163,11 @@
                 <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
               </div>
 
-              <button id="loginButton" class="button primary">Login</button>
               <div class="authUtilityLinks">
                 <button id="forgotPasswordButton" class="linkButton" type="button">Reset password</button>
                 <button id="forgotUsernameButton" class="linkButton" type="button">Forgot username</button>
               </div>
+              <button id="loginButton" class="button primary">Login</button>
             </section>
           </section>
         </section>
@@ -632,6 +632,26 @@
           </div>
 
           <div class="settingsGrid">
+            <section class="settingsCard profileSettingsCard wideSettingsCard">
+              <div class="profileSettingsRow">
+                <div class="profileAvatarFrame">
+                  <img id="settingsProfileImage" class="profileAvatarImage hidden" alt="Profile picture" />
+                  <span id="settingsProfileInitials" class="profileAvatarInitials">SA</span>
+                </div>
+                <div class="profileSettingsInfo">
+                  <h3>Profile</h3>
+                  <p id="settingsProfileName" class="profileNameLine">Name</p>
+                  <p id="settingsProfileUsername" class="profileMetaLine">Username</p>
+                  <p id="settingsProfileEmail" class="profileMetaLine">Email</p>
+                </div>
+              </div>
+              <div class="profilePictureActions">
+                <label class="button secondary profileUploadButton" for="profilePictureInput">Add profile picture</label>
+                <input id="profilePictureInput" class="visuallyHidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <button id="removeProfilePictureButton" class="button ghost" type="button">Remove picture</button>
+              </div>
+              <p class="panelHint">Stored locally for now. When you add cloud accounts later, wire this to a real upload endpoint.</p>
+            </section>
             <section class="settingsCard">
               <h3>Language</h3>
               <p class="panelHint">Uses your device language when possible. Manual choices are saved locally.</p>
@@ -648,7 +668,7 @@
               <label class="toggleRow"><input id="ownerTwoFactorEnabled" type="checkbox" /> Require owner 2FA</label>
               <div id="ownerSecurityNotice" class="formNotice hidden"></div>
             </section>
-            <section class="settingsCard">
+            <section class="settingsCard nonEmployeeOnly">
               <h3>Account Recovery</h3>
               <p class="panelHint">Use verified email links for password reset and username reminders.</p>
               <button id="settingsForgotPasswordButton" class="button secondary" type="button">Send password reset</button>
