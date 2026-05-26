@@ -48,6 +48,8 @@ async function ownerOwnsLocation(user, locationId) {
 
 router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
   const requestedLocationId = req.query.locationId || null;
+  const safePage = Math.max(1, Number(req.query.page) || 1);
+  const safePageSize = Math.min(25, Math.max(1, Number(req.query.pageSize) || 5));
 
   try {
     let locationFilterSql = "";
@@ -55,7 +57,7 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
 
     if (req.user.role === "owner") {
       if (!requestedLocationId || !(await ownerOwnsLocation(req.user, requestedLocationId))) {
-        return res.json({ logs: [] });
+        return res.json({ logs: [], page: 1, pageSize: safePageSize, total: 0, totalPages: 1 });
       }
 
       params.push(requestedLocationId);
@@ -64,7 +66,7 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
       const allowedLocationIds = await assignedLocationIds(req.user);
 
       if (allowedLocationIds.length === 0) {
-        return res.json({ logs: [] });
+        return res.json({ logs: [], page: 1, pageSize: safePageSize, total: 0, totalPages: 1 });
       }
 
       if (requestedLocationId) {
@@ -79,6 +81,19 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
         locationFilterSql = "AND al.location_id = ANY($2::uuid[])";
       }
     }
+
+    const countResult = await pool.query(
+      `SELECT count(*)::int AS total
+       FROM audit_logs al
+       WHERE al.business_id = $1
+         ${locationFilterSql}`,
+      params
+    );
+
+    const total = countResult.rows[0]?.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+    const pageToUse = Math.min(safePage, totalPages);
+    const offset = (pageToUse - 1) * safePageSize;
 
     const result = await pool.query(
       `SELECT
@@ -100,11 +115,11 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
        WHERE al.business_id = $1
          ${locationFilterSql}
        ORDER BY al.created_at DESC
-       LIMIT 150`,
-      params
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, safePageSize, offset]
     );
 
-    res.json({ logs: result.rows });
+    res.json({ logs: result.rows, page: pageToUse, pageSize: safePageSize, total, totalPages });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to load audit log." });
