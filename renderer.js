@@ -2880,8 +2880,8 @@ function ensureUltimateAutomationLayout() {
   }
 
   const locationRulesHtml = `
-    <section id="locationRulesPanel" class="automationCard managerOnly hidden locationRulesInline">
-      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction locationRulesHeader">
+    <section id="locationRulesPanel" class="automationCard managerOnly hidden locationRulesInline locationRulesPanelBlock">
+      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction locationRulesHeader locationPanelSubheader">
         <div class="dashboardTitleGroup">
           <span class="iconBadge">01B</span>
           <div>
@@ -2891,8 +2891,8 @@ function ensureUltimateAutomationLayout() {
         </div>
         <div class="inlineToolbar rulesHeaderToolbar"><button id="createLocationRulesButton" class="button secondary" type="button">Update Rules</button></div>
       </div>
-      <form id="locationRulesForm" class="editorForm automationForm hidden">
-        <div class="formGrid twoColumn">
+      <form id="locationRulesForm" class="editorForm automationForm hidden locationRulesForm">
+        <div class="formGrid twoColumn locationRulesGrid">
           <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" /></div>
           <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" /></div>
           <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" /></div>
@@ -2902,14 +2902,19 @@ function ensureUltimateAutomationLayout() {
           <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay"><option value="" selected disabled>Select publish day</option>${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
           <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" /></div>
         </div>
-        <div class="fieldGroup"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
+        <div class="fieldGroup locationRulesOpenDaysField"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
       </form>
       <div id="locationRulesNotice" class="formNotice hidden"></div>
     </section>
   `;
 
   if (!$("locationRulesPanel")) {
-    locationsPanel.insertAdjacentHTML("beforeend", locationRulesHtml);
+    const locationPager = $("locationPager");
+    if (locationPager) {
+      locationPager.insertAdjacentHTML("afterend", locationRulesHtml);
+    } else {
+      locationsPanel.insertAdjacentHTML("beforeend", locationRulesHtml);
+    }
   }
 
   if ($("publishScheduleBar")) {
