@@ -185,6 +185,21 @@ async function findUserForLogin(login) {
   return slashResult.rows[0] || null;
 }
 
+async function verifyActorPassword(userId, password) {
+  if (!password) return false;
+
+  const result = await pool.query(
+    `SELECT password_hash
+     FROM users
+     WHERE id = $1
+       AND active = true`,
+    [userId]
+  );
+
+  if (result.rows.length === 0) return false;
+  return argon2.verify(result.rows[0].password_hash, normalizePassword(password));
+}
+
 function createAccessToken(user) {
   return jwt.sign(
     {
@@ -526,6 +541,40 @@ router.post("/refresh", async (req, res) => {
   });
 });
 
+router.post("/forgot-username", async (req, res) => {
+  const { email } = req.body;
+  const genericMessage = "If that email exists, a username reminder has been sent.";
+
+  if (!email) {
+    return res.json({ message: genericMessage });
+  }
+
+  const result = await pool.query(
+    `SELECT email, full_login, username
+     FROM users
+     WHERE lower(email) = $1
+       AND active = true
+     ORDER BY created_at ASC`,
+    [String(email).toLowerCase().trim()]
+  );
+
+  if (result.rows.length === 0) {
+    return res.json({ message: genericMessage });
+  }
+
+  const loginList = result.rows
+    .map((user) => `<li>${user.full_login || user.username}</li>`)
+    .join("");
+
+  await sendEmail({
+    to: result.rows[0].email,
+    subject: "Your Shift Ahoy username",
+    html: `<p>Here are the Shift Ahoy login names tied to this email:</p><ul>${loginList}</ul>`
+  });
+
+  res.json({ message: genericMessage });
+});
+
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
@@ -639,6 +688,54 @@ router.post("/logout", async (req, res) => {
 
   res.clearCookie("shiftahoy_refresh");
   res.json({ message: "Logged out." });
+});
+
+router.get("/settings", requireAuth, async (req, res) => {
+  if (req.user.role !== "owner") {
+    return res.status(403).json({ error: "Owner permission required." });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT owner_2fa_enabled
+       FROM businesses
+       WHERE id = $1`,
+      [req.user.businessId]
+    );
+
+    res.json({ settings: { twoFactorEnabled: result.rows[0]?.owner_2fa_enabled === true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load security settings." });
+  }
+});
+
+router.put("/settings", requireAuth, async (req, res) => {
+  if (req.user.role !== "owner") {
+    return res.status(403).json({ error: "Owner permission required." });
+  }
+
+  try {
+    const passwordOk = await verifyActorPassword(req.user.id, req.body.actorPassword);
+    if (!passwordOk) {
+      return res.status(403).json({ error: "Wrong owner password." });
+    }
+
+    const twoFactorEnabled = req.body.twoFactorEnabled === true;
+
+    await pool.query(
+      `UPDATE businesses
+       SET owner_2fa_enabled = $1,
+           updated_at = now()
+       WHERE id = $2`,
+      [twoFactorEnabled, req.user.businessId]
+    );
+
+    res.json({ settings: { twoFactorEnabled } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save security settings." });
+  }
 });
 
 router.get("/me", requireAuth, async (req, res) => {
