@@ -234,6 +234,102 @@ function setLanguage(code) {
   renderLanguageSelector("settingsLanguageSelector");
 }
 
+function userDisplayName() {
+  const first = currentUser?.firstName || currentUser?.first_name || "";
+  const last = currentUser?.lastName || currentUser?.last_name || "";
+  return `${first} ${last}`.trim() || currentUser?.username || currentUser?.email || "Shift Ahoy User";
+}
+
+function userInitials() {
+  const name = userDisplayName();
+  const parts = name.split(/\s+/).filter(Boolean);
+  const initials = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : name.slice(0, 2);
+  return initials.toUpperCase();
+}
+
+function profilePictureStorageKey() {
+  return currentUser?.id ? `shiftAhoyProfilePicture:${currentUser.id}` : "shiftAhoyProfilePicture:guest";
+}
+
+function getProfilePicture() {
+  try {
+    return localStorage.getItem(profilePictureStorageKey()) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setProfilePicture(dataUrl) {
+  try {
+    if (dataUrl) {
+      localStorage.setItem(profilePictureStorageKey(), dataUrl);
+    } else {
+      localStorage.removeItem(profilePictureStorageKey());
+    }
+  } catch {
+    setNotice("ownerSecurityNotice", "error", "The selected profile picture is too large for local storage.");
+  }
+  renderProfileSettings();
+  updateProfileAvatars();
+}
+
+function profileAvatarHtml(extraClass = "") {
+  const src = getProfilePicture();
+  const initials = escapeHtml(userInitials());
+  if (src) {
+    return `<span class="profileMiniAvatar ${extraClass}"><img src="${escapeHtml(src)}" alt="${escapeHtml(userDisplayName())} profile picture" /></span>`;
+  }
+  return `<span class="profileMiniAvatar ${extraClass}" aria-label="${escapeHtml(userDisplayName())}">${initials}</span>`;
+}
+
+function renderProfileSettings() {
+  const name = userDisplayName();
+  const username = currentUser?.fullLogin || currentUser?.username || "Username unavailable";
+  const email = currentUser?.email || "Email unavailable";
+  const picture = getProfilePicture();
+
+  if ($("settingsProfileName")) $("settingsProfileName").textContent = name;
+  if ($("settingsProfileUsername")) $("settingsProfileUsername").textContent = username;
+  if ($("settingsProfileEmail")) $("settingsProfileEmail").textContent = email;
+  if ($("settingsProfileInitials")) {
+    $("settingsProfileInitials").textContent = userInitials();
+    $("settingsProfileInitials").classList.toggle("hidden", !!picture);
+  }
+  if ($("settingsProfileImage")) {
+    $("settingsProfileImage").src = picture || "";
+    $("settingsProfileImage").classList.toggle("hidden", !picture);
+  }
+  if ($("removeProfilePictureButton")) $("removeProfilePictureButton").disabled = !picture;
+}
+
+function updateProfileAvatars() {
+  document.querySelectorAll("[data-profile-avatar]").forEach((slot) => {
+    slot.innerHTML = profileAvatarHtml("embeddedAvatar");
+  });
+}
+
+function handleProfilePictureChange(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  if (!file.type?.startsWith("image/")) {
+    setNotice("ownerSecurityNotice", "error", "Choose an image file for your profile picture.");
+    return;
+  }
+  if (file.size > 1024 * 1024) {
+    setNotice("ownerSecurityNotice", "error", "Choose an image under 1 MB for local storage.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.addEventListener("load", () => setProfilePicture(String(reader.result || "")));
+  reader.addEventListener("error", () => setNotice("ownerSecurityNotice", "error", "Could not read that image."));
+  reader.readAsDataURL(file);
+}
+
+function applyAccountVisibility() {
+  const employeeOnly = currentUser?.role === "employee";
+  document.querySelectorAll(".nonEmployeeOnly").forEach((el) => el.classList.toggle("hidden", employeeOnly));
+}
+
 function applyAppearanceMode(mode = localStorage.getItem("shiftAhoyAppearance") || "system") {
   const safeMode = ["system", "light", "dark"].includes(mode) ? mode : "system";
   localStorage.setItem("shiftAhoyAppearance", safeMode);
@@ -875,6 +971,9 @@ async function login(event) {
     accessToken = data.accessToken;
     currentUser = data.user;
 
+    renderProfileSettings();
+    updateProfileAvatars();
+
     if (!accessToken || !currentUser) {
       throw new Error("Login succeeded, but the server did not return a session.");
     }
@@ -909,6 +1008,8 @@ async function refreshSession() {
 
   accessToken = data.accessToken;
   currentUser = data.user || currentUser;
+  renderProfileSettings();
+  updateProfileAvatars();
   return data;
 }
 
@@ -956,9 +1057,10 @@ function applyRoleUI() {
   const employeeOnly = currentUser?.role === "employee";
 
   document.body.classList.toggle("employeePortalOnly", employeeOnly);
+  applyAccountVisibility();
   $("upgradeButton").classList.toggle("hidden", !owner || employeeOnly);
   $("currentPlanText").classList.toggle("hidden", !owner || employeeOnly);
-  $("settingsButton").classList.toggle("hidden", !owner);
+  $("settingsButton").classList.toggle("hidden", !currentUser);
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     if (el.classList.contains("editorForm")) {
@@ -979,6 +1081,10 @@ function applyRoleUI() {
   document.querySelectorAll(".nonManagerOnly").forEach((el) => {
     el.classList.toggle("hidden", canManage);
   });
+
+  applyAccountVisibility();
+  renderProfileSettings();
+  updateProfileAvatars();
 
   document.querySelectorAll(".managerOnly").forEach((el) => {
     el.classList.toggle("hidden", !canManage || employeeOnly);
@@ -2784,6 +2890,8 @@ function setupEvents() {
   $("cancelRecoveryX")?.addEventListener("click", () => $("recoveryDialog")?.close());
   $("appearanceMode")?.addEventListener("change", () => applyAppearanceMode($("appearanceMode").value));
   $("ownerTwoFactorEnabled")?.addEventListener("change", saveOwnerSecuritySettings);
+  $("profilePictureInput")?.addEventListener("change", handleProfilePictureChange);
+  $("removeProfilePictureButton")?.addEventListener("click", () => setProfilePicture(""));
 
   signupFieldIds.forEach((id) => {
     const input = $(id);
@@ -2989,7 +3097,12 @@ function setupEvents() {
   });
 
   $("upgradeButton").addEventListener("click", openPlanDialog);
-  $("settingsButton").addEventListener("click", async () => { await loadOwnerSecuritySettings(); $("settingsDialog").showModal(); });
+  $("settingsButton").addEventListener("click", async () => {
+    renderProfileSettings();
+    applyAccountVisibility();
+    if (isOwner()) await loadOwnerSecuritySettings();
+    $("settingsDialog").showModal();
+  });
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
@@ -3005,6 +3118,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setLanguage(detectDeviceLanguage());
   renderLanguageSelector("authLanguageDock");
   renderLanguageSelector("settingsLanguageSelector");
+  renderProfileSettings();
   applyAppearanceMode();
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => applyAppearanceMode());
   setupSectionNavigationHighlighting();
@@ -3039,6 +3153,7 @@ function syncAutomationRoleVisibility() {
   const employeeOnly = currentUser?.role === "employee";
 
   document.body.classList.toggle("employeePortalOnly", employeeOnly);
+  applyAccountVisibility();
 
   document.querySelectorAll(".ownerOnly").forEach((el) => {
     if (el.classList.contains("editorForm")) {
@@ -3183,6 +3298,24 @@ function ensureUltimateAutomationLayout() {
 
   const employeePortalContent = $("employeePortalContent");
   const managerPortalContent = $("managerPortalContent");
+
+  if (employeePortalContent && !$("employeePortalIdentity")) {
+    employeePortalContent.insertAdjacentHTML("afterbegin", `
+      <section id="employeePortalIdentity" class="portalSubcard profilePortalCard">
+        <div data-profile-avatar class="profilePortalAvatarSlot">${profileAvatarHtml("embeddedAvatar")}</div>
+        <div>
+          <h3>${escapeHtml(userDisplayName())}</h3>
+          <p class="panelHint">${escapeHtml(currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee")}</p>
+        </div>
+      </section>
+    `);
+  } else if ($("employeePortalIdentity")) {
+    const title = $("employeePortalIdentity")?.querySelector("h3");
+    const meta = $("employeePortalIdentity")?.querySelector(".panelHint");
+    if (title) title.textContent = userDisplayName();
+    if (meta) meta.textContent = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee";
+  }
+  updateProfileAvatars();
 
   if (employeePortalContent && !$("employeeSchedulePanel")) {
     employeePortalContent.insertAdjacentHTML("beforeend", `
@@ -3509,13 +3642,14 @@ async function loadEmployeeSchedule() {
     list.innerHTML = `
       <article class="automationSummary"><strong>${cells.length}</strong><span>published shifts this week</span></article>
       ${cells.length ? cells.map((cell) => `
-        <article class="listItem"><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
+        <article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
       `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
       <div class="automationDivider">Request status</div>
-      ${timeOff.length ? timeOff.map((request) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
+      ${timeOff.length ? timeOff.map((request) => `<article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
       <div class="automationDivider">Open shifts at your location</div>
-      ${openShifts.length ? openShifts.slice(0, 5).map((shift) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open</span></div><button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button></article>`).join("") : `<div class="emptyState compactEmpty">No open shifts available.</div>`}
+      ${openShifts.length ? openShifts.slice(0, 5).map((shift) => `<article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open</span></div><button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button></article>`).join("") : `<div class="emptyState compactEmpty">No open shifts available.</div>`}
     `;
+    updateProfileAvatars();
   } catch (err) {
     list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
   }
