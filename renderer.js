@@ -936,7 +936,6 @@ async function login(event) {
     await loadLocations({ resetPage: true });
     await loadOwnerSecuritySettings().catch(() => {});
     renderUltimateAutomationPanels();
-    showMessage("Login successful.", "success");
   } catch (err) {
     accessToken = null;
     currentUser = null;
