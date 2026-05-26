@@ -2,6 +2,18 @@
 
 Shift Ahoy is a desktop employee scheduling system for small teams and multi-location businesses. It combines an Electron desktop app with a local Node/Express API and PostgreSQL database so owners and managers can build schedules, manage employees, review time-off requests, publish schedules, and monitor coverage health from one organized dashboard.
 
+
+## Recent UX and Workflow Updates
+
+- Dashboard greeting now displays the user's full name instead of their username/login.
+- Removed the top dashboard alert area under the greeting; validation and workflow feedback now stay closer to the related form or action.
+- Schedule Forecast is employee-centered: every active employee for the selected location appears as a row for the selected week, even when they are off all week.
+- Schedule preview/print now uses a professional print-focused layout with a schedule summary header, clean table styling, and print-safe spacing.
+- Dark mode now keeps form fields, validation states, warning cards, schedule health cards, portal metrics, and labor cards visually consistent.
+- Employee-created usernames and passwords now follow the same rules as owner account creation.
+- Owners can turn employee time-off requests on/off.
+- Owners can turn employee shift cover/swap requests on/off independently from time-off requests.
+
 ## Current Feature Set
 
 ### Scheduling automation
@@ -40,6 +52,7 @@ Shift Ahoy is a desktop employee scheduling system for small teams and multi-loc
 - Manager/owner approval and denial workflow
 - Approved time off automatically feeds into schedule forecasting
 - Time-off request enable/disable setting
+- Shift cover/swap request enable/disable setting
 - Blocked dates and holiday dates by location
 
 ### Open shifts and shift coverage
@@ -47,6 +60,7 @@ Shift Ahoy is a desktop employee scheduling system for small teams and multi-loc
 - Open shifts generated from published schedule coverage gaps
 - Employees can claim open shifts
 - Shift cover and shift swap request workflow
+- Owner setting to turn employee shift cover/swap requests on or off
 - Manager/owner approval or denial for cover/swap requests
 - Approved cover/swap requests can update saved schedule cells when linked to a published schedule cell
 
