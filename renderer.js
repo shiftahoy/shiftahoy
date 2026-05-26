@@ -33,6 +33,7 @@ let timeOffCalendarMonth = startOfMonth(new Date());
 let timeOffRangeStart = null;
 let timeOffRangeEnd = null;
 let auditLogs = [];
+let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
 
 const message = document.getElementById("message");
 
@@ -1022,8 +1023,16 @@ async function loadSchedule() {
     `/schedules?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`
   );
 
-  renderSchedule(data.cells || []);
-  renderScheduleHealth(data.health || null, data.coverage || [], data.warnings || []);
+  lastSchedulePayload = {
+    cells: data.cells || [],
+    coverage: data.coverage || [],
+    warnings: data.warnings || [],
+    health: data.health || null,
+    skipped: data.skipped || []
+  };
+  renderSchedule(lastSchedulePayload.cells);
+  renderScheduleHealth(lastSchedulePayload.health, lastSchedulePayload.coverage, lastSchedulePayload.warnings);
+  renderUltimateAutomationPanels();
 }
 
 function renderEmptySchedule() {
@@ -1458,6 +1467,10 @@ function resetEmployeeForm() {
   $("employmentType").value = "full_time";
   $("weeklyHours").value = "40";
   $("dailyHours").value = "8";
+  if ($("payRateDollars")) $("payRateDollars").value = "0";
+  if ($("overtimeAllowed")) $("overtimeAllowed").checked = true;
+  if ($("overtimeThresholdHours")) $("overtimeThresholdHours").value = "40";
+  if ($("minRestHours")) $("minRestHours").value = "8";
   $("employeePriority").value = "1";
   $("orientationStart").value = "";
   $("canManageSchedule").checked = false;
@@ -1512,7 +1525,7 @@ function renderEmployees() {
       <article class="listItem">
         <div>
           <strong>${escapeHtml(employee.employee_code)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
-          <span>${escapeHtml(employee.title)} · ${escapeHtml(employee.employment_type)} · ${escapeHtml(employee.weekly_hours)} hrs/week · Available: ${escapeHtml(availableDays)}</span>
+          <span>${escapeHtml(employee.title)} · ${escapeHtml(employee.employment_type)} · ${escapeHtml(employee.weekly_hours)} hrs/week · Pay $${escapeHtml(((Number(employee.pay_rate_cents || 0) / 100).toFixed(2)))} · Available: ${escapeHtml(availableDays)}</span>
           <span>Days off: ${escapeHtml(daysOff.join(", ") || "None")}</span>
         </div>
         <div class="rowActions">
@@ -1543,6 +1556,10 @@ function editEmployee(employeeId) {
   $("employmentType").value = employee.employment_type || "full_time";
   $("weeklyHours").value = employee.weekly_hours || "40";
   $("dailyHours").value = employee.daily_hours || "8";
+  if ($("payRateDollars")) $("payRateDollars").value = ((Number(employee.pay_rate_cents || 0) / 100).toFixed(2));
+  if ($("overtimeAllowed")) $("overtimeAllowed").checked = employee.overtime_allowed !== false;
+  if ($("overtimeThresholdHours")) $("overtimeThresholdHours").value = employee.overtime_threshold_hours || "40";
+  if ($("minRestHours")) $("minRestHours").value = employee.min_rest_hours || "8";
   $("employeePriority").value = employee.priority || "1";
   $("orientationStart").value = employee.orientation_start ? String(employee.orientation_start).slice(0, 10) : "";
   $("canManageSchedule").checked = Boolean(employee.can_manage_schedule);
@@ -1577,6 +1594,10 @@ async function saveEmployee(event) {
     employmentType: $("employmentType").value,
     weeklyHours: Number($("weeklyHours").value),
     dailyHours: Number($("dailyHours").value),
+    payRateCents: Math.max(0, Math.round(Number($("payRateDollars")?.value || 0) * 100)),
+    overtimeAllowed: $("overtimeAllowed")?.checked !== false,
+    overtimeThresholdHours: Number($("overtimeThresholdHours")?.value || 40),
+    minRestHours: Number($("minRestHours")?.value || 8),
     priority: Number($("employeePriority").value),
     preferredShiftId: $("preferredShiftId").value || null,
     orientationStart: $("orientationStart").value || null,
@@ -2731,3 +2752,417 @@ document.addEventListener("DOMContentLoaded", () => {
   resetFieldState("holidayDateName", "Required");
   resetFieldState("decisionReason", "Required");
 });
+
+// Ultimate automation layer: publish states, employee view, open shifts, shift swaps, labor forecasting, location rules, and manager queue.
+function moneyFromCents(cents) {
+  return `$${(Number(cents || 0) / 100).toFixed(2)}`;
+}
+
+function ensureUltimateAutomationLayout() {
+  const navList = document.querySelector(".navList");
+  if (navList && !$("ultimateNavRules")) {
+    const scheduleLink = navList.querySelector('a[href="#schedulePanel"]');
+    scheduleLink?.insertAdjacentHTML("afterend", `
+      <a id="ultimateNavRules" class="navItem managerOnly" href="#locationRulesPanel">Rules</a>
+      <a id="ultimateNavOpen" class="navItem" href="#openShiftsPanel">Open Shifts</a>
+      <a id="ultimateNavLabor" class="navItem managerOnly" href="#laborPanel">Labor</a>
+      <a id="ultimateNavQueue" class="navItem managerOnly" href="#approvalQueuePanel">Queue</a>
+    `);
+  }
+
+  const schedulePanel = $("schedulePanel");
+  if (schedulePanel && !$("publishScheduleBar")) {
+    schedulePanel.insertAdjacentHTML("beforeend", `
+      <section id="publishScheduleBar" class="automationCard managerOnly hidden">
+        <div>
+          <p class="eyebrow">Publish Control</p>
+          <h3 id="publishedScheduleStatus">Forecast is live</h3>
+          <p class="panelHint">Save a draft while reviewing, publish when employees can rely on it, or revise after publishing.</p>
+        </div>
+        <div class="inlineToolbar wrapToolbar">
+          <input id="schedulePublishNotes" class="searchInput" placeholder="Optional publish note" />
+          <button id="saveDraftScheduleButton" class="button secondary" type="button">Save Draft</button>
+          <button id="publishScheduleButton" class="button primary" type="button">Publish</button>
+          <button id="reviseScheduleButton" class="button ghost" type="button">Revise</button>
+        </div>
+      </section>
+    `);
+  }
+
+  const workspace = document.querySelector(".dashboardPanels") || document.querySelector(".workspace");
+  const anchor = $("timeOffPanel") || schedulePanel;
+  if (!workspace || !anchor) return;
+
+  if (!$("locationRulesPanel")) {
+    anchor.insertAdjacentHTML("afterend", `
+      <section id="locationRulesPanel" class="card panelCard managerOnly hidden">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup">
+            <span class="iconBadge">R</span>
+            <div>
+              <h2>Location Rules</h2>
+              <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls.</p>
+            </div>
+          </div>
+        </div>
+        <form id="locationRulesForm" class="editorForm automationForm">
+          <div class="formGrid twoColumn">
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" value="08:00" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" value="17:00" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" value="0" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleMaxEmployees">Max Employees / Day</label><input id="ruleMaxEmployees" type="number" min="1" placeholder="No cap" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleDefaultRequired">Default Employees Needed</label><input id="ruleDefaultRequired" type="number" min="0" max="99" value="1" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleLaborBudget">Weekly Labor Budget</label><input id="ruleLaborBudget" type="number" min="0" step="0.01" value="0" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay">${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" value="America/Chicago" /></div>
+          </div>
+          <div class="fieldGroup"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
+          <div class="formActions"><button class="button primary" type="submit">Save Rules</button></div>
+        </form>
+        <div id="locationRulesNotice" class="formNotice hidden"></div>
+      </section>
+    `);
+  }
+
+  if (!$("employeeSchedulePanel")) {
+    $("locationRulesPanel")?.insertAdjacentHTML("afterend", `
+      <section id="employeeSchedulePanel" class="card panelCard">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">ME</span><div><h2>My Schedule</h2><p class="panelHint">Employee view for published shifts, open shifts, and request status.</p></div></div>
+        </div>
+        <div id="employeeScheduleList" class="listStack"></div>
+      </section>
+    `);
+  }
+
+  if (!$("openShiftsPanel")) {
+    $("employeeSchedulePanel")?.insertAdjacentHTML("afterend", `
+      <section id="openShiftsPanel" class="card panelCard">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">OS</span><div><h2>Open Shifts</h2><p class="panelHint">Coverage gaps from published schedules become claimable open shifts.</p></div></div>
+          <button id="refreshOpenShiftsButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="openShiftsList" class="listStack"></div>
+      </section>
+    `);
+  }
+
+  if (!$("shiftSwapsPanel")) {
+    $("openShiftsPanel")?.insertAdjacentHTML("afterend", `
+      <section id="shiftSwapsPanel" class="card panelCard">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">SW</span><div><h2>Shift Cover / Swap</h2><p class="panelHint">Employees can offer shifts for cover, coworkers can accept, and managers approve.</p></div></div>
+          <button id="showSwapRequestButton" class="button secondary" type="button">Request Cover</button>
+        </div>
+        <form id="swapRequestForm" class="editorForm hidden">
+          <div class="formGrid twoColumn">
+            <div class="fieldGroup"><label class="fieldLabel" for="swapWorkDate">Work Date</label><input id="swapWorkDate" type="date" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="swapRequestType">Request Type</label><select id="swapRequestType"><option value="cover">Cover</option><option value="swap">Swap</option></select></div>
+          </div>
+          <div class="fieldGroup"><label class="fieldLabel" for="swapReason">Reason</label><input id="swapReason" placeholder="Optional reason" /></div>
+          <div class="formActions"><button class="button primary" type="submit">Submit Request</button><button id="cancelSwapRequestButton" class="button ghost" type="button">Cancel</button></div>
+        </form>
+        <div id="shiftSwapList" class="listStack"></div>
+      </section>
+    `);
+  }
+
+  if (!$("laborPanel")) {
+    $("shiftSwapsPanel")?.insertAdjacentHTML("afterend", `
+      <section id="laborPanel" class="card panelCard managerOnly hidden">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">$</span><div><h2>Labor Forecast</h2><p class="panelHint">Estimated costs, overtime warnings, and budget control for the selected week.</p></div></div>
+          <button id="refreshLaborButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="laborForecastList" class="listStack"></div>
+      </section>
+    `);
+  }
+
+  if (!$("approvalQueuePanel")) {
+    $("laborPanel")?.insertAdjacentHTML("afterend", `
+      <section id="approvalQueuePanel" class="card panelCard managerOnly hidden">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">Q</span><div><h2>Manager Approval Queue</h2><p class="panelHint">One place for time off, shift cover/swap requests, and open coverage gaps.</p></div></div>
+          <button id="refreshApprovalQueueButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="approvalQueueList" class="listStack"></div>
+      </section>
+    `);
+  }
+}
+
+function renderRuleOpenDays(openDays = [1, 2, 3, 4, 5]) {
+  const selected = new Set(openDays.map(Number));
+  const box = $("ruleOpenDays");
+  if (!box) return;
+  box.innerHTML = DAYS.map((day) => `
+    <button class="dotDay ${selected.has(day.value) ? "active" : ""}" type="button" data-day="${day.value}" aria-pressed="${selected.has(day.value)}">${day.short}</button>
+  `).join("");
+}
+
+function collectRuleOpenDays() {
+  return [...document.querySelectorAll("#ruleOpenDays .dotDay.active")].map((button) => Number(button.dataset.day));
+}
+
+async function loadLocationRules() {
+  if (!selectedLocationId || !canManageSchedule() || !$("locationRulesForm")) return;
+  try {
+    const data = await api(`/automation/rules?locationId=${encodeURIComponent(selectedLocationId)}`);
+    const rules = data.rules || {};
+    $("ruleOperatingStart").value = String(rules.operating_start || "08:00").slice(0, 5);
+    $("ruleOperatingEnd").value = String(rules.operating_end || "17:00").slice(0, 5);
+    $("ruleMinEmployees").value = rules.min_employees_per_day ?? 0;
+    $("ruleMaxEmployees").value = rules.max_employees_per_day ?? "";
+    $("ruleDefaultRequired").value = rules.default_required_staff ?? 1;
+    $("ruleLaborBudget").value = ((Number(rules.labor_budget_cents || 0) / 100).toFixed(2));
+    $("rulePublishDay").value = rules.schedule_publish_day ?? 1;
+    $("ruleTimeZone").value = rules.time_zone || "America/Chicago";
+    renderRuleOpenDays(rules.open_days || [1, 2, 3, 4, 5]);
+  } catch (err) {
+    setNotice("locationRulesNotice", "error", err.message);
+  }
+}
+
+async function saveLocationRules(event) {
+  event.preventDefault();
+  if (!selectedLocationId) return;
+  try {
+    const data = await api("/automation/rules", {
+      method: "PUT",
+      body: JSON.stringify({
+        locationId: selectedLocationId,
+        openDays: collectRuleOpenDays(),
+        operatingStart: $("ruleOperatingStart").value,
+        operatingEnd: $("ruleOperatingEnd").value,
+        minEmployeesPerDay: Number($("ruleMinEmployees").value || 0),
+        maxEmployeesPerDay: $("ruleMaxEmployees").value || null,
+        defaultRequiredStaff: Number($("ruleDefaultRequired").value || 1),
+        laborBudgetCents: Math.round(Number($("ruleLaborBudget").value || 0) * 100),
+        schedulePublishDay: Number($("rulePublishDay").value || 1),
+        timeZone: $("ruleTimeZone").value || "America/Chicago"
+      })
+    });
+    setNotice("locationRulesNotice", "success", data.message || "Rules saved.");
+    await Promise.all([loadSchedule(), loadAuditLog()]);
+  } catch (err) {
+    setNotice("locationRulesNotice", "error", err.message);
+  }
+}
+
+async function saveScheduleState(state) {
+  if (!selectedLocationId) return;
+  if (!lastSchedulePayload.cells.length && state !== "draft") {
+    showMessage("No forecast cells are available to publish yet.");
+    return;
+  }
+  try {
+    const data = await api("/automation/schedules/publish", {
+      method: "POST",
+      body: JSON.stringify({
+        locationId: selectedLocationId,
+        weekStart: dateOnly(currentWeekStart),
+        state,
+        notes: $("schedulePublishNotes")?.value || "",
+        cells: lastSchedulePayload.cells,
+        coverage: lastSchedulePayload.coverage
+      })
+    });
+    showMessage(data.message || "Schedule saved.", "success");
+    await Promise.all([loadPublishedScheduleStatus(), loadOpenShifts(), loadLaborForecast(), loadApprovalQueue(), loadAuditLog()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function loadPublishedScheduleStatus() {
+  if (!selectedLocationId || !$("publishedScheduleStatus")) return;
+  try {
+    const data = await api(`/automation/schedules/published?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`);
+    const schedule = data.schedule;
+    $("publishedScheduleStatus").textContent = schedule
+      ? `${String(schedule.status || "draft").toUpperCase()} · Revision ${schedule.revision_number || 1}`
+      : "Forecast has not been saved yet";
+  } catch {
+    $("publishedScheduleStatus").textContent = "Published status unavailable";
+  }
+}
+
+async function loadEmployeeSchedule() {
+  const list = $("employeeScheduleList");
+  if (!list || !accessToken) return;
+  try {
+    const data = await api(`/automation/employee-schedule?weekStart=${dateOnly(currentWeekStart)}`);
+    const cells = data.cells || [];
+    const timeOff = data.timeOff || [];
+    const openShifts = data.openShifts || [];
+    list.innerHTML = `
+      <article class="automationSummary"><strong>${cells.length}</strong><span>published shifts this week</span></article>
+      ${cells.length ? cells.map((cell) => `
+        <article class="listItem"><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
+      `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
+      <div class="automationDivider">Request status</div>
+      ${timeOff.length ? timeOff.map((request) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
+      <div class="automationDivider">Open shifts at your location</div>
+      ${openShifts.length ? openShifts.slice(0, 5).map((shift) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open</span></div><button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button></article>`).join("") : `<div class="emptyState compactEmpty">No open shifts available.</div>`}
+    `;
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadOpenShifts() {
+  const list = $("openShiftsList");
+  if (!list || !selectedLocationId) return;
+  try {
+    const data = await api(`/automation/open-shifts?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`);
+    const shifts = data.openShifts || [];
+    list.innerHTML = shifts.length ? shifts.map((shift) => `
+      <article class="listItem">
+        <div><strong>${escapeHtml(formatRequestDate(shift.work_date))} — ${escapeHtml(shift.shift_name)}</strong><span>${escapeHtml(String(shift.start_time || "").slice(0,5))}–${escapeHtml(String(shift.end_time || "").slice(0,5))} · ${escapeHtml(shift.slots_open)} open · ${escapeHtml(shift.status)}</span></div>
+        <button class="button secondary" data-action="claim-open-shift" data-id="${escapeHtml(shift.id)}">Claim</button>
+      </article>`).join("") : `<div class="emptyState compactEmpty">No open shifts have been published for this week.</div>`;
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function claimOpenShift(id) {
+  try {
+    await api(`/automation/open-shifts/${encodeURIComponent(id)}/claim`, { method: "POST", body: JSON.stringify({ note: "Claimed from Shift Ahoy desktop." }) });
+    await Promise.all([loadOpenShifts(), loadEmployeeSchedule(), loadApprovalQueue(), loadAuditLog()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function loadShiftSwaps() {
+  const list = $("shiftSwapList");
+  if (!list) return;
+  try {
+    const suffix = selectedLocationId ? `?locationId=${encodeURIComponent(selectedLocationId)}` : "";
+    const data = await api(`/automation/shift-swaps${suffix}`);
+    const requests = data.requests || [];
+    list.innerHTML = requests.length ? requests.map((request) => {
+      const fromName = `${request.from_first_name || ""} ${request.from_last_name || ""}`.trim() || request.from_username || "Employee";
+      const toName = `${request.to_first_name || ""} ${request.to_last_name || ""}`.trim() || request.to_username || "No taker yet";
+      return `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(request.work_date))} · ${escapeHtml(request.request_type)}</strong><span>${escapeHtml(fromName)} → ${escapeHtml(toName)} · ${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div><div class="rowActions"><button class="button secondary" data-action="accept-swap" data-id="${escapeHtml(request.id)}">Accept</button><button class="button primary managerOnly" data-action="approve-swap" data-id="${escapeHtml(request.id)}">Approve</button><button class="button ghost managerOnly" data-action="deny-swap" data-id="${escapeHtml(request.id)}">Deny</button></div></article>`;
+    }).join("") : `<div class="emptyState compactEmpty">No shift cover or swap requests yet.</div>`;
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function submitSwapRequest(event) {
+  event.preventDefault();
+  try {
+    await api("/automation/shift-swaps", {
+      method: "POST",
+      body: JSON.stringify({
+        workDate: $("swapWorkDate").value,
+        requestType: $("swapRequestType").value,
+        reason: $("swapReason").value
+      })
+    });
+    $("swapRequestForm").classList.add("hidden");
+    await Promise.all([loadShiftSwaps(), loadApprovalQueue(), loadAuditLog()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function decideSwap(id, decision) {
+  try {
+    await api(`/automation/shift-swaps/${encodeURIComponent(id)}/${decision === "accept" ? "accept" : "decision"}`, {
+      method: "POST",
+      body: decision === "accept" ? JSON.stringify({}) : JSON.stringify({ decision, reason: "Handled from manager queue." })
+    });
+    await Promise.all([loadShiftSwaps(), loadApprovalQueue(), loadEmployeeSchedule(), loadAuditLog()]);
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+async function loadLaborForecast() {
+  const list = $("laborForecastList");
+  if (!list || !selectedLocationId || !canManageSchedule()) return;
+  try {
+    const data = await api(`/automation/labor?locationId=${encodeURIComponent(selectedLocationId)}&weekStart=${dateOnly(currentWeekStart)}`);
+    const employeeRows = data.byEmployee || [];
+    const warnings = data.warnings || [];
+    list.innerHTML = `
+      <section class="automationMetrics">
+        <article><strong>${moneyFromCents(data.totalCostCents)}</strong><span>estimated labor</span></article>
+        <article><strong>${moneyFromCents(data.laborBudgetCents)}</strong><span>weekly budget</span></article>
+        <article><strong>${warnings.length}</strong><span>warnings</span></article>
+      </section>
+      ${warnings.length ? `<div class="scheduleWarningsList"><ul>${warnings.map((w) => `<li>${escapeHtml(w.message)}</li>`).join("")}</ul></div>` : `<div class="scheduleWarningsList success">Labor is within configured limits.</div>`}
+      ${employeeRows.length ? employeeRows.map((row) => `<article class="listItem"><div><strong>${escapeHtml(row.name || row.employeeCode)}</strong><span>${escapeHtml(row.hours.toFixed(2))} hours · ${moneyFromCents(row.costCents)} · OT after ${escapeHtml(row.overtimeThresholdHours)}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">Save or publish a schedule to calculate labor.</div>`}
+    `;
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadApprovalQueue() {
+  const list = $("approvalQueueList");
+  if (!list || !selectedLocationId || !canManageSchedule()) return;
+  try {
+    const data = await api(`/automation/approval-queue?locationId=${encodeURIComponent(selectedLocationId)}`);
+    const queue = data.queue || { timeOff: [], shiftSwaps: [], openShifts: [], total: 0 };
+    list.innerHTML = `
+      <section class="automationMetrics"><article><strong>${escapeHtml(queue.total || 0)}</strong><span>items needing attention</span></article><article><strong>${escapeHtml(queue.timeOff.length)}</strong><span>time off</span></article><article><strong>${escapeHtml(queue.shiftSwaps.length)}</strong><span>swap/cover</span></article><article><strong>${escapeHtml(queue.openShifts.length)}</strong><span>open shifts</span></article></section>
+      <div class="automationDivider">Time Off</div>
+      ${queue.timeOff.length ? queue.timeOff.map((r) => `<article class="listItem"><div><strong>${escapeHtml(`${r.first_name || ""} ${r.last_name || ""}`.trim() || r.username)}</strong><span>${escapeHtml(formatRequestDate(r.start_date))}–${escapeHtml(formatRequestDate(r.end_date))} · ${escapeHtml(r.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No pending time off.</div>`}
+      <div class="automationDivider">Shift Swaps / Covers</div>
+      ${queue.shiftSwaps.length ? queue.shiftSwaps.map((r) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(r.work_date))} · ${escapeHtml(r.request_type)}</strong><span>${escapeHtml(r.status)} · ${escapeHtml(r.reason || "")}</span></div><div class="rowActions"><button class="button primary" data-action="approve-swap" data-id="${escapeHtml(r.id)}">Approve</button><button class="button ghost" data-action="deny-swap" data-id="${escapeHtml(r.id)}">Deny</button></div></article>`).join("") : `<div class="emptyState compactEmpty">No shift swap approvals.</div>`}
+      <div class="automationDivider">Coverage Gaps</div>
+      ${queue.openShifts.length ? queue.openShifts.map((s) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(s.work_date))} — ${escapeHtml(s.shift_name)}</strong><span>${escapeHtml(s.slots_open)} open slot(s)</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No open coverage gaps.</div>`}
+    `;
+  } catch (err) {
+    list.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderUltimateAutomationPanels() {
+  if (!accessToken) return;
+  ensureUltimateAutomationLayout();
+  loadPublishedScheduleStatus();
+  loadEmployeeSchedule();
+  loadOpenShifts();
+  loadShiftSwaps();
+  loadLaborForecast();
+  loadApprovalQueue();
+  loadLocationRules();
+}
+
+function setupUltimateAutomationEvents() {
+  ensureUltimateAutomationLayout();
+  renderRuleOpenDays();
+  $("locationRulesForm")?.addEventListener("submit", saveLocationRules);
+  $("ruleOpenDays")?.addEventListener("click", (event) => {
+    const button = event.target.closest(".dotDay");
+    if (!button) return;
+    button.classList.toggle("active");
+    button.setAttribute("aria-pressed", button.classList.contains("active"));
+  });
+  $("saveDraftScheduleButton")?.addEventListener("click", () => saveScheduleState("draft"));
+  $("publishScheduleButton")?.addEventListener("click", () => saveScheduleState("published"));
+  $("reviseScheduleButton")?.addEventListener("click", () => saveScheduleState("revised"));
+  $("refreshOpenShiftsButton")?.addEventListener("click", loadOpenShifts);
+  $("refreshLaborButton")?.addEventListener("click", loadLaborForecast);
+  $("refreshApprovalQueueButton")?.addEventListener("click", loadApprovalQueue);
+  $("showSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.remove("hidden"));
+  $("cancelSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.add("hidden"));
+  $("swapRequestForm")?.addEventListener("submit", submitSwapRequest);
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "claim-open-shift") await claimOpenShift(button.dataset.id);
+    if (button.dataset.action === "accept-swap") await decideSwap(button.dataset.id, "accept");
+    if (button.dataset.action === "approve-swap") await decideSwap(button.dataset.id, "approve");
+    if (button.dataset.action === "deny-swap") await decideSwap(button.dataset.id, "deny");
+  });
+}
+
+document.addEventListener("DOMContentLoaded", setupUltimateAutomationEvents);
