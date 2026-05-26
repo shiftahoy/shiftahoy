@@ -377,12 +377,6 @@
                   <input id="minRestHours" type="number" min="0" max="24" step="0.25" value="8" />
                 </div>
                 <div class="fieldGroup">
-                  <label class="checkboxLine">
-                    <input id="overtimeAllowed" type="checkbox" checked />
-                    Overtime allowed
-                  </label>
-                </div>
-                <div class="fieldGroup">
                   <label class="fieldLabel" for="employeePriority">Priority</label>
                   <input id="employeePriority" type="number" min="1" max="25" value="1" />
                 </div>
@@ -411,12 +405,21 @@
                 <div id="daysOffList" class="pillList"></div>
               </div>
 
-              <div class="fieldGroup ownerOnly">
-                <label class="checkboxLine">
-                  <input id="canManageSchedule" type="checkbox" />
-                  Manager permission
-                </label>
-              </div>
+              <section class="permissionsSection" aria-label="Employee permissions">
+                <div class="permissionsHeader">
+                  <span class="fieldLabel">Permissions</span>
+                </div>
+                <div class="permissionsGrid">
+                  <label class="permissionCheck checkboxLine">
+                    <input id="overtimeAllowed" type="checkbox" checked />
+                    <span>Overtime</span>
+                  </label>
+                  <label class="permissionCheck checkboxLine ownerOnly">
+                    <input id="canManageSchedule" type="checkbox" />
+                    <span>Manage Schedule</span>
+                  </label>
+                </div>
+              </section>
 
               <div class="formActions">
                 <button id="saveEmployeeButton" class="button primary" type="submit">Save Employee</button>
