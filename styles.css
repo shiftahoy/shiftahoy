@@ -2471,3 +2471,56 @@ body {
     width: 100%;
   }
 }
+
+/* v9: force Location Rules action to the far-right edge, matching Add Location */
+.locationRulesInline .cardTitle.dashboardCardTitleWithAction,
+.locationRulesInline .cardTitle.dashboardCardTitleWithAction.locationRulesHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 16px;
+  width: 100%;
+}
+
+.locationRulesInline .dashboardTitleGroup {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.locationRulesInline .dashboardTitleGroup .panelHint {
+  max-width: 100%;
+}
+
+.locationRulesInline .inlineToolbar,
+.locationRulesInline .rulesHeaderToolbar {
+  justify-self: end;
+  align-self: start;
+  margin-left: 0;
+  width: auto;
+  max-width: max-content;
+  flex: 0 0 auto;
+}
+
+.locationRulesInline #createLocationRulesButton {
+  margin-left: 0;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 780px) {
+  .locationRulesInline .cardTitle.dashboardCardTitleWithAction,
+  .locationRulesInline .cardTitle.dashboardCardTitleWithAction.locationRulesHeader {
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  .locationRulesInline .inlineToolbar,
+  .locationRulesInline .rulesHeaderToolbar {
+    justify-self: stretch;
+    width: 100%;
+    max-width: none;
+  }
+
+  .locationRulesInline #createLocationRulesButton {
+    width: 100%;
+  }
+}
