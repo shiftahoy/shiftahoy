@@ -54,28 +54,20 @@
         </header>
 
         <section id="authView" class="authLayout">
+          <div id="authLanguageDock" class="languageDock" aria-label="Language selector"></div>
           <section class="heroPanel">
             <div class="heroLogoWrap">
               <img class="heroLogo" src="assets/logo.png" alt="Shift Ahoy logo" />
             </div>
 
             <p class="eyebrow">Blue-water clarity</p>
-            <h2>Build schedules without the spreadsheet hassle.</h2>
-            <p>Navigate schedules from one clean experience.</p>
+            <h2>Navigate schedules from one clean experience.</h2>
 
             <div class="metricGrid" aria-label="Product highlights">
-              <div>
-                <strong>FORECAST</strong>
-                <span>automatically updates every week</span>
-              </div>
-              <div>
-                <strong>MANAGE</strong>
-                <span>owner and manager role controls</span>
-              </div>
-              <div>
-                <strong>PRINT</strong>
-                <span>ready-to-print schedules</span>
-              </div>
+              <div><strong>FORECAST</strong><span>Staffing suggestions by location and week</span></div>
+              <div><strong>PUBLISH</strong><span>Draft, publish, revise, and print schedules</span></div>
+              <div><strong>PORTALS</strong><span>Employee self-service and manager approvals</span></div>
+              <div><strong>LABOR</strong><span>Budget, overtime, and coverage warnings</span></div>
             </div>
           </section>
 
@@ -172,6 +164,10 @@
               </div>
 
               <button id="loginButton" class="button primary">Login</button>
+              <div class="authUtilityLinks">
+                <button id="forgotPasswordButton" class="linkButton" type="button">Reset password</button>
+                <button id="forgotUsernameButton" class="linkButton" type="button">Forgot username</button>
+              </div>
             </section>
           </section>
         </section>
@@ -602,6 +598,11 @@
               </div>
             </div>
             <div id="auditLogList" class="listStack"></div>
+            <div id="auditPager" class="pager hidden">
+              <button id="prevAuditPage" class="button ghost" type="button">← Previous</button>
+              <button id="nextAuditPage" class="button ghost" type="button">Next →</button>
+              <div id="auditPageLabel" class="pageLabel">Page 1/1</div>
+            </div>
           </section>
         </section>
 
@@ -610,6 +611,7 @@
             <div>
               <p class="eyebrow">Billing</p>
               <h2>Choose Plan</h2>
+              <p class="panelHint">Review your current plan, compare limits, then confirm upgrades or downgrades with the owner password.</p>
             </div>
 
             <button id="closePlanDialog" class="button ghost">Close</button>
@@ -623,13 +625,53 @@
             <div>
               <p class="eyebrow">Settings</p>
               <h2>Settings</h2>
-              <p class="panelHint">Settings options will be added here later.</p>
+              <p class="panelHint">Language, appearance, security, account recovery, and local desktop preferences.</p>
             </div>
 
             <button id="closeSettingsDialog" class="button ghost">Close</button>
           </div>
 
-          <div class="emptyState">No settings have been added yet.</div>
+          <div class="settingsGrid">
+            <section class="settingsCard">
+              <h3>Language</h3>
+              <p class="panelHint">Uses your device language when possible. Manual choices are saved locally.</p>
+              <div id="settingsLanguageSelector" class="settingsLanguageSelector"></div>
+            </section>
+            <section class="settingsCard">
+              <h3>Appearance</h3>
+              <p class="panelHint">Use your device theme or force light/dark mode for this desktop app.</p>
+              <select id="appearanceMode"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select>
+            </section>
+            <section class="settingsCard ownerOnly hidden">
+              <h3>Owner Security</h3>
+              <p class="panelHint">Local 2FA readiness switch for the owner account. Wire this to a TOTP/passkey provider when your auth API is added.</p>
+              <label class="toggleRow"><input id="ownerTwoFactorEnabled" type="checkbox" /> Require owner 2FA</label>
+              <div id="ownerSecurityNotice" class="formNotice hidden"></div>
+            </section>
+            <section class="settingsCard">
+              <h3>Account Recovery</h3>
+              <p class="panelHint">Use verified email links for password reset and username reminders.</p>
+              <button id="settingsForgotPasswordButton" class="button secondary" type="button">Send password reset</button>
+              <button id="settingsForgotUsernameButton" class="button ghost" type="button">Send username reminder</button>
+            </section>
+          </div>
+        </dialog>
+
+        <dialog id="recoveryDialog" class="modalCard credentialDialog">
+          <form id="recoveryForm" method="dialog">
+            <div class="sectionHeader">
+              <div>
+                <p id="recoveryEyebrow" class="eyebrow">Account recovery</p>
+                <h2 id="recoveryTitle">Recover Account</h2>
+                <p id="recoveryMessage" class="panelHint">Enter the verified email on the account.</p>
+              </div>
+              <button id="cancelRecoveryX" class="button ghost" type="button">Close</button>
+            </div>
+            <div id="recoveryNotice" class="formNotice hidden" role="status" aria-live="polite"></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="recoveryEmail">Email</label><input id="recoveryEmail" type="email" autocomplete="email" placeholder="owner@example.com" /></div>
+            <div class="fieldGroup hidden" id="recoveryNewPasswordGroup"><label class="fieldLabel" for="recoveryNewPassword">New Password</label><input id="recoveryNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" /></div>
+            <div class="formActions"><button id="submitRecoveryButton" class="button primary" type="submit">Send</button><button id="cancelRecoveryButton" class="button ghost" type="button">Cancel</button></div>
+          </form>
         </dialog>
 
         <dialog id="decisionDialog" class="modalCard credentialDialog">
