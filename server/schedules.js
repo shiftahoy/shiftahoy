@@ -268,6 +268,10 @@ router.get("/", requireAuth, async (req, res) => {
          e.employment_type,
          e.weekly_hours,
          e.daily_hours,
+         e.pay_rate_cents,
+         e.overtime_allowed,
+         e.overtime_threshold_hours,
+         e.min_rest_hours,
          e.preferred_shift_id,
          u.first_name,
          u.last_name,
@@ -495,6 +499,17 @@ router.get("/", requireAuth, async (req, res) => {
 
           if (scheduledMinutes <= 0) continue;
 
+          const nextTotalHours = (weeklyAssigned + scheduledMinutes) / 60;
+          const overtimeThresholdHours = Number(employee.overtime_threshold_hours || 40);
+          if (nextTotalHours > overtimeThresholdHours) {
+            warnings.push({
+              type: "overtime_threshold",
+              severity: employee.overtime_allowed === false ? "error" : "warning",
+              employeeId: employee.employee_id,
+              message: `${employeeName(employee)} would reach ${Math.round(nextTotalHours * 100) / 100} hours, above the ${overtimeThresholdHours} hour overtime threshold.`
+            });
+          }
+
           const nextWeeklyAssigned = weeklyAssigned + scheduledMinutes;
           const weeklyHours = Math.round((nextWeeklyAssigned / 60) * 100) / 100;
           const weeklyTargetHours = Math.round((weeklyTarget / 60) * 100) / 100;
@@ -515,6 +530,11 @@ router.get("/", requireAuth, async (req, res) => {
             daily_hours: Number(employee.daily_hours || 0),
             hours_this_week_after_shift: weeklyHours,
             weekly_target_hours: weeklyTargetHours,
+            pay_rate_cents: Number(employee.pay_rate_cents || 0),
+            estimated_cost_cents: Math.round((scheduledMinutes / 60) * Number(employee.pay_rate_cents || 0)),
+            overtime_threshold_hours: Number(employee.overtime_threshold_hours || 40),
+            overtime_allowed: employee.overtime_allowed !== false,
+            min_rest_hours: Number(employee.min_rest_hours || 8),
             last_scheduled: lastScheduled,
             fairness_score: Math.round(scoreEmployee({ employee, assignedWeeklyMinutes, lastScheduledByEmployee }) * 100),
             assignment_reason: [
