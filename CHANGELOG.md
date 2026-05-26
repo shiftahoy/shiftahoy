@@ -1,3 +1,30 @@
+# Shift Ahoy Current Dashboard Polish
+
+This update refines the dashboard experience, schedule forecast layout, print workflow, dark mode, employee credentials, and employee request controls.
+
+## Added
+
+- Employee-centered Schedule Forecast rows: every active employee assigned to the selected location appears for the selected forecast week.
+- Professional schedule preview/print output with location, week range, assignment counts, health summary, and print-safe table styling.
+- Owner-controlled setting for employee shift cover/swap requests.
+- Existing owner-controlled time-off request setting is reflected in the updated request controls panel.
+- Database support for `time_off_settings.shift_swaps_enabled`.
+
+## Updated
+
+- Dashboard greeting now displays the user's full name instead of username/login.
+- Removed the top dashboard alert area underneath the greeting.
+- Employee dashboard username and password creation now follows the same guidelines as owner account creation.
+- Dark-mode form error, warning, success, autofill, and invalid states stay dark and readable.
+- My Schedule, Manager Approval Queue, and Labor Forecast metric cards now visually match Schedule Health in dark mode.
+- README now reflects current schedule, print, dark-mode, employee credential, and request-control behavior.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
 # Shift Ahoy Ultimate Automation Overhaul
 
 This update expands Shift Ahoy from a live scheduling forecast into a fuller automated scheduling system.
