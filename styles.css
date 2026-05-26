@@ -444,7 +444,7 @@ p {
 .compactCard {
   align-self: stretch;
   align-content: stretch;
-  grid-template-rows: auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   padding-bottom: 12px !important;
 }
 
@@ -2976,13 +2976,26 @@ body.theme-dark .appShell { background: var(--page-bg); }
   margin: 4px 0 0;
 }
 
+.loginFieldGroup {
+  gap: 6px;
+}
+
+.fieldUtilityLink {
+  justify-self: end;
+  align-self: end;
+  padding: 0;
+  min-height: auto;
+  text-align: right;
+  line-height: 1.1;
+}
+
 .compactCard {
-  grid-template-rows: auto auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr auto;
 }
 
 .compactCard #loginButton {
-  margin-top: 4px;
-  align-self: start;
+  margin-top: 0;
+  align-self: end;
 }
 
 body.theme-dark #authView .card,
