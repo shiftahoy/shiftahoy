@@ -41,7 +41,6 @@
               <span class="welcomeLine">Welcome aboard,</span>
               <span id="dashboardLoginText" class="loginLine">Login</span>
             </div>
-            <div id="dashboardStatus" class="dashboardStatus hidden" role="status" aria-live="polite"></div>
           </div>
 
           <div class="topbarActions">
@@ -338,18 +337,16 @@
                 <div class="fieldGroup" data-field="employeeUsername">
                   <label class="fieldLabel" for="employeeUsername">
                     Username
-                    <span id="employeeUsernameStatus" class="fieldStatus">3–30</span>
+                    <span id="employeeUsernameStatus" class="fieldStatus">Required</span>
                   </label>
-                  <input id="employeeUsername" autocomplete="username" placeholder="Username" minlength="3" maxlength="30" pattern="[a-z0-9]{3,30}" required />
-                  <small class="fieldHelp">Letters and numbers only, matching owner account usernames.</small>
+                  <input id="employeeUsername" autocomplete="username" placeholder="Username" />
                 </div>
                 <div class="fieldGroup" data-field="employeePassword">
                   <label class="fieldLabel" for="employeePassword">
                     Password <span class="optionalText editPasswordHint">(required for new employees)</span>
-                    <span id="employeePasswordStatus" class="fieldStatus">12–128</span>
+                    <span id="employeePasswordStatus" class="fieldStatus">Required for new</span>
                   </label>
-                  <input id="employeePassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Password" />
-                  <small class="fieldHelp">Spaces and symbols allowed, matching owner account passwords.</small>
+                  <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
                 </div>
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employmentType">Employment Type</label>
@@ -522,8 +519,8 @@
             <section id="timeOffSettingsCard" class="settingsInlineCard ownerOnly hidden">
               <div class="sectionHeader compactHeader dashboardCardTitleWithAction">
                 <div>
-                  <h3>Override</h3>
-                  <p class="panelHint">Owner controls for employee requests and blocked dates.</p>
+                  <h3>Request Controls</h3>
+                  <p class="panelHint">Owner controls for employee requests, cover/swap workflow, and blocked dates.</p>
                 </div>
                 <div class="inlineToolbar">
                   <button id="showHolidayDateFormButton" class="button secondary" type="button">Add Holiday</button>
@@ -531,10 +528,14 @@
                 </div>
               </div>
 
-              <div class="overrideControlRow">
+              <div class="overrideControlRow stackedControls">
                 <label class="switchLine">
                   <input id="timeOffRequestsEnabled" type="checkbox" />
                   <span>Allow employee time off requests</span>
+                </label>
+                <label class="switchLine">
+                  <input id="shiftSwapsEnabled" type="checkbox" />
+                  <span>Allow employee shift cover / swap requests</span>
                 </label>
               </div>
 
