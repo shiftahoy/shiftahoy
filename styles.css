@@ -444,7 +444,7 @@ p {
 .compactCard {
   align-self: stretch;
   align-content: stretch;
-  grid-template-rows: auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   padding-bottom: 12px !important;
 }
 
@@ -2976,13 +2976,26 @@ body.theme-dark .appShell { background: var(--page-bg); }
   margin: 4px 0 0;
 }
 
+.loginFieldGroup {
+  gap: 6px;
+}
+
+.fieldUtilityLink {
+  justify-self: end;
+  align-self: end;
+  padding: 0;
+  min-height: auto;
+  text-align: right;
+  line-height: 1.1;
+}
+
 .compactCard {
-  grid-template-rows: auto auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr auto;
 }
 
 .compactCard #loginButton {
-  margin-top: 4px;
-  align-self: start;
+  margin-top: 0;
+  align-self: end;
 }
 
 body.theme-dark #authView .card,
@@ -3401,331 +3414,176 @@ body.theme-dark .emptyState {
   border-color: var(--line);
 }
 
-/* v9: in-app schedule preview and professional forecast summary polish */
-.schedulePreviewDialog {
-  width: min(1180px, calc(100vw - 36px));
-  max-height: calc(100vh - 36px);
-  overflow: hidden;
+/* Login recovery links: keep them compact so the login button aligns with the signup button. */
+.loginFieldGroup {
+  gap: 2px;
+}
+
+.compactCard .fieldUtilityLink {
+  justify-self: end;
+  align-self: end;
+  min-height: 0;
+  margin-top: -1px;
   padding: 0;
-}
-
-.schedulePreviewDialog::backdrop {
-  background: rgba(15, 23, 42, 0.54);
-  backdrop-filter: blur(6px);
-}
-
-.schedulePreviewHeader {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  padding: 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.schedulePreviewContent {
-  max-height: calc(100vh - 146px);
-  overflow: auto;
-  padding: 18px;
-  background: var(--surface-soft);
-}
-
-.schedulePreviewSheet {
-  display: grid;
-  gap: 18px;
-  width: 100%;
-  padding: 22px;
-  border: 1px solid rgba(0, 93, 170, 0.16);
-  border-radius: 20px;
-  background: #ffffff;
-  box-shadow: 0 18px 45px rgba(0, 93, 170, 0.1);
-}
-
-.schedulePreviewTitleBlock {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.schedulePreviewTitleBlock h1 {
-  margin: 4px 0;
-  color: var(--brand);
-  font-size: clamp(1.6rem, 3vw, 2.45rem);
+  font-size: 0.68rem;
   line-height: 1;
-  letter-spacing: -0.055em;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
-.schedulePreviewTitleBlock p:not(.eyebrow),
-.schedulePreviewMeta {
-  color: var(--muted);
-  font-weight: 850;
+.compactCard #loginButton {
+  margin-top: auto;
 }
 
-.schedulePreviewMeta {
+/* Employee permissions section */
+.permissionsSection {
   display: grid;
-  justify-items: end;
-  gap: 5px;
-  min-width: max-content;
-  font-size: 0.82rem;
-}
-
-.schedulePreviewStats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-}
-
-.schedulePreviewStats article,
-.automationMetrics article {
-  min-width: 0;
-}
-
-.schedulePreviewStats article {
-  display: grid;
-  gap: 5px;
-  padding: 14px;
-  border: 1px solid rgba(0, 93, 170, 0.16);
-  border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.schedulePreviewStats strong {
-  color: var(--brand);
-  font-size: 1.45rem;
-  line-height: 1;
-}
-
-.schedulePreviewStats span {
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 900;
-  text-transform: lowercase;
-}
-
-.schedulePreviewSection {
-  display: grid;
-  gap: 10px;
-}
-
-.schedulePreviewSection h2 {
-  color: var(--ink);
-  font-size: 1rem;
-  letter-spacing: -0.025em;
-}
-
-.schedulePreviewCoverage {
+  gap: 8px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--surface-soft);
-}
-
-.schedulePreviewTableFrame {
-  max-width: 100%;
-  overflow: auto;
-}
-
-.schedulePreviewTable {
-  width: 100%;
-  min-width: 980px;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.employeeScheduleMetrics {
-  margin-bottom: 0;
-}
-
-.automationMetrics article {
-  position: relative;
+  background: var(--surface);
   overflow: hidden;
 }
 
-.automationMetrics article::after,
-.schedulePreviewStats article::after {
-  content: "";
-  position: absolute;
-  width: 88px;
-  height: 88px;
-  right: -42px;
-  bottom: -46px;
-  border-radius: 999px;
-  background: rgba(0, 93, 170, 0.08);
-  pointer-events: none;
+.permissionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-body.theme-dark .schedulePreviewDialog,
-body.theme-dark .schedulePreviewHeader,
-body.theme-dark .schedulePreviewSheet {
-  background: linear-gradient(180deg, #111f33, #0f172a);
+.permissionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(118px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.permissionCheck {
+  min-height: 30px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  gap: 6px;
+  line-height: 1.1;
+}
+
+.permissionCheck input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.permissionCheck span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
+}
+
+body.theme-dark .permissionsSection {
+  background: var(--surface-soft);
   border-color: var(--line);
+}
+
+body.theme-dark .permissionCheck {
   color: var(--ink);
-}
-
-body.theme-dark .schedulePreviewContent {
-  background: #0b1220;
-}
-
-body.theme-dark .schedulePreviewDialog::backdrop {
-  background: rgba(0, 0, 0, 0.72);
-}
-
-body.theme-dark .schedulePreviewTitleBlock,
-body.theme-dark .schedulePreviewHeader {
-  border-color: var(--line);
-}
-
-body.theme-dark .schedulePreviewTitleBlock h1,
-body.theme-dark .schedulePreviewStats strong,
-body.theme-dark .automationMetrics strong,
-body.theme-dark .automationDivider,
-body.theme-dark .automationCard h3 {
-  color: #8cc7ff;
-}
-
-body.theme-dark .schedulePreviewTitleBlock p:not(.eyebrow),
-body.theme-dark .schedulePreviewMeta,
-body.theme-dark .schedulePreviewStats span,
-body.theme-dark .automationSummary span,
-body.theme-dark .automationMetrics span {
-  color: var(--muted);
-}
-
-body.theme-dark .schedulePreviewStats article,
-body.theme-dark .automationSummary,
-body.theme-dark .automationMetrics article {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(184, 216, 244, 0.16);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
-}
-
-body.theme-dark .schedulePreviewCoverage {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(184, 216, 244, 0.12);
-}
-
-body.theme-dark .automationMetrics article::after,
-body.theme-dark .schedulePreviewStats article::after {
-  background: rgba(140, 199, 255, 0.09);
-}
-
-body.theme-dark .portalSection,
-body.theme-dark .portalSubcard,
-body.theme-dark .locationRulesInline {
-  background: linear-gradient(180deg, #111f33, #0f172a);
-  border-color: var(--line);
-  color: var(--ink);
-}
-
-body.theme-dark .portalSectionHeader h3,
-body.theme-dark .portalSubcard h2,
-body.theme-dark .portalSubcard h3 {
-  color: #8cc7ff;
-}
-
-body.theme-dark .portalSectionHeader p,
-body.theme-dark .selectedLocationHint {
-  color: var(--muted);
 }
 
 @media (max-width: 760px) {
-  .schedulePreviewTitleBlock {
-    flex-direction: column;
-  }
-
-  .schedulePreviewMeta {
-    justify-items: start;
-    min-width: 0;
-  }
-
-  .schedulePreviewHeader {
-    align-items: stretch;
-    flex-direction: column;
+  .permissionsGrid {
+    grid-template-columns: 1fr;
   }
 }
 
-@media print {
-  body.printingSchedulePreview {
-    background: #ffffff !important;
+/* Login panel consistency update: match Create Owner Account spacing without oversized recovery links. */
+.compactCard {
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto;
+  align-content: stretch;
+  gap: 6px;
+  padding: 14px 18px 12px !important;
+}
+
+.compactCard .cardTitle {
+  margin-bottom: 0;
+}
+
+.compactCard #loginFormMessage {
+  margin: 0;
+}
+
+.compactCard .loginFieldGroup {
+  position: relative;
+  gap: 3px;
+  padding-bottom: 11px;
+  margin: 0;
+  min-width: 0;
+}
+
+.compactCard .loginFieldGroup .fieldLabel,
+.compactCard .loginFieldGroup input {
+  min-width: 0;
+}
+
+.compactCard .fieldUtilityLink {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  justify-self: auto;
+  align-self: auto;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand);
+  font-size: 0.61rem;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: 0.005em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compactCard .fieldUtilityLink:hover {
+  color: var(--brand-dark);
+  text-decoration: underline;
+  background: transparent;
+}
+
+.compactCard #loginButton {
+  align-self: end;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+body.theme-dark .compactCard .fieldUtilityLink {
+  color: #93c5fd;
+}
+
+body.theme-dark .compactCard .fieldUtilityLink:hover {
+  color: #bfdbfe;
+}
+
+@media (max-height: 760px) {
+  .compactCard {
+    gap: 5px;
+    padding-bottom: 10px !important;
   }
 
-  body.printingSchedulePreview .appShell,
-  body.printingSchedulePreview .modalCard:not(#schedulePreviewDialog) {
-    display: none !important;
+  .compactCard .loginFieldGroup {
+    padding-bottom: 9px;
   }
 
-  body.printingSchedulePreview #schedulePreviewDialog {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    max-width: none !important;
-    max-height: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewHeader {
-    display: none !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewContent {
-    display: block !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewSheet {
-    display: grid !important;
-    gap: 12px !important;
-    padding: 0 !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewTitleBlock {
-    break-after: avoid;
-  }
-
-  body.printingSchedulePreview .schedulePreviewStats,
-  body.printingSchedulePreview .coverageHeatMap {
-    break-inside: avoid;
-  }
-
-  body.printingSchedulePreview .schedulePreviewStats article,
-  body.printingSchedulePreview .coverageChip,
-  body.printingSchedulePreview .scheduleWarningsList {
-    border: 1px solid #999 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    box-shadow: none !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewTable {
-    min-width: 0 !important;
-    width: 100% !important;
-    border-collapse: collapse !important;
-    font-size: 9pt !important;
-  }
-
-  body.printingSchedulePreview .schedulePreviewTable th,
-  body.printingSchedulePreview .schedulePreviewTable td {
-    border: 1px solid #999 !important;
-    padding: 5px !important;
-  }
-
-  body.printingSchedulePreview .assignmentReason {
-    color: #444 !important;
+  .compactCard .fieldUtilityLink {
+    font-size: 0.58rem;
   }
 }
