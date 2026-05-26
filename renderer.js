@@ -216,7 +216,6 @@ function renderLanguageSelector(targetId) {
   const selected = currentLanguageOption();
   target.innerHTML = `
     <label class="languageSelectWrap" for="${targetId}Select">
-      <span class="languageFlag" aria-hidden="true">${selected.flag}</span>
       <select id="${targetId}Select" class="languageSelect" aria-label="Language">
         ${LANGUAGE_OPTIONS.map((language) => `<option value="${escapeHtml(language.code)}" ${language.code === selected.code ? "selected" : ""}>${escapeHtml(language.flag)} ${escapeHtml(language.native)}</option>`).join("")}
       </select>
@@ -429,17 +428,32 @@ function sectionDocumentBottom(section) {
   return section.getBoundingClientRect().bottom + window.scrollY;
 }
 
-function scrollToSectionForNav(sectionId) {
-  const section = $(sectionId);
-  if (!section) return;
+const NAV_SECTION_SCROLL_TARGETS = {
+  locationsPanel: "page-top",
+  portalsPanel: "panel-top",
+  schedulePanel: "panel-top",
+  shiftsPanel: "panel-top",
+  employeesPanel: "panel-top",
+  auditPanel: "panel-top"
+};
 
-  if (sectionId === "locationsPanel") {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+function scrollToViewportTop(targetY, behavior = "smooth") {
+  const safeTargetY = Math.max(0, Math.round(Number(targetY) || 0));
+  window.scrollTo({ top: safeTargetY, behavior });
+}
+
+function scrollToSectionForNav(sectionId, behavior = "smooth") {
+  if (!sectionId) return;
+
+  if (NAV_SECTION_SCROLL_TARGETS[sectionId] === "page-top") {
+    scrollToViewportTop(0, behavior);
     return;
   }
 
-  const topOffset = Math.max(0, sectionDocumentTop(section));
-  window.scrollTo({ top: topOffset, behavior: "smooth" });
+  const section = $(sectionId);
+  if (!section) return;
+
+  scrollToViewportTop(sectionDocumentTop(section), behavior);
 }
 
 function updateActiveNavigationFromScroll() {
@@ -793,6 +807,106 @@ function validateSignupField(inputId, showEmptyErrors = false) {
 
 function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
+}
+
+
+function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
+  const button = $(buttonId);
+  if (!button) return;
+
+  if (busy) {
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || "";
+    button.textContent = busyText;
+    button.disabled = true;
+    return;
+  }
+
+  button.textContent = button.dataset.originalText || button.textContent || "Submit";
+  button.disabled = false;
+}
+
+async function signup(event) {
+  event?.preventDefault?.();
+  setNotice("signupFormMessage", "", "");
+  setNotice("loginFormMessage", "", "");
+
+  if (!validateSignupForm(true)) {
+    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating the account.");
+    return;
+  }
+
+  const payload = {
+    firstName: $("signupFirstName")?.value?.trim() || "",
+    lastName: $("signupLastName")?.value?.trim() || "",
+    businessName: $("signupBusinessName")?.value?.trim() || "",
+    email: $("signupEmail")?.value?.trim() || "",
+    username: cleanUsernameInput($("signupUsername")?.value || ""),
+    password: normalizePasswordInput($("signupPassword")?.value || "")
+  };
+
+  setAuthButtonBusy("signupButton", true, "Creating...");
+
+  try {
+    const data = await api("/auth/signup", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify(payload)
+    });
+
+    setNotice("signupFormMessage", "success", data.message || "Owner account created.");
+
+    if ($("loginValue") && data.fullLogin) $("loginValue").value = data.fullLogin;
+    if ($("loginPassword")) $("loginPassword").value = "";
+    setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
+  } catch (err) {
+    setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
+  } finally {
+    setAuthButtonBusy("signupButton", false);
+  }
+}
+
+async function login(event) {
+  event?.preventDefault?.();
+  setNotice("loginFormMessage", "", "");
+  showMessage("");
+
+  const loginValue = $("loginValue")?.value?.trim() || "";
+  const password = normalizePasswordInput($("loginPassword")?.value || "");
+
+  if (!loginValue || !password) {
+    setNotice("loginFormMessage", "error", "Enter your login and password.");
+    return;
+  }
+
+  setAuthButtonBusy("loginButton", true, "Logging in...");
+
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify({ login: loginValue, password })
+    });
+
+    accessToken = data.accessToken;
+    currentUser = data.user;
+
+    if (!accessToken || !currentUser) {
+      throw new Error("Login succeeded, but the server did not return a session.");
+    }
+
+    applyRoleUI();
+    await loadPlans(false).catch(() => {});
+    await loadLocations({ resetPage: true });
+    await loadOwnerSecuritySettings().catch(() => {});
+    renderUltimateAutomationPanels();
+    showMessage("Login successful.", "success");
+  } catch (err) {
+    accessToken = null;
+    currentUser = null;
+    setNotice("loginFormMessage", "error", err.message || "Login failed.");
+  } finally {
+    setAuthButtonBusy("loginButton", false);
+  }
 }
 
 async function refreshSession() {
