@@ -2497,6 +2497,49 @@ async function loadAuditLog() {
   }
 }
 
+function formatAuditDetails(details, fallback = "Action recorded") {
+  if (!details) return fallback;
+
+  if (typeof details === "string") {
+    const trimmed = details.trim();
+    if (!trimmed) return fallback;
+
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        return formatAuditDetails(JSON.parse(trimmed), fallback);
+      } catch {
+        return fallback;
+      }
+    }
+
+    return trimmed;
+  }
+
+  if (typeof details === "object") {
+    if (typeof details.summary === "string" && details.summary.trim()) return details.summary.trim();
+    if (typeof details.message === "string" && details.message.trim()) return details.message.trim();
+
+    const openDays = Array.isArray(details.open_days) ? details.open_days : Array.isArray(details.openDays) ? details.openDays : null;
+    const operatingStart = details.operating_start || details.operatingStart;
+    const operatingEnd = details.operating_end || details.operatingEnd;
+    const defaultStaff = details.default_required_staff ?? details.defaultRequiredStaff;
+    const publishDay = details.schedule_publish_day ?? details.schedulePublishDay;
+
+    if (openDays || operatingStart || operatingEnd || defaultStaff !== undefined || publishDay !== undefined) {
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const openText = openDays?.length ? openDays.map((day) => dayNames[Number(day) - 1]).filter(Boolean).join(", ") : "No open days";
+      const timeText = operatingStart && operatingEnd ? `${String(operatingStart).slice(0, 5)}–${String(operatingEnd).slice(0, 5)}` : "Hours not set";
+      const staffText = defaultStaff !== undefined ? `${defaultStaff} default staff` : "Default staff not set";
+      const publishText = publishDay ? `publish day ${publishDay}` : "publish day not set";
+      return `${openText} · ${timeText} · ${staffText} · ${publishText}`;
+    }
+
+    return fallback;
+  }
+
+  return String(details || fallback);
+}
+
 function renderAuditLog() {
   const list = $("auditLogList");
   if (!list) return;
@@ -2513,7 +2556,7 @@ function renderAuditLog() {
       <article class="listItem auditItem">
         <div>
           <strong>${escapeHtml(entry.action)}</strong>
-          <span>${escapeHtml(entry.details || entry.entity_type || "Action recorded")}</span>
+          <span>${escapeHtml(formatAuditDetails(entry.details, entry.entity_type || "Action recorded"))}</span>
           <span>${escapeHtml(actor)} · ${escapeHtml(date)}</span>
         </div>
       </article>
@@ -2846,7 +2889,7 @@ function ensureUltimateAutomationLayout() {
             <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls for <strong id="locationRulesLocationName">${escapeHtml(selectedLocationName())}</strong>.</p>
           </div>
         </div>
-        <button id="createLocationRulesButton" class="button primary" type="button">Create Rules</button>
+        <div class="inlineToolbar"><button id="createLocationRulesButton" class="button secondary" type="button">Update Rules</button></div>
       </div>
       <form id="locationRulesForm" class="editorForm automationForm hidden">
         <div class="formGrid twoColumn">
@@ -3035,7 +3078,7 @@ function setLocationRulesEditorOpen(open) {
   const button = $("createLocationRulesButton");
 
   form?.classList.toggle("hidden", !locationRulesEditorOpen);
-  if (button) button.textContent = locationRulesEditorOpen ? "Save Rules" : "Create Rules";
+  if (button) button.textContent = "Update Rules";
 }
 
 
@@ -3158,7 +3201,7 @@ async function saveLocationRules(event) {
     cachedLocationRules = data.rules || DEFAULT_LOCATION_RULES;
     populateLocationRulesForm(cachedLocationRules);
     setLocationRulesEditorOpen(true);
-    setNotice("locationRulesNotice", "success", data.message || "Rules saved.");
+    setNotice("locationRulesNotice", "success", data.message || "Rules updated.");
     await Promise.all([loadSchedule(), loadAuditLog()]);
   } catch (err) {
     setNotice("locationRulesNotice", "error", err.message);
