@@ -97,7 +97,7 @@ function selectedLocationName() {
 
 function updateSelectedLocationLabels() {
   const name = selectedLocationName();
-  ["scheduleLocationName", "shiftLocationName", "employeeLocationName"].forEach((id) => {
+  ["scheduleLocationName", "shiftLocationName", "employeeLocationName", "locationRulesLocationName", "employeePortalLocationName", "managerPortalLocationName"].forEach((id) => {
     const element = $(id);
     if (element) element.textContent = name;
   });
@@ -260,7 +260,7 @@ function setActiveNavigation(sectionId) {
 }
 
 function visibleSectionCandidates() {
-  return ["locationsPanel", "schedulePanel", "shiftsPanel", "employeesPanel", "timeOffPanel", "auditPanel"]
+  return ["locationsPanel", "portalsPanel", "schedulePanel", "shiftsPanel", "employeesPanel", "auditPanel"]
     .map((id) => $(id))
     .filter((section) => section && !section.classList.contains("hidden"));
 }
@@ -284,6 +284,8 @@ function scrollToSectionForNav(sectionId) {
 
   if (sectionId === "locationsPanel") {
     targetY = 0;
+  } else if (sectionId === "portalsPanel") {
+    targetY = Math.max(0, sectionDocumentTop(section) - 14);
   } else if (sectionId === "employeesPanel") {
     targetY = Math.max(0, sectionDocumentTop(section) - 14);
   } else if (sectionId === "schedulePanel") {
@@ -2758,26 +2760,132 @@ function moneyFromCents(cents) {
   return `$${(Number(cents || 0) / 100).toFixed(2)}`;
 }
 
+
+function syncAutomationRoleVisibility() {
+  const owner = isOwner();
+  const canManage = canManageSchedule();
+
+  document.querySelectorAll(".ownerOnly").forEach((el) => {
+    if (el.classList.contains("editorForm")) {
+      if (!owner) el.classList.add("hidden");
+      return;
+    }
+
+    el.classList.toggle("hidden", !owner);
+  });
+
+  document.querySelectorAll(".nonOwnerOnly").forEach((el) => {
+    el.classList.toggle("hidden", owner);
+  });
+
+  document.querySelectorAll(".managerOnly").forEach((el) => {
+    el.classList.toggle("hidden", !canManage);
+  });
+
+  document.querySelectorAll(".employeeOnlyHidden").forEach((el) => {
+    el.classList.toggle("hidden", currentUser?.role === "employee");
+  });
+}
+
 function ensureUltimateAutomationLayout() {
-  const navList = document.querySelector(".navList");
-  if (navList && !$("ultimateNavRules")) {
-    const scheduleLink = navList.querySelector('a[href="#schedulePanel"]');
-    scheduleLink?.insertAdjacentHTML("afterend", `
-      <a id="ultimateNavRules" class="navItem managerOnly" href="#locationRulesPanel">Rules</a>
-      <a id="ultimateNavOpen" class="navItem" href="#openShiftsPanel">Open Shifts</a>
-      <a id="ultimateNavLabor" class="navItem managerOnly" href="#laborPanel">Labor</a>
-      <a id="ultimateNavQueue" class="navItem managerOnly" href="#approvalQueuePanel">Queue</a>
-    `);
+  const locationsPanel = $("locationsPanel");
+  const schedulePanel = $("schedulePanel");
+  const shiftsPanel = $("shiftsPanel");
+  const workspace = document.querySelector(".dashboardPanels") || document.querySelector(".workspace");
+
+  if (!workspace || !locationsPanel || !schedulePanel) return;
+
+  const portalIntroHtml = `
+    <section id="portalsPanel" class="card panelCard portalHubCard">
+      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+        <div class="dashboardTitleGroup">
+          <span class="iconBadge">02</span>
+          <div>
+            <h2>Portals</h2>
+            <p class="panelHint">Employee self-service first, followed by manager controls for the selected location.</p>
+            <p class="selectedLocationHint">Selected location: <strong id="employeePortalLocationName">${escapeHtml(selectedLocationName())}</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <section id="employeePortalPanel" class="portalSection">
+        <div class="portalSectionHeader">
+          <span class="portalBadge">EP</span>
+          <div>
+            <h3>Employee Portal</h3>
+            <p>My Schedule, time-off requests, open shifts, and cover/swap requests.</p>
+          </div>
+        </div>
+        <div id="employeePortalContent" class="portalContent"></div>
+      </section>
+
+      <section id="managerPortalPanel" class="portalSection managerOnly hidden">
+        <div class="portalSectionHeader">
+          <span class="portalBadge">MP</span>
+          <div>
+            <h3>Manager Portal</h3>
+            <p>Approval queue plus shortcuts for forecast review and schedule overrides at <strong id="managerPortalLocationName">${escapeHtml(selectedLocationName())}</strong>.</p>
+          </div>
+        </div>
+        <div id="managerPortalContent" class="portalContent"></div>
+      </section>
+    </section>
+  `;
+
+  if (!$("portalsPanel")) {
+    locationsPanel.insertAdjacentHTML("afterend", portalIntroHtml);
   }
 
-  const schedulePanel = $("schedulePanel");
-  if (schedulePanel && !$("publishScheduleBar")) {
+  const locationRulesHtml = `
+    <section id="locationRulesPanel" class="automationCard managerOnly hidden locationRulesInline">
+      <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+        <div class="dashboardTitleGroup">
+          <span class="iconBadge">01B</span>
+          <div>
+            <h2>Location Rules</h2>
+            <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls for <strong id="locationRulesLocationName">${escapeHtml(selectedLocationName())}</strong>.</p>
+          </div>
+        </div>
+      </div>
+      <form id="locationRulesForm" class="editorForm automationForm">
+        <div class="formGrid twoColumn">
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" value="08:00" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" value="17:00" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" value="0" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleMaxEmployees">Max Employees / Day</label><input id="ruleMaxEmployees" type="number" min="1" placeholder="No cap" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleDefaultRequired">Default Employees Needed</label><input id="ruleDefaultRequired" type="number" min="0" max="99" value="1" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleLaborBudget">Weekly Labor Budget</label><input id="ruleLaborBudget" type="number" min="0" step="0.01" value="0" /></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay">${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
+          <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" value="America/Chicago" /></div>
+        </div>
+        <div class="fieldGroup"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
+        <div class="formActions"><button class="button primary" type="submit">Save Rules</button></div>
+      </form>
+      <div id="locationRulesNotice" class="formNotice hidden"></div>
+    </section>
+  `;
+
+  if (!$("locationRulesPanel")) {
+    locationsPanel.insertAdjacentHTML("beforeend", locationRulesHtml);
+  }
+
+  if ($("publishScheduleBar")) {
+    const eyebrow = $("publishScheduleBar")?.querySelector(".eyebrow");
+    const heading = $("publishedScheduleStatus");
+    const hint = $("publishScheduleBar")?.querySelector(".panelHint");
+
+    if (eyebrow) eyebrow.textContent = "Forecast & Override";
+    if (heading && heading.textContent === "Forecast is live") heading.textContent = "Forecast has not been saved yet";
+    if (hint) hint.textContent = "Review the live forecast, save a draft, publish, or revise after overriding schedule cells.";
+  }
+
+  if (!$("publishScheduleBar")) {
     schedulePanel.insertAdjacentHTML("beforeend", `
       <section id="publishScheduleBar" class="automationCard managerOnly hidden">
         <div>
-          <p class="eyebrow">Publish Control</p>
-          <h3 id="publishedScheduleStatus">Forecast is live</h3>
-          <p class="panelHint">Save a draft while reviewing, publish when employees can rely on it, or revise after publishing.</p>
+          <p class="eyebrow">Forecast & Override</p>
+          <h3 id="publishedScheduleStatus">Forecast has not been saved yet</h3>
+          <p class="panelHint">Review the live forecast, save a draft, publish, or revise after overriding schedule cells.</p>
         </div>
         <div class="inlineToolbar wrapToolbar">
           <input id="schedulePublishNotes" class="searchInput" placeholder="Optional publish note" />
@@ -2789,69 +2897,57 @@ function ensureUltimateAutomationLayout() {
     `);
   }
 
-  const workspace = document.querySelector(".dashboardPanels") || document.querySelector(".workspace");
-  const anchor = $("timeOffPanel") || schedulePanel;
-  if (!workspace || !anchor) return;
+  const employeePortalContent = $("employeePortalContent");
+  const managerPortalContent = $("managerPortalContent");
 
-  if (!$("locationRulesPanel")) {
-    anchor.insertAdjacentHTML("afterend", `
-      <section id="locationRulesPanel" class="card panelCard managerOnly hidden">
+  if (employeePortalContent && !$("employeeSchedulePanel")) {
+    employeePortalContent.insertAdjacentHTML("beforeend", `
+      <section id="employeeSchedulePanel" class="portalSubcard">
         <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup">
-            <span class="iconBadge">R</span>
-            <div>
-              <h2>Location Rules</h2>
-              <p class="panelHint">Operating days, labor budget, default staffing, publish day, and local scheduling controls.</p>
-            </div>
-          </div>
-        </div>
-        <form id="locationRulesForm" class="editorForm automationForm">
-          <div class="formGrid twoColumn">
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingStart">Operating Start</label><input id="ruleOperatingStart" type="time" value="08:00" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleOperatingEnd">Operating End</label><input id="ruleOperatingEnd" type="time" value="17:00" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleMinEmployees">Min Employees / Day</label><input id="ruleMinEmployees" type="number" min="0" value="0" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleMaxEmployees">Max Employees / Day</label><input id="ruleMaxEmployees" type="number" min="1" placeholder="No cap" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleDefaultRequired">Default Employees Needed</label><input id="ruleDefaultRequired" type="number" min="0" max="99" value="1" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleLaborBudget">Weekly Labor Budget</label><input id="ruleLaborBudget" type="number" min="0" step="0.01" value="0" /></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="rulePublishDay">Publish Day</label><select id="rulePublishDay">${DAYS.map((day) => `<option value="${day.value}">${day.long}</option>`).join("")}</select></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="ruleTimeZone">Time Zone</label><input id="ruleTimeZone" value="America/Chicago" /></div>
-          </div>
-          <div class="fieldGroup"><span class="fieldLabel">Open Days</span><div id="ruleOpenDays" class="dotDayRow"></div></div>
-          <div class="formActions"><button class="button primary" type="submit">Save Rules</button></div>
-        </form>
-        <div id="locationRulesNotice" class="formNotice hidden"></div>
-      </section>
-    `);
-  }
-
-  if (!$("employeeSchedulePanel")) {
-    $("locationRulesPanel")?.insertAdjacentHTML("afterend", `
-      <section id="employeeSchedulePanel" class="card panelCard">
-        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup"><span class="iconBadge">ME</span><div><h2>My Schedule</h2><p class="panelHint">Employee view for published shifts, open shifts, and request status.</p></div></div>
+          <div class="dashboardTitleGroup"><span class="iconBadge">EP-01</span><div><h2>My Schedule</h2><p class="panelHint">Published shifts, upcoming request status, and available open shifts.</p></div></div>
         </div>
         <div id="employeeScheduleList" class="listStack"></div>
       </section>
     `);
+  } else if (employeePortalContent && $("employeeSchedulePanel") && $("employeeSchedulePanel").parentElement !== employeePortalContent) {
+    employeePortalContent.appendChild($("employeeSchedulePanel"));
   }
 
-  if (!$("openShiftsPanel")) {
-    $("employeeSchedulePanel")?.insertAdjacentHTML("afterend", `
-      <section id="openShiftsPanel" class="card panelCard">
+  const timeOffPanel = $("timeOffPanel");
+  if (employeePortalContent && timeOffPanel && timeOffPanel.parentElement !== employeePortalContent) {
+    employeePortalContent.appendChild(timeOffPanel);
+  }
+
+  if (timeOffPanel) {
+    timeOffPanel.classList.add("portalSubcard");
+    timeOffPanel.classList.remove("card");
+    const badge = timeOffPanel.querySelector(".iconBadge");
+    const title = timeOffPanel.querySelector("h2");
+    const hint = timeOffPanel.querySelector(".panelHint");
+    if (badge) badge.textContent = "EP-02";
+    if (title) title.textContent = "Request Time Off";
+    if (hint) hint.textContent = "Submit date-range requests, review request status, and view blocked or holiday dates for your location.";
+  }
+
+  if (employeePortalContent && !$("openShiftsPanel")) {
+    employeePortalContent.insertAdjacentHTML("beforeend", `
+      <section id="openShiftsPanel" class="portalSubcard">
         <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup"><span class="iconBadge">OS</span><div><h2>Open Shifts</h2><p class="panelHint">Coverage gaps from published schedules become claimable open shifts.</p></div></div>
+          <div class="dashboardTitleGroup"><span class="iconBadge">EP-03</span><div><h2>Open Shifts</h2><p class="panelHint">Coverage gaps from published schedules become claimable open shifts.</p></div></div>
           <button id="refreshOpenShiftsButton" class="button secondary" type="button">Refresh</button>
         </div>
         <div id="openShiftsList" class="listStack"></div>
       </section>
     `);
+  } else if (employeePortalContent && $("openShiftsPanel") && $("openShiftsPanel").parentElement !== employeePortalContent) {
+    employeePortalContent.appendChild($("openShiftsPanel"));
   }
 
-  if (!$("shiftSwapsPanel")) {
-    $("openShiftsPanel")?.insertAdjacentHTML("afterend", `
-      <section id="shiftSwapsPanel" class="card panelCard">
+  if (employeePortalContent && !$("shiftSwapsPanel")) {
+    employeePortalContent.insertAdjacentHTML("beforeend", `
+      <section id="shiftSwapsPanel" class="portalSubcard">
         <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup"><span class="iconBadge">SW</span><div><h2>Shift Cover / Swap</h2><p class="panelHint">Employees can offer shifts for cover, coworkers can accept, and managers approve.</p></div></div>
+          <div class="dashboardTitleGroup"><span class="iconBadge">EP-04</span><div><h2>Shift Cover / Swap</h2><p class="panelHint">Offer a shift for cover, accept a coworker request, and let a manager approve the change.</p></div></div>
           <button id="showSwapRequestButton" class="button secondary" type="button">Request Cover</button>
         </div>
         <form id="swapRequestForm" class="editorForm hidden">
@@ -2865,32 +2961,58 @@ function ensureUltimateAutomationLayout() {
         <div id="shiftSwapList" class="listStack"></div>
       </section>
     `);
+  } else if (employeePortalContent && $("shiftSwapsPanel") && $("shiftSwapsPanel").parentElement !== employeePortalContent) {
+    employeePortalContent.appendChild($("shiftSwapsPanel"));
   }
 
-  if (!$("laborPanel")) {
-    $("shiftSwapsPanel")?.insertAdjacentHTML("afterend", `
-      <section id="laborPanel" class="card panelCard managerOnly hidden">
+  if (managerPortalContent && !$("managerForecastPanel")) {
+    managerPortalContent.insertAdjacentHTML("beforeend", `
+      <section id="managerForecastPanel" class="portalSubcard managerOnly hidden">
         <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup"><span class="iconBadge">$</span><div><h2>Labor Forecast</h2><p class="panelHint">Estimated costs, overtime warnings, and budget control for the selected week.</p></div></div>
-          <button id="refreshLaborButton" class="button secondary" type="button">Refresh</button>
+          <div class="dashboardTitleGroup"><span class="iconBadge">MP-01</span><div><h2>Forecast & Override</h2><p class="panelHint">Jump to the schedule forecast, manually override cells as needed, then save draft, publish, or revise.</p></div></div>
+          <button id="managerForecastShortcutButton" class="button primary" type="button">Open Schedule</button>
         </div>
-        <div id="laborForecastList" class="listStack"></div>
       </section>
     `);
   }
 
-  if (!$("approvalQueuePanel")) {
-    $("laborPanel")?.insertAdjacentHTML("afterend", `
-      <section id="approvalQueuePanel" class="card panelCard managerOnly hidden">
+  if (managerPortalContent && !$("approvalQueuePanel")) {
+    managerPortalContent.insertAdjacentHTML("beforeend", `
+      <section id="approvalQueuePanel" class="portalSubcard managerOnly hidden">
         <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
-          <div class="dashboardTitleGroup"><span class="iconBadge">Q</span><div><h2>Manager Approval Queue</h2><p class="panelHint">One place for time off, shift cover/swap requests, and open coverage gaps.</p></div></div>
+          <div class="dashboardTitleGroup"><span class="iconBadge">MP-02</span><div><h2>Manager Approval Queue</h2><p class="panelHint">One place for time off, shift cover/swap requests, and open coverage gaps.</p></div></div>
           <button id="refreshApprovalQueueButton" class="button secondary" type="button">Refresh</button>
         </div>
         <div id="approvalQueueList" class="listStack"></div>
       </section>
     `);
+  } else if (managerPortalContent && $("approvalQueuePanel") && $("approvalQueuePanel").parentElement !== managerPortalContent) {
+    managerPortalContent.appendChild($("approvalQueuePanel"));
   }
+
+  if (managerPortalContent && !$("laborPanel")) {
+    managerPortalContent.insertAdjacentHTML("beforeend", `
+      <section id="laborPanel" class="portalSubcard managerOnly hidden">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">MP-03</span><div><h2>Labor Forecast</h2><p class="panelHint">Estimated costs, overtime warnings, and budget control for the selected week.</p></div></div>
+          <button id="refreshLaborButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="laborForecastList" class="listStack"></div>
+      </section>
+    `);
+  } else if (managerPortalContent && $("laborPanel") && $("laborPanel").parentElement !== managerPortalContent) {
+    managerPortalContent.appendChild($("laborPanel"));
+  }
+
+  if (shiftsPanel) {
+    const badge = shiftsPanel.querySelector(".iconBadge");
+    if (badge) badge.textContent = "04";
+  }
+
+  updateSelectedLocationLabels();
+  syncAutomationRoleVisibility();
 }
+
 
 function renderRuleOpenDays(openDays = [1, 2, 3, 4, 5]) {
   const selected = new Set(openDays.map(Number));
@@ -3127,6 +3249,7 @@ async function loadApprovalQueue() {
 function renderUltimateAutomationPanels() {
   if (!accessToken) return;
   ensureUltimateAutomationLayout();
+  syncAutomationRoleVisibility();
   loadPublishedScheduleStatus();
   loadEmployeeSchedule();
   loadOpenShifts();
@@ -3152,6 +3275,7 @@ function setupUltimateAutomationEvents() {
   $("refreshOpenShiftsButton")?.addEventListener("click", loadOpenShifts);
   $("refreshLaborButton")?.addEventListener("click", loadLaborForecast);
   $("refreshApprovalQueueButton")?.addEventListener("click", loadApprovalQueue);
+  $("managerForecastShortcutButton")?.addEventListener("click", () => scrollToSectionForNav("schedulePanel"));
   $("showSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.remove("hidden"));
   $("cancelSwapRequestButton")?.addEventListener("click", () => $("swapRequestForm")?.classList.add("hidden"));
   $("swapRequestForm")?.addEventListener("submit", submitSwapRequest);
