@@ -344,8 +344,8 @@
                 </div>
                 <div class="fieldGroup" data-field="employeePassword">
                   <label class="fieldLabel" for="employeePassword">
-                    Password <span class="optionalText editPasswordHint">(required for new employees)</span>
-                    <span id="employeePasswordStatus" class="fieldStatus">Required for new</span>
+                    Password <span class="optionalText editPasswordHint">Required</span>
+                    <span id="employeePasswordStatus" class="fieldStatus">Required</span>
                   </label>
                   <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
                 </div>
@@ -558,6 +558,10 @@
                     <input id="holidayDateName" placeholder="Thanksgiving, Christmas Eve, Company holiday, etc." />
                   </div>
                 </div>
+                <label class="toggleRow recurringOptionRow">
+                  <input id="holidayDateYearly" type="checkbox" />
+                  <span>Repeat every year</span>
+                </label>
                 <div class="formActions">
                   <button id="addHolidayDateButton" class="button primary" type="submit">Save Holiday</button>
                   <button id="cancelHolidayDateButton" class="button ghost" type="button">Cancel</button>
@@ -581,6 +585,10 @@
                     <input id="blockedDateReason" placeholder="Holiday, inventory, blackout date, etc." />
                   </div>
                 </div>
+                <label class="toggleRow recurringOptionRow">
+                  <input id="blockedDateYearly" type="checkbox" />
+                  <span>Repeat every year</span>
+                </label>
                 <div class="formActions">
                   <button id="addBlockedDateButton" class="button primary" type="submit">Save Blocked Date</button>
                   <button id="cancelBlockedDateButton" class="button ghost" type="button">Cancel</button>
@@ -650,6 +658,11 @@
                 </div>
               </div>
               <p class="panelHint">Profile photos are disabled for now. Shift Ahoy uses initials so every account stays clean and consistent locally.</p>
+            </section>
+            <section class="settingsCard accountSettingsCard">
+              <h3>Account</h3>
+              <p class="panelHint">Log out of this desktop session and return to the blue login panel.</p>
+              <button id="settingsLogoutButton" class="button secondary fullWidthButton" type="button">Log Out</button>
             </section>
             <section class="settingsCard">
               <h3>Language</h3>
