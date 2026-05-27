@@ -385,12 +385,58 @@ p {
   margin-top: 22px;
 }
 
-.metricGrid div {
-  grid-column: span 2;
+.metricBubble {
+  grid-column: var(--bubble-column, span 2);
+  grid-row: var(--bubble-row, auto);
+  justify-self: var(--bubble-justify, stretch);
+  align-self: var(--bubble-align, stretch);
+  transform: translate(var(--bubble-x, 0), var(--bubble-y, 0));
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.12);
+}
+
+.metricBubbleForecast {
+  --bubble-column: 1 / span 2;
+  --bubble-row: 1;
+  --bubble-x: 0;
+  --bubble-y: 0;
+}
+
+.metricBubblePublish {
+  --bubble-column: 3 / span 2;
+  --bubble-row: 1;
+  --bubble-x: 0;
+  --bubble-y: 0;
+}
+
+.metricBubblePortals {
+  --bubble-column: 5 / span 2;
+  --bubble-row: 1;
+  --bubble-x: 0;
+  --bubble-y: 0;
+}
+
+.metricBubbleLabor {
+  --bubble-column: 1 / span 2;
+  --bubble-row: 2;
+  --bubble-x: 0;
+  --bubble-y: 0;
+}
+
+.metricBubblePrint {
+  --bubble-column: 3 / span 2;
+  --bubble-row: 2;
+  --bubble-x: 0;
+  --bubble-y: 0;
+}
+
+.metricBubbleClock {
+  --bubble-column: 5 / span 2;
+  --bubble-row: 2;
+  --bubble-x: 0;
+  --bubble-y: 0;
 }
 
 .metricGrid strong {
@@ -982,7 +1028,7 @@ tbody tr:hover td {
     margin-top: 16px;
   }
 
-  .metricGrid div {
+  .metricBubble {
     padding: 10px;
   }
 
@@ -1142,8 +1188,10 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
-  .metricGrid div {
+  .metricBubble {
     grid-column: 1 / -1;
+    grid-row: auto;
+    transform: none;
   }
 
   .topbar,
