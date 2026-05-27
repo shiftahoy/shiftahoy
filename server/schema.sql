@@ -519,3 +519,78 @@ INSERT INTO location_schedule_rules (business_id, location_id)
 SELECT business_id, id
 FROM locations
 ON CONFLICT (location_id) DO NOTHING;
+
+-- Immutable 9 digit account IDs and payroll/time clock support.
+CREATE TABLE IF NOT EXISTS issued_account_ids (
+  account_number CHAR(9) PRIMARY KEY CHECK (account_number ~ '^\d{9}$'),
+  issued_to TEXT NOT NULL DEFAULT 'user',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_number CHAR(9) UNIQUE CHECK (account_number ~ '^\d{9}$');
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_account_number_unique
+ON users (account_number)
+WHERE account_number IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS employees_employee_code_global_unique
+ON employees (employee_code);
+
+CREATE TABLE IF NOT EXISTS payroll_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE UNIQUE,
+  first_pay_period_start DATE NOT NULL DEFAULT CURRENT_DATE,
+  pay_period_weeks INTEGER NOT NULL DEFAULT 2 CHECK (pay_period_weeks BETWEEN 1 AND 12),
+  updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS time_clock_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  account_number CHAR(9) NOT NULL CHECK (account_number ~ '^\d{9}$'),
+  clock_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  clock_out_at TIMESTAMPTZ,
+  clock_in_status TEXT NOT NULL DEFAULT 'on_time' CHECK (clock_in_status IN ('early', 'on_time', 'late', 'unscheduled')),
+  clock_out_status TEXT CHECK (clock_out_status IN ('early', 'on_time', 'late', 'unscheduled')),
+  scheduled_start_at TIMESTAMPTZ,
+  scheduled_end_at TIMESTAMPTZ,
+  minutes_worked INTEGER GENERATED ALWAYS AS (
+    CASE
+      WHEN clock_out_at IS NULL THEN NULL
+      ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (clock_out_at - clock_in_at)) / 60)::int)
+    END
+  ) STORED,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS time_clock_entries_employee_clock_idx
+ON time_clock_entries (business_id, employee_id, clock_in_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS time_clock_entries_one_open_per_employee
+ON time_clock_entries (employee_id)
+WHERE clock_out_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS payroll_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  time_clock_entry_id UUID REFERENCES time_clock_entries(id) ON DELETE CASCADE,
+  alert_type TEXT NOT NULL CHECK (alert_type IN ('clock_in_early', 'clock_in_late', 'clock_in_unscheduled', 'clock_out_early', 'clock_out_late', 'clock_out_unscheduled')),
+  message TEXT NOT NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS payroll_alerts_business_location_created_idx
+ON payroll_alerts (business_id, location_id, created_at DESC);
+
+INSERT INTO payroll_settings (business_id)
+SELECT id
+FROM businesses
+ON CONFLICT (business_id) DO NOTHING;
