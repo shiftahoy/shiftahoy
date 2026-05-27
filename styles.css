@@ -408,45 +408,45 @@ p {
 }
 
 .metricBubbleForecast {
-  --bubble-column: 3 / span 2;
+  --bubble-column: 1 / span 2;
   --bubble-row: 1;
-  --bubble-x: 75px;
-  --bubble-y: -350px;
+  --bubble-x: 0px;
+  --bubble-y: 0px;
 }
 
 .metricBubblePublish {
-  --bubble-column: 4 / span 2;
+  --bubble-column: 3 / span 2;
   --bubble-row: 1;
-  --bubble-x: 25px;
-  --bubble-y: -250px;
+  --bubble-x: 0px;
+  --bubble-y: 0px;
 }
 
 .metricBubblePortals {
   --bubble-column: 5 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -150px;
+  --bubble-y: 0px;
 }
 
 .metricBubbleLabor {
-  --bubble-column: 4 / span 2;
-  --bubble-row: 1;
+  --bubble-column: 1 / span 2;
+  --bubble-row: 2;
   --bubble-x: 0px;
-  --bubble-y: -50px;
+  --bubble-y: 0px;
 }
 
 .metricBubblePrint {
   --bubble-column: 3 / span 2;
-  --bubble-row: 1;
-  --bubble-x: -50px;
-  --bubble-y: 50px;
+  --bubble-row: 2;
+  --bubble-x: 0px;
+  --bubble-y: 0px;
 }
 
 .metricBubbleClock {
   --bubble-column: 5 / span 2;
-  --bubble-row: 1;
-  --bubble-x: -50px;
-  --bubble-y: 50px;
+  --bubble-row: 2;
+  --bubble-x: 0px;
+  --bubble-y: 0px;
 }
 
 .metricGrid strong {
