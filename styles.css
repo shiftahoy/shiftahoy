@@ -295,6 +295,7 @@ p {
 }
 
 .heroPanel {
+  --hero-intro-y: -44px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -337,6 +338,14 @@ p {
 .heroPanel > * {
   position: relative;
   z-index: 1;
+}
+
+.heroIntro {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  transform: translateY(var(--hero-intro-y));
 }
 
 .heroLogoWrap {
@@ -1000,6 +1009,7 @@ tbody tr:hover td {
   }
 
   .heroPanel {
+    --hero-intro-y: -28px;
     padding: 20px;
   }
 
@@ -1168,6 +1178,7 @@ tbody tr:hover td {
   }
 
   .heroPanel {
+    --hero-intro-y: -18px;
     height: auto;
     min-height: 520px;
     padding: 24px;
