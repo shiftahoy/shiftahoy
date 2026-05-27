@@ -7,9 +7,9 @@ const { sendEmail } = require("./mailer");
 const { requireAuth } = require("./middleware");
 
 const router = express.Router();
+const { normalizeAccountNumber, isValidAccountNumber, createUniqueAccountNumber } = require("./id-utils");
 
-const USERNAME_RULE_MESSAGE =
-  "Username must be 3 to 30 characters and can only contain lowercase letters and numbers. No spaces or symbols.";
+const ACCOUNT_ID_RULE_MESSAGE = "ID# must be exactly 9 digits.";
 
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
@@ -97,14 +97,13 @@ async function findUserForLogin(login) {
     return null;
   }
 
-  if (normalizedLogin.includes("@")) {
-    const emailResult = await pool.query(
-      `SELECT
+  const selectSql = `SELECT
          id,
          business_id,
          first_name,
          last_name,
          email,
+         account_number,
          username,
          full_login,
          password_hash,
@@ -112,7 +111,11 @@ async function findUserForLogin(login) {
          can_manage_schedule,
          email_verified
        FROM users
-       WHERE active = true
+       WHERE active = true`;
+
+  if (normalizedLogin.includes("@")) {
+    const emailResult = await pool.query(
+      `${selectSql}
          AND lower(email) = $1
        LIMIT 1`,
       [normalizedLogin]
@@ -121,68 +124,19 @@ async function findUserForLogin(login) {
     return emailResult.rows[0] || null;
   }
 
-  const exactResult = await pool.query(
-    `SELECT
-       id,
-       business_id,
-       first_name,
-       last_name,
-       email,
-       username,
-       full_login,
-       password_hash,
-       role,
-       can_manage_schedule,
-       email_verified
-     FROM users
-     WHERE active = true
-       AND full_login = $1
-     LIMIT 1`,
-    [normalizedLogin]
-  );
-
-  if (exactResult.rows.length > 0) {
-    return exactResult.rows[0];
-  }
-
-  if (!normalizedLogin.includes("/")) {
+  const accountNumber = normalizeAccountNumber(normalizedLogin);
+  if (!isValidAccountNumber(accountNumber)) {
     return null;
   }
 
-  const slashIndex = normalizedLogin.indexOf("/");
-  const usernamePart = normalizedLogin.slice(0, slashIndex);
-  const businessPart = normalizedLogin.slice(slashIndex + 1);
-
-  const normalizedUsername = normalizeUsername(usernamePart);
-  const normalizedBusinessSlug = normalizeBusinessSlug(businessPart);
-
-  if (!isValidUsername(normalizedUsername) || !normalizedBusinessSlug) {
-    return null;
-  }
-
-  const slashLogin = buildFullLogin(normalizedUsername, normalizedBusinessSlug);
-
-  const slashResult = await pool.query(
-    `SELECT
-       id,
-       business_id,
-       first_name,
-       last_name,
-       email,
-       username,
-       full_login,
-       password_hash,
-       role,
-       can_manage_schedule,
-       email_verified
-     FROM users
-     WHERE active = true
-       AND full_login = $1
+  const idResult = await pool.query(
+    `${selectSql}
+       AND account_number = $1
      LIMIT 1`,
-    [slashLogin]
+    [accountNumber]
   );
 
-  return slashResult.rows[0] || null;
+  return idResult.rows[0] || null;
 }
 
 async function verifyActorPassword(userId, password) {
@@ -208,6 +162,7 @@ function createAccessToken(user) {
       email: user.email,
       username: user.username,
       fullLogin: user.full_login,
+      accountNumber: user.account_number,
       role: user.role,
       canManageSchedule: user.can_manage_schedule,
       emailVerified: user.email_verified
@@ -243,6 +198,7 @@ function publicUser(user) {
     email: user.email,
     username: user.username,
     fullLogin: user.full_login,
+    accountNumber: user.account_number,
     role: user.role,
     canManageSchedule: user.can_manage_schedule,
     emailVerified: user.email_verified,
@@ -252,18 +208,12 @@ function publicUser(user) {
 }
 
 router.post("/signup", async (req, res) => {
-  const { firstName, lastName, businessName, email, username, password } = req.body;
+  const { firstName, lastName, businessName, email, password } = req.body;
 
-  if (!firstName || !lastName || !businessName || !email || !username || !password) {
+  if (!firstName || !lastName || !businessName || !email || !password) {
     return res.status(400).json({
-      error: "First name, last name, business, email, username, and password are required."
+      error: "First name, last name, business, email, and password are required."
     });
-  }
-
-  const normalizedUsername = normalizeUsername(username);
-
-  if (!isValidUsername(normalizedUsername)) {
-    return res.status(400).json({ error: USERNAME_RULE_MESSAGE });
   }
 
   const normalizedPassword = normalizePassword(password);
@@ -292,7 +242,8 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
+    const accountNumber = await createUniqueAccountNumber(client, "owner");
+    const fullLogin = accountNumber;
 
     const businessResult = await client.query(
       `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
@@ -309,19 +260,21 @@ router.post("/signup", async (req, res) => {
          first_name,
          last_name,
          email,
+         account_number,
          username,
          full_login,
          password_hash,
          role,
          can_manage_schedule
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', true)
+       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, 'owner', true)
        RETURNING
          id,
          business_id,
          first_name,
          last_name,
          email,
+         account_number,
          username,
          full_login,
          role,
@@ -332,7 +285,7 @@ router.post("/signup", async (req, res) => {
         firstName.trim(),
         lastName.trim(),
         normalizedEmail,
-        normalizedUsername,
+        accountNumber,
         fullLogin,
         passwordHash
       ]
@@ -343,6 +296,13 @@ router.post("/signup", async (req, res) => {
     await client.query(
       `INSERT INTO locations (business_id, name)
        VALUES ($1, 'Main Location')`,
+      [business.id]
+    );
+
+    await client.query(
+      `INSERT INTO payroll_settings (business_id)
+       VALUES ($1)
+       ON CONFLICT (business_id) DO NOTHING`,
       [business.id]
     );
 
@@ -362,11 +322,12 @@ router.post("/signup", async (req, res) => {
     await sendEmail({
       to: user.email,
       subject: "Verify your Shift Ahoy email",
-      html: `<p>Verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`
+      html: `<p>Verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>Your permanent Shift Ahoy ID# is <strong>${accountNumber}</strong>.</p>`
     });
 
     res.status(201).json({
-      message: "Owner account created. Check your email for the verification link.",
+      message: `Owner account created. Your permanent ID# is ${accountNumber}. Check your email for the verification link.`,
+      accountNumber,
       fullLogin,
       businessName: business.business_name,
       businessSlug: business.business_slug
@@ -377,7 +338,7 @@ router.post("/signup", async (req, res) => {
     if (err.code === "23505") {
       return res.status(409).json({
         error:
-          "That email, login, or business login slug was just taken. Please try signing up again."
+          "That email, ID#, or business login slug was just taken. Please try signing up again."
       });
     }
 
@@ -502,6 +463,7 @@ router.post("/refresh", async (req, res) => {
        first_name,
        last_name,
        email,
+       account_number,
        username,
        full_login,
        password_hash,
@@ -543,14 +505,14 @@ router.post("/refresh", async (req, res) => {
 
 router.post("/forgot-username", async (req, res) => {
   const { email } = req.body;
-  const genericMessage = "If that email exists, a username reminder has been sent.";
+  const genericMessage = "If that email exists, an ID# reminder has been sent.";
 
   if (!email) {
     return res.json({ message: genericMessage });
   }
 
   const result = await pool.query(
-    `SELECT email, full_login, username
+    `SELECT email, account_number
      FROM users
      WHERE lower(email) = $1
        AND active = true
@@ -562,14 +524,14 @@ router.post("/forgot-username", async (req, res) => {
     return res.json({ message: genericMessage });
   }
 
-  const loginList = result.rows
-    .map((user) => `<li>${user.full_login || user.username}</li>`)
+  const idList = result.rows
+    .map((user) => `<li>${user.account_number}</li>`)
     .join("");
 
   await sendEmail({
     to: result.rows[0].email,
-    subject: "Your Shift Ahoy username",
-    html: `<p>Here are the Shift Ahoy login names tied to this email:</p><ul>${loginList}</ul>`
+    subject: "Your Shift Ahoy ID#",
+    html: `<p>Here are the Shift Ahoy ID# values tied to this email:</p><ul>${idList}</ul>`
   });
 
   res.json({ message: genericMessage });
