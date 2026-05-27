@@ -3,6 +3,27 @@
 Shift Ahoy is a desktop employee scheduling system for small teams and multi-location businesses. It combines an Electron desktop app with a local Node/Express API and PostgreSQL database so owners and managers can build schedules, manage employees, review time-off requests, publish schedules, and monitor coverage health from one organized dashboard.
 
 
+## ID# Login and Payroll Time Clock Updates
+
+- Owner accounts no longer collect a username during signup. Shift Ahoy automatically creates a permanent unique 9 digit ID# for the owner.
+- Employee creation no longer asks for Employee # or Username. Shift Ahoy automatically creates a permanent unique 9 digit ID# for each employee and stores it as the employee code used throughout schedules.
+- ID# values are issued through `issued_account_ids` and are never reused, even if an employee is deleted or deactivated.
+- Login now accepts ID# or verified email plus password. The old Username/Business login flow has been removed from the UI.
+- The dashboard greeting, settings profile, employee portal identity, employee list, and schedule table display ID# instead of username or Employee #.
+- The login screen now includes a compact Clock In / Out panel. Employees enter their 9 digit ID#, scan it, and Shift Ahoy shows the correct Clock In or Clock Out action based on their current status. After a successful punch, the ID# field is cleared.
+
+## Payroll System
+
+Shift Ahoy now includes a local payroll/time-clock foundation:
+
+- Payroll settings are available in the Manager Portal. Owners can set the first pay-cycle start date and the number of weeks in each pay period.
+- Employees can view payroll details in the Employee Portal, including recent clock entries, clock-in/clock-out timestamps, current pay-period hours, and estimated next pay based on their hourly pay rate.
+- Managers can view current pay-period totals, estimated payroll, and recent payroll alerts for the selected location.
+- Payroll alerts are created when employees clock in or out more than 15 minutes early or late compared with their published/revised schedule. Unscheduled clock events are also flagged.
+- Time clock data is tied to immutable ID# values and employee records so historical payroll logs remain available even after an employee is deactivated.
+
+> Payroll calculations are estimates for operational review. Confirm final payroll, rounding, overtime, breaks, and compliance rules with your payroll provider and local labor requirements before paying employees.
+
 ## Latest UI and Request-Control Updates
 
 - Holiday dates and blocked dates can now be saved as one-time dates or yearly recurring dates.
