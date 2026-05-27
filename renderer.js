@@ -55,6 +55,7 @@ let pendingRecoveryMode = "password";
 let ownerSecuritySettings = { twoFactorEnabled: false };
 let lastPrintedScheduleTitle = "Shift Ahoy Schedule";
 let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
+let pendingClockAction = null;
 
 const message = document.getElementById("message");
 
@@ -63,7 +64,6 @@ const signupFieldIds = [
   "signupLastName",
   "signupBusinessName",
   "signupEmail",
-  "signupUsername",
   "signupPassword"
 ];
 const loginFieldIds = ["loginValue", "loginPassword"];
@@ -75,7 +75,9 @@ function $(id) {
 
 function dashboardWelcomeText() {
   const name = userDisplayName();
-  return name ? `Welcome aboard, ${name}` : "Welcome aboard";
+  const id = userAccountNumber();
+  const label = id ? `${name} · ID# ${id}` : name;
+  return label ? `Welcome aboard, ${label}` : "Welcome aboard";
 }
 
 function setDashboardWelcome(text) {
@@ -237,7 +239,17 @@ function setLanguage(code) {
 function userDisplayName() {
   const first = currentUser?.firstName || currentUser?.first_name || "";
   const last = currentUser?.lastName || currentUser?.last_name || "";
-  return `${first} ${last}`.trim() || currentUser?.username || currentUser?.email || "Shift Ahoy User";
+  return `${first} ${last}`.trim() || currentUser?.accountNumber || currentUser?.account_number || currentUser?.email || "Shift Ahoy User";
+}
+
+function userAccountNumber() {
+  return currentUser?.accountNumber || currentUser?.account_number || currentUser?.employeeCode || currentUser?.employee_code || "";
+}
+
+function userDisplayNameWithId() {
+  const id = userAccountNumber();
+  const name = userDisplayName();
+  return id ? `${name} · ID# ${id}` : name;
 }
 
 function userInitials() {
@@ -254,11 +266,11 @@ function profileAvatarHtml(extraClass = "") {
 
 function renderProfileSettings() {
   const name = userDisplayName();
-  const username = currentUser?.fullLogin || currentUser?.username || "Username unavailable";
+  const accountNumber = userAccountNumber() || "ID# unavailable";
   const email = currentUser?.email || "Email unavailable";
 
   if ($("settingsProfileName")) $("settingsProfileName").textContent = name;
-  if ($("settingsProfileUsername")) $("settingsProfileUsername").textContent = username;
+  if ($("settingsProfileUsername")) $("settingsProfileUsername").textContent = `ID# ${accountNumber}`;
   if ($("settingsProfileEmail")) $("settingsProfileEmail").textContent = email;
   if ($("settingsProfileInitials")) {
     $("settingsProfileInitials").textContent = userInitials();
@@ -318,9 +330,9 @@ async function saveOwnerSecuritySettings() {
 
 function openRecoveryDialog(mode) {
   pendingRecoveryMode = mode === "username" ? "username" : "password";
-  if ($("recoveryTitle")) $("recoveryTitle").textContent = pendingRecoveryMode === "username" ? "Forgot Username" : "Reset Password";
-  if ($("recoveryMessage")) $("recoveryMessage").textContent = pendingRecoveryMode === "username" ? "Enter the verified email on your account and we will send your login name." : "Enter the verified email on your account and we will send a password-reset link.";
-  if ($("submitRecoveryButton")) $("submitRecoveryButton").textContent = pendingRecoveryMode === "username" ? "Send Username" : "Send Reset Link";
+  if ($("recoveryTitle")) $("recoveryTitle").textContent = pendingRecoveryMode === "username" ? "Forgot ID#" : "Reset Password";
+  if ($("recoveryMessage")) $("recoveryMessage").textContent = pendingRecoveryMode === "username" ? "Enter the verified email on your account and we will send your ID#." : "Enter the verified email on your account and we will send a password-reset link.";
+  if ($("submitRecoveryButton")) $("submitRecoveryButton").textContent = pendingRecoveryMode === "username" ? "Send ID#" : "Send Reset Link";
   if ($("recoveryEmail")) $("recoveryEmail").value = currentUser?.email || $("loginValue")?.value || "";
   setNotice("recoveryNotice", "", "");
   $("recoveryDialog")?.showModal();
@@ -352,7 +364,7 @@ function setupEnterToSubmit() {
       return;
     }
     const fallbackMap = {
-      signupFirstName: "signupButton", signupLastName: "signupButton", signupBusinessName: "signupButton", signupEmail: "signupButton", signupUsername: "signupButton", signupPassword: "signupButton",
+      signupFirstName: "signupButton", signupLastName: "signupButton", signupBusinessName: "signupButton", signupEmail: "signupButton", signupPassword: "signupButton",
       loginValue: "loginButton", loginPassword: "loginButton", employeeFilter: null, locationFilter: null, shiftFilter: null
     };
     const buttonId = fallbackMap[control.id];
@@ -814,7 +826,7 @@ function validateSignupField(inputId, showEmptyErrors = false) {
     return true;
   }
 
-  if (inputId === "signupUsername") {
+  if (false && inputId === "signupUsername") {
     const cleaned = cleanUsernameInput(input.value);
 
     if (input.value !== cleaned) input.value = cleaned;
@@ -867,7 +879,7 @@ function validateLoginForm(showEmptyErrors = false) {
 }
 
 function clearAuthFieldStates() {
-  signupFieldIds.forEach((id) => resetFieldState(id, id === "signupUsername" ? "3–30" : id === "signupPassword" ? "12–128" : "Required"));
+  signupFieldIds.forEach((id) => resetFieldState(id, id === "signupPassword" ? "12–128" : "Required"));
   loginFieldIds.forEach((id) => resetFieldState(id, "Required"));
 }
 
@@ -880,7 +892,6 @@ function setSignupApiError(err) {
   else if (lowerMessage.includes("last name")) inputId = "signupLastName";
   else if (lowerMessage.includes("business")) inputId = "signupBusinessName";
   else if (lowerMessage.includes("email")) inputId = "signupEmail";
-  else if (lowerMessage.includes("username") || lowerMessage.includes("login")) inputId = "signupUsername";
   else if (lowerMessage.includes("password")) inputId = "signupPassword";
 
   setFieldState(inputId, "invalid", message);
@@ -924,7 +935,6 @@ async function signup(event) {
     lastName: $("signupLastName")?.value?.trim() || "",
     businessName: $("signupBusinessName")?.value?.trim() || "",
     email: $("signupEmail")?.value?.trim() || "",
-    username: cleanUsernameInput($("signupUsername")?.value || ""),
     password: normalizePasswordInput($("signupPassword")?.value || "")
   };
 
@@ -939,9 +949,9 @@ async function signup(event) {
 
     setNotice("signupFormMessage", "success", data.message || "Owner account created.");
 
-    if ($("loginValue") && data.fullLogin) $("loginValue").value = data.fullLogin;
+    if ($("loginValue") && (data.accountNumber || data.fullLogin)) $("loginValue").value = data.accountNumber || data.fullLogin;
     if ($("loginPassword")) $("loginPassword").value = "";
-    setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
+    setNotice("loginFormMessage", "success", "Your ID# has been filled in. Enter your password to open the dashboard.");
   } catch (err) {
     setSignupApiError(err);
     setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
@@ -959,7 +969,7 @@ async function login(event) {
   const password = normalizePasswordInput($("loginPassword")?.value || "");
 
   if (!validateLoginForm(true)) {
-    setNotice("loginFormMessage", "error", "Enter your login and password.");
+    setNotice("loginFormMessage", "error", "Enter your ID# or email and password.");
     return;
   }
 
@@ -1418,8 +1428,8 @@ function renderSchedule(cells) {
     if (!grouped.has(cell.employee_id)) {
       grouped.set(cell.employee_id, {
         priority: Number(cell.priority || 0),
-        employeeCode: cell.employee_code || "—",
-        employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.username || "Employee",
+        employeeCode: cell.account_number || cell.employee_code || "—",
+        employee: `${cell.first_name || ""} ${cell.last_name || ""}`.trim() || cell.account_number || "Employee",
         title: cell.title || "—",
         days: {}
       });
@@ -1446,7 +1456,7 @@ function renderSchedule(cells) {
     <thead>
       <tr>
         <th scope="col" class="employeeMetaCol">Priority</th>
-        <th scope="col" class="employeeMetaCol">Employee #</th>
+        <th scope="col" class="employeeMetaCol">ID#</th>
         <th scope="col" class="employeeNameCol">Employee</th>
         <th scope="col" class="employeeMetaCol">Title</th>
         ${DAYS.map((day, index) => {
@@ -1779,11 +1789,9 @@ function populatePreferredShiftSelect(selected = "") {
 
 function resetEmployeeForm() {
   $("employeeId").value = "";
-  $("employeeCode").value = "";
   $("employeeTitle").value = "";
   $("employeeFirstName").value = "";
   $("employeeLastName").value = "";
-  $("employeeUsername").value = "";
   $("employeePassword").value = "";
   $("employmentType").value = "full_time";
   $("weeklyHours").value = "40";
@@ -1797,8 +1805,6 @@ function resetEmployeeForm() {
   $("canManageSchedule").checked = false;
   employeeDaysOff = new Set();
   setNotice("employeeFormMessage", "", "");
-  resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
   resetFieldState("employeePassword", "Required");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
@@ -1851,7 +1857,7 @@ function renderEmployees() {
     return `
       <article class="listItem">
         <div>
-          <strong>${escapeHtml(employee.employee_code)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
+          <strong>ID# ${escapeHtml(employee.account_number || employee.employee_code)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
           <span>${escapeHtml(employee.title)} · ${escapeHtml(employee.employment_type)} · ${escapeHtml(employee.weekly_hours)} hrs/week · Pay $${escapeHtml(((Number(employee.pay_rate_cents || 0) / 100).toFixed(2)))} · Available: ${escapeHtml(availableDays)}</span>
           <span>Days off: ${escapeHtml(daysOff.join(", ") || "None")}</span>
         </div>
@@ -1870,15 +1876,12 @@ function editEmployee(employeeId) {
 
   $("employeeForm").classList.remove("hidden");
   setNotice("employeeFormMessage", "", "");
-  resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
   resetFieldState("employeePassword", "Optional while editing");
   $("employeeId").value = employee.id;
-  $("employeeCode").value = employee.employee_code || "";
+  if ($("employeeGeneratedIdText")) $("employeeGeneratedIdText").textContent = `Assigned permanent ID# ${employee.account_number || employee.employee_code || ""}`;
   $("employeeTitle").value = employee.title || "";
   $("employeeFirstName").value = employee.first_name || "";
   $("employeeLastName").value = employee.last_name || "";
-  $("employeeUsername").value = employee.username || "";
   $("employeePassword").value = "";
   $("employmentType").value = employee.employment_type || "full_time";
   $("weeklyHours").value = employee.weekly_hours || "40";
@@ -1894,14 +1897,12 @@ function editEmployee(employeeId) {
   renderAvailabilityEditor(employee.availability || defaultAvailability());
   renderDaysOffList();
   populatePreferredShiftSelect(employee.preferred_shift_id || "");
-  $("employeeCode").focus();
+  $("employeeFirstName")?.focus?.();
 }
 
 async function saveEmployee(event) {
   event.preventDefault();
   setNotice("employeeFormMessage", "", "");
-  resetFieldState("employeeCode", "Required");
-  resetFieldState("employeeUsername", "Required");
   resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required");
 
   if (!selectedLocationId) {
@@ -1912,11 +1913,9 @@ async function saveEmployee(event) {
   const employeeId = $("employeeId").value;
   const body = {
     locationId: selectedLocationId,
-    employeeCode: $("employeeCode").value.trim(),
     title: $("employeeTitle").value.trim(),
     firstName: $("employeeFirstName").value.trim(),
     lastName: $("employeeLastName").value.trim(),
-    username: cleanUsernameInput($("employeeUsername").value),
     password: normalizePasswordInput($("employeePassword").value),
     employmentType: $("employmentType").value,
     weeklyHours: Number($("weeklyHours").value),
@@ -1934,23 +1933,6 @@ async function saveEmployee(event) {
   };
 
   let isValid = true;
-
-  if (!body.employeeCode) {
-    setFieldState("employeeCode", "invalid", "Required");
-    isValid = false;
-  } else {
-    setFieldState("employeeCode", "valid", "Looks good");
-  }
-
-  if (!body.username) {
-    setFieldState("employeeUsername", "invalid", "Required");
-    isValid = false;
-  } else if (body.username.length < 3) {
-    setFieldState("employeeUsername", "invalid", "3–30 letters or numbers");
-    isValid = false;
-  } else {
-    setFieldState("employeeUsername", "valid", "Username works");
-  }
 
   if (!employeeId && !body.password) {
     setFieldState("employeePassword", "invalid", "Required");
@@ -1986,7 +1968,7 @@ async function deleteEmployee(employeeId) {
 
   const deleted = await runOwnerCredentialAction({
     title: "Delete Employee",
-    message: `Enter your owner password to delete employee ${employee.employee_code}.`,
+    message: `Enter your owner password to delete employee ID# ${employee.account_number || employee.employee_code}.`,
     confirmLabel: "Delete Employee",
     onConfirm: (actorPassword) =>
       api(`/employees/${encodeURIComponent(employeeId)}/delete`, {
@@ -2699,7 +2681,7 @@ function requestStatusColumnId(status) {
 }
 
 function requesterName(request) {
-  return `${request.first_name || ""} ${request.last_name || ""}`.trim() || request.username || "Employee";
+  return `${request.first_name || ""} ${request.last_name || ""}`.trim() || request.account_number || "Employee";
 }
 
 function approverName(request) {
@@ -3002,7 +2984,7 @@ function renderAuditLog() {
   }
 
   list.innerHTML = auditLogs.map((entry) => {
-    const actor = `${entry.first_name || ""} ${entry.last_name || ""}`.trim() || entry.username || entry.full_login || "Unknown user";
+    const actor = `${entry.first_name || ""} ${entry.last_name || ""}`.trim() || entry.account_number || entry.username || entry.full_login || "Unknown user";
     const date = new Date(entry.created_at).toLocaleString();
     return `
       <article class="listItem auditItem">
@@ -3099,6 +3081,9 @@ async function logout() {
 function setupEvents() {
   $("signupButton").addEventListener("click", signup);
   $("loginButton").addEventListener("click", login);
+  $("clockLookupButton")?.addEventListener("click", lookupClockStatus);
+  $("clockActionButton")?.addEventListener("click", submitClockAction);
+  $("clockAccountNumber")?.addEventListener("input", () => { const input = $("clockAccountNumber"); if (input) input.value = input.value.replace(/\D/g, "").slice(0, 9); pendingClockAction = null; $("clockActionButton")?.classList.add("hidden"); });
   $("forgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
   $("forgotUsernameButton")?.addEventListener("click", () => openRecoveryDialog("username"));
   $("settingsForgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
@@ -3525,7 +3510,7 @@ function ensureUltimateAutomationLayout() {
         <div data-profile-avatar class="profilePortalAvatarSlot">${profileAvatarHtml("embeddedAvatar")}</div>
         <div>
           <h3>${escapeHtml(userDisplayName())}</h3>
-          <p class="panelHint">${escapeHtml(currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee")}</p>
+          <p class="panelHint">${escapeHtml(userAccountNumber() ? `ID# ${userAccountNumber()}` : currentUser?.email || "Employee")}</p>
         </div>
       </section>
     `);
@@ -3533,7 +3518,7 @@ function ensureUltimateAutomationLayout() {
     const title = $("employeePortalIdentity")?.querySelector("h3");
     const meta = $("employeePortalIdentity")?.querySelector(".panelHint");
     if (title) title.textContent = userDisplayName();
-    if (meta) meta.textContent = currentUser?.fullLogin || currentUser?.username || currentUser?.email || "Employee";
+    if (meta) meta.textContent = userAccountNumber() ? `ID# ${userAccountNumber()}` : currentUser?.email || "Employee";
   }
   updateProfileAvatars();
 
@@ -3602,6 +3587,21 @@ function ensureUltimateAutomationLayout() {
     employeePortalContent.appendChild($("shiftSwapsPanel"));
   }
 
+  if (employeePortalContent && !$("employeePayrollPanel")) {
+    employeePortalContent.insertAdjacentHTML("beforeend", `
+      <section id="employeePayrollPanel" class="portalSubcard">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">EP-05</span><div><h2>Payroll</h2><p class="panelHint">Your current pay-period hours, estimated pay, and clock history.</p></div></div>
+          <button id="refreshEmployeePayrollButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="employeePayrollList" class="listStack"></div>
+      </section>
+    `);
+    $("refreshEmployeePayrollButton")?.addEventListener("click", loadEmployeePayrollSummary);
+  } else if (employeePortalContent && $("employeePayrollPanel") && $("employeePayrollPanel").parentElement !== employeePortalContent) {
+    employeePortalContent.appendChild($("employeePayrollPanel"));
+  }
+
   if (managerPortalContent && !$("managerForecastPanel")) {
     managerPortalContent.insertAdjacentHTML("beforeend", `
       <section id="managerForecastPanel" class="portalSubcard managerOnly hidden">
@@ -3639,6 +3639,30 @@ function ensureUltimateAutomationLayout() {
     `);
   } else if (managerPortalContent && $("laborPanel") && $("laborPanel").parentElement !== managerPortalContent) {
     managerPortalContent.appendChild($("laborPanel"));
+  }
+
+  if (managerPortalContent && !$("managerPayrollPanel")) {
+    managerPortalContent.insertAdjacentHTML("beforeend", `
+      <section id="managerPayrollPanel" class="portalSubcard managerOnly hidden">
+        <div class="cardTitle dashboardCardTitle dashboardCardTitleWithAction">
+          <div class="dashboardTitleGroup"><span class="iconBadge">MP-05</span><div><h2>Payroll</h2><p class="panelHint">Owner-managed pay cycle settings, current period totals, and early/late clock alerts.</p></div></div>
+          <button id="refreshManagerPayrollButton" class="button secondary" type="button">Refresh</button>
+        </div>
+        <div id="payrollSettingsNotice" class="formNotice hidden" role="status" aria-live="polite"></div>
+        <form id="payrollSettingsForm" class="editorForm ownerOnly hidden">
+          <div class="formGrid twoColumn">
+            <div class="fieldGroup"><label class="fieldLabel" for="payrollStartDate">First Pay Cycle Start Date</label><input id="payrollStartDate" type="date" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="payPeriodWeeks">Pay Every X Weeks</label><input id="payPeriodWeeks" type="number" min="1" max="12" value="2" /></div>
+          </div>
+          <div class="formActions"><button class="button primary" type="submit">Save Payroll Settings</button></div>
+        </form>
+        <div id="managerPayrollList" class="listStack"></div>
+      </section>
+    `);
+    $("refreshManagerPayrollButton")?.addEventListener("click", loadManagerPayrollSummary);
+    $("payrollSettingsForm")?.addEventListener("submit", savePayrollSettings);
+  } else if (managerPortalContent && $("managerPayrollPanel") && $("managerPayrollPanel").parentElement !== managerPortalContent) {
+    managerPortalContent.appendChild($("managerPayrollPanel"));
   }
 
   const overridePanel = $("timeOffSettingsCard");
@@ -4007,7 +4031,7 @@ async function loadApprovalQueue() {
     list.innerHTML = `
       <section class="automationMetrics healthMetricGrid"><article><strong>${escapeHtml(queue.total || 0)}</strong><span>items needing attention</span></article><article><strong>${escapeHtml(queue.timeOff.length)}</strong><span>time off</span></article><article><strong>${escapeHtml(queue.shiftSwaps.length)}</strong><span>swap/cover</span></article><article><strong>${escapeHtml(queue.openShifts.length)}</strong><span>open shifts</span></article></section>
       <div class="automationDivider">Time Off</div>
-      ${queue.timeOff.length ? queue.timeOff.map((r) => `<article class="listItem"><div><strong>${escapeHtml(`${r.first_name || ""} ${r.last_name || ""}`.trim() || r.username)}</strong><span>${escapeHtml(formatRequestDate(r.start_date))}–${escapeHtml(formatRequestDate(r.end_date))} · ${escapeHtml(r.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No pending time off.</div>`}
+      ${queue.timeOff.length ? queue.timeOff.map((r) => `<article class="listItem"><div><strong>${escapeHtml(`${r.first_name || ""} ${r.last_name || ""}`.trim() || r.account_number)}</strong><span>${escapeHtml(formatRequestDate(r.start_date))}–${escapeHtml(formatRequestDate(r.end_date))} · ${escapeHtml(r.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No pending time off.</div>`}
       <div class="automationDivider">Shift Swaps / Covers</div>
       ${queue.shiftSwaps.length ? queue.shiftSwaps.map((r) => `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(r.work_date))} · ${escapeHtml(r.request_type)}</strong><span>${escapeHtml(r.status)} · ${escapeHtml(r.reason || "")}</span></div><div class="rowActions"><button class="button primary" data-action="approve-swap" data-id="${escapeHtml(r.id)}">Approve</button><button class="button ghost" data-action="deny-swap" data-id="${escapeHtml(r.id)}">Deny</button></div></article>`).join("") : `<div class="emptyState compactEmpty">No shift swap approvals.</div>`}
       <div class="automationDivider">Coverage Gaps</div>
@@ -4018,11 +4042,154 @@ async function loadApprovalQueue() {
   }
 }
 
+
+function formatHoursFromMinutes(minutes) {
+  return (Math.max(0, Number(minutes || 0)) / 60).toFixed(2);
+}
+
+async function lookupClockStatus() {
+  const input = $("clockAccountNumber");
+  const number = String(input?.value || "").replace(/\D/g, "").slice(0, 9);
+  if (input) input.value = number;
+  pendingClockAction = null;
+  $("clockActionButton")?.classList.add("hidden");
+  $("clockStatusPreview")?.classList.add("hidden");
+
+  if (number.length !== 9) {
+    setNotice("clockFormMessage", "error", "Enter a 9 digit ID#.");
+    return;
+  }
+
+  try {
+    const data = await api("/payroll/clock/lookup", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify({ accountNumber: number })
+    });
+    pendingClockAction = data.clockedIn ? "clock_out" : "clock_in";
+    const actionButton = $("clockActionButton");
+    if (actionButton) {
+      actionButton.textContent = data.clockedIn ? "Clock Out" : "Clock In";
+      actionButton.classList.remove("hidden");
+    }
+    const preview = $("clockStatusPreview");
+    if (preview) {
+      preview.classList.remove("hidden");
+      preview.innerHTML = `<strong>${escapeHtml(data.employee?.name || "Employee")}</strong><span>${data.clockedIn ? "Currently clocked in" : "Currently clocked out"}</span>`;
+    }
+    setNotice("clockFormMessage", "success", "ID# found. Confirm the action below.");
+  } catch (err) {
+    setNotice("clockFormMessage", "error", err.message || "Clock lookup failed.");
+  }
+}
+
+async function submitClockAction() {
+  const input = $("clockAccountNumber");
+  const number = String(input?.value || "").replace(/\D/g, "").slice(0, 9);
+  if (!pendingClockAction || number.length !== 9) {
+    await lookupClockStatus();
+    return;
+  }
+
+  try {
+    const data = await api("/payroll/clock", {
+      method: "POST",
+      skipRefresh: true,
+      body: JSON.stringify({ accountNumber: number, action: pendingClockAction })
+    });
+    setNotice("clockFormMessage", "success", `${data.message || "Clock action successful."} Status: ${String(data.status || "on_time").replaceAll("_", " ")}.`);
+    if (input) input.value = "";
+    pendingClockAction = null;
+    $("clockActionButton")?.classList.add("hidden");
+    $("clockStatusPreview")?.classList.add("hidden");
+    if (accessToken) {
+      loadPayrollPanels().catch(() => {});
+    }
+  } catch (err) {
+    setNotice("clockFormMessage", "error", err.message || "Clock action failed.");
+  }
+}
+
+async function savePayrollSettings(event) {
+  event?.preventDefault?.();
+  try {
+    const data = await api("/payroll/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        firstPayPeriodStart: $("payrollStartDate")?.value || "",
+        payPeriodWeeks: Number($("payPeriodWeeks")?.value || 2)
+      })
+    });
+    setNotice("payrollSettingsNotice", "success", "Payroll settings saved.");
+    await loadPayrollPanels();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to save payroll settings.");
+  }
+}
+
+async function loadPayrollPanels() {
+  if (!accessToken) return;
+  if (currentUser?.role === "employee") {
+    await loadEmployeePayrollSummary();
+  }
+  if (canManageSchedule()) {
+    await loadManagerPayrollSummary();
+  }
+}
+
+async function loadEmployeePayrollSummary() {
+  const target = $("employeePayrollList");
+  if (!target) return;
+  try {
+    const data = await api("/payroll/employee-summary");
+    const period = data.currentPeriod || {};
+    const entries = data.entries || [];
+    target.innerHTML = `
+      <section class="automationMetrics healthMetricGrid">
+        <article><strong>${escapeHtml(formatHoursFromMinutes(period.minutes_worked))}</strong><span>current period hours</span></article>
+        <article><strong>${moneyFromCents(period.estimated_pay_cents || 0)}</strong><span>estimated next pay</span></article>
+      </section>
+      <div class="automationDivider">Recent Clock Activity</div>
+      ${entries.length ? entries.map((entry) => `<article class="listItem"><div><strong>${escapeHtml(new Date(entry.clock_in_at).toLocaleString())}</strong><span>Out: ${escapeHtml(entry.clock_out_at ? new Date(entry.clock_out_at).toLocaleString() : "Still clocked in")} · ${escapeHtml(formatHoursFromMinutes(entry.minutes_worked))} hours · In ${escapeHtml(entry.clock_in_status || "on_time")} / Out ${escapeHtml(entry.clock_out_status || "pending")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No payroll time entries yet.</div>`}
+    `;
+  } catch (err) {
+    target.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadManagerPayrollSummary() {
+  const target = $("managerPayrollList");
+  if (!target) return;
+  try {
+    const query = selectedLocationId ? `?locationId=${encodeURIComponent(selectedLocationId)}` : "";
+    const data = await api(`/payroll/manager-summary${query}`);
+    const settings = data.settings || {};
+    if ($("payrollStartDate") && settings.first_pay_period_start) $("payrollStartDate").value = String(settings.first_pay_period_start).slice(0, 10);
+    if ($("payPeriodWeeks") && settings.pay_period_weeks) $("payPeriodWeeks").value = settings.pay_period_weeks;
+    const employees = data.employees || [];
+    const alerts = data.alerts || [];
+    const totalPay = employees.reduce((sum, row) => sum + Number(row.estimated_pay_cents || 0), 0);
+    target.innerHTML = `
+      <section class="automationMetrics healthMetricGrid">
+        <article><strong>${escapeHtml(employees.length)}</strong><span>employees</span></article>
+        <article><strong>${moneyFromCents(totalPay)}</strong><span>estimated payroll</span></article>
+        <article><strong>${escapeHtml(alerts.length)}</strong><span>recent alerts</span></article>
+      </section>
+      ${alerts.length ? `<div class="scheduleWarningsList"><strong>Payroll alerts</strong><ul>${alerts.map((alert) => `<li>${escapeHtml(alert.message)}</li>`).join("")}</ul></div>` : `<div class="scheduleWarningsList success">No recent early/late clock alerts.</div>`}
+      <div class="automationDivider">Current Pay Period</div>
+      ${employees.length ? employees.map((row) => `<article class="listItem"><div><strong>${escapeHtml(`${row.first_name || ""} ${row.last_name || ""}`.trim() || row.account_number || row.employee_code)}</strong><span>ID# ${escapeHtml(row.account_number || row.employee_code)} · ${escapeHtml(formatHoursFromMinutes(row.minutes_worked))} hours · ${moneyFromCents(row.estimated_pay_cents || 0)} estimated pay</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No active employees in this payroll view.</div>`}
+    `;
+  } catch (err) {
+    target.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
 function renderUltimateAutomationPanels() {
   if (!accessToken) return;
   ensureUltimateAutomationLayout();
   syncAutomationRoleVisibility();
   loadPublishedScheduleStatus();
+  loadPayrollPanels().catch(() => {});
   loadEmployeeSchedule();
   loadOpenShifts();
   loadShiftSwaps();
