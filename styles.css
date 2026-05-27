@@ -620,23 +620,27 @@ select:focus {
 }
 
 .fieldGroup.is-invalid input,
+.fieldGroup.is-invalid select,
 .inputInvalid {
   border-color: var(--danger);
-  background: var(--danger-soft);
+  background: #ffffff;
 }
 
 .fieldGroup.is-invalid input:focus,
+.fieldGroup.is-invalid select:focus,
 .inputInvalid:focus {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
-.fieldGroup.is-valid input {
+.fieldGroup.is-valid input,
+.fieldGroup.is-valid select {
   border-color: var(--success);
   background: #ffffff;
 }
 
-.fieldGroup.is-valid input:focus {
+.fieldGroup.is-valid input:focus,
+.fieldGroup.is-valid select:focus {
   border-color: var(--success);
   box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12);
 }
@@ -4218,4 +4222,13 @@ body.theme-dark input.inputInvalid:-webkit-autofill:focus {
   caret-color: var(--ink) !important;
   box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
   border-color: var(--danger) !important;
+}
+
+.recurringOptionRow {
+  margin-top: 8px;
+}
+
+.fullWidthButton {
+  width: 100%;
+  justify-content: center;
 }
