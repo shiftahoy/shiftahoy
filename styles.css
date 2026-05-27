@@ -295,7 +295,7 @@ p {
 }
 
 .heroPanel {
-  --hero-intro-y: -200px;
+  --hero-intro-y: -44px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -340,12 +340,13 @@ p {
   z-index: 1;
 }
 
+
 .heroIntro {
   position: relative;
   z-index: 1;
   display: grid;
   justify-items: start;
-  transform: translateY(var(--hero-intro-y));
+  transform: translate3d(0, var(--hero-intro-y, 0px), 0);
 }
 
 .heroLogoWrap {
