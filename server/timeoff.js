@@ -15,6 +15,10 @@ function cleanText(value) {
   return String(value || "").trim();
 }
 
+function normalizeBoolean(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 async function verifyActorPassword(userId, password) {
   if (!password) return false;
 
@@ -62,24 +66,24 @@ async function loadSettings(businessId, locationId = null) {
 
   const blockedResult = locationId
     ? await pool.query(
-        `SELECT id, blocked_date, reason, location_id
+        `SELECT id, blocked_date, reason, location_id, recurs_yearly
          FROM time_off_blocked_dates
          WHERE business_id = $1
            AND location_id = $2
-           AND blocked_date >= CURRENT_DATE
-         ORDER BY blocked_date ASC`,
+           AND (blocked_date >= CURRENT_DATE OR recurs_yearly = true)
+         ORDER BY recurs_yearly DESC, blocked_date ASC`,
         [businessId, locationId]
       )
     : { rows: [] };
 
   const holidayResult = locationId
     ? await pool.query(
-        `SELECT id, holiday_date, name, location_id
+        `SELECT id, holiday_date, name, location_id, recurs_yearly
          FROM time_off_holiday_dates
          WHERE business_id = $1
            AND location_id = $2
-           AND holiday_date >= CURRENT_DATE
-         ORDER BY holiday_date ASC`,
+           AND (holiday_date >= CURRENT_DATE OR recurs_yearly = true)
+         ORDER BY recurs_yearly DESC, holiday_date ASC`,
         [businessId, locationId]
       )
     : { rows: [] };
@@ -96,13 +100,22 @@ async function loadSettings(businessId, locationId = null) {
 
 async function hasBlockedDateInRange(businessId, locationId, startDate, endDate) {
   const result = await pool.query(
-    `SELECT blocked_date, reason
+    `SELECT blocked_date, reason, recurs_yearly
      FROM time_off_blocked_dates
      WHERE business_id = $1
        AND location_id = $2
-       AND blocked_date >= $3::date
-       AND blocked_date <= $4::date
-     ORDER BY blocked_date ASC
+       AND (
+         (blocked_date >= $3::date AND blocked_date <= $4::date)
+         OR (
+           recurs_yearly = true
+           AND EXISTS (
+             SELECT 1
+             FROM generate_series($3::date, $4::date, interval '1 day') AS requested_day(day_value)
+             WHERE to_char(requested_day.day_value, 'MM-DD') = to_char(blocked_date, 'MM-DD')
+           )
+         )
+       )
+     ORDER BY recurs_yearly ASC, blocked_date ASC
      LIMIT 1`,
     [businessId, locationId, startDate, endDate]
   );
@@ -247,6 +260,7 @@ router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
 router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
   const blockedDate = normalizeDate(req.body.blockedDate);
   const reason = cleanText(req.body.reason);
+  const recursYearly = normalizeBoolean(req.body.recursYearly);
   let auditLocationId;
   try {
     auditLocationId = await requireOwnerSelectedLocation(req.user, req.body.locationId);
@@ -264,12 +278,14 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO time_off_blocked_dates (business_id, location_id, blocked_date, reason)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO time_off_blocked_dates (business_id, location_id, blocked_date, reason, recurs_yearly)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (business_id, location_id, blocked_date)
-       DO UPDATE SET reason = EXCLUDED.reason
-       RETURNING id, blocked_date, reason, location_id`,
-      [req.user.businessId, auditLocationId, blockedDate, reason]
+       DO UPDATE SET
+         reason = EXCLUDED.reason,
+         recurs_yearly = EXCLUDED.recurs_yearly
+       RETURNING id, blocked_date, reason, location_id, recurs_yearly`,
+      [req.user.businessId, auditLocationId, blockedDate, reason, recursYearly]
     );
 
     await logAudit({
@@ -279,7 +295,7 @@ router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
       action: "Blocked time off date saved",
       entityType: "time_off_blocked_date",
       entityId: result.rows[0]?.id,
-      details: `${blockedDate} — ${reason}`
+      details: `${blockedDate}${recursYearly ? " yearly" : ""} — ${reason}`
     });
 
     res.status(201).json(await loadSettings(req.user.businessId, auditLocationId));
@@ -294,7 +310,7 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
 
   try {
     const existing = await pool.query(
-      `SELECT blocked_date, reason, location_id
+      `SELECT blocked_date, reason, location_id, recurs_yearly
        FROM time_off_blocked_dates
        WHERE id = $1
          AND business_id = $2`,
@@ -322,7 +338,7 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
       action: "Blocked time off date removed",
       entityType: "time_off_blocked_date",
       entityId: id,
-      details: `${String(existing.rows[0].blocked_date).slice(0, 10)} — ${existing.rows[0].reason || "No reason"}`
+      details: `${String(existing.rows[0].blocked_date).slice(0, 10)}${existing.rows[0].recurs_yearly ? " yearly" : ""} — ${existing.rows[0].reason || "No reason"}`
     });
 
     res.json(await loadSettings(req.user.businessId, auditLocationId));
@@ -336,6 +352,7 @@ router.post("/blocked-dates/:id/delete", requireAuth, requireOwner, async (req, 
 router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
   const holidayDate = normalizeDate(req.body.holidayDate);
   const name = cleanText(req.body.name);
+  const recursYearly = normalizeBoolean(req.body.recursYearly);
   let auditLocationId;
   try {
     auditLocationId = await requireOwnerSelectedLocation(req.user, req.body.locationId);
@@ -353,12 +370,14 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO time_off_holiday_dates (business_id, location_id, holiday_date, name)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO time_off_holiday_dates (business_id, location_id, holiday_date, name, recurs_yearly)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (business_id, location_id, holiday_date)
-       DO UPDATE SET name = EXCLUDED.name
-       RETURNING id, holiday_date, name, location_id`,
-      [req.user.businessId, auditLocationId, holidayDate, name]
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         recurs_yearly = EXCLUDED.recurs_yearly
+       RETURNING id, holiday_date, name, location_id, recurs_yearly`,
+      [req.user.businessId, auditLocationId, holidayDate, name, recursYearly]
     );
 
     await logAudit({
@@ -368,7 +387,7 @@ router.post("/holidays", requireAuth, requireOwner, async (req, res) => {
       action: "Holiday date saved",
       entityType: "time_off_holiday_date",
       entityId: result.rows[0]?.id,
-      details: `${holidayDate} — ${name}`
+      details: `${holidayDate}${recursYearly ? " yearly" : ""} — ${name}`
     });
 
     res.status(201).json(await loadSettings(req.user.businessId, auditLocationId));
@@ -383,7 +402,7 @@ router.post("/holidays/:id/delete", requireAuth, requireOwner, async (req, res) 
 
   try {
     const existing = await pool.query(
-      `SELECT holiday_date, name, location_id
+      `SELECT holiday_date, name, location_id, recurs_yearly
        FROM time_off_holiday_dates
        WHERE id = $1
          AND business_id = $2`,
@@ -411,7 +430,7 @@ router.post("/holidays/:id/delete", requireAuth, requireOwner, async (req, res) 
       action: "Holiday date removed",
       entityType: "time_off_holiday_date",
       entityId: id,
-      details: `${String(existing.rows[0].holiday_date).slice(0, 10)} — ${existing.rows[0].name || "Holiday"}`
+      details: `${String(existing.rows[0].holiday_date).slice(0, 10)}${existing.rows[0].recurs_yearly ? " yearly" : ""} — ${existing.rows[0].name || "Holiday"}`
     });
 
     res.json(await loadSettings(req.user.businessId, auditLocationId));
