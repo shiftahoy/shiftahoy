@@ -1,3 +1,29 @@
+# Shift Ahoy Recurring Dates and Validation Polish
+
+This update adds yearly recurrence for holiday and blocked dates, improves field-level error styling, and adds an in-settings logout workflow.
+
+## Added
+
+- Yearly recurring option for holiday dates.
+- Yearly recurring option for blocked dates.
+- Database support for `time_off_blocked_dates.recurs_yearly` and `time_off_holiday_dates.recurs_yearly`.
+- Settings logout button that matches the existing settings design and returns users to the blue login panel.
+
+## Updated
+
+- Create Owner Account errors now outline the affected field in red.
+- Login errors now outline both login fields in red when credentials are missing or invalid.
+- Shared field validation now works for all form fields by falling back to the nearest `.fieldGroup`.
+- Light mode and dark mode invalid fields now use a red outline without changing the field fill color.
+- Employee password status now says `Required` instead of `Required for new employees`.
+- README now documents recurring blocked/holiday dates, validation polish, and logout behavior.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
 # Shift Ahoy Current Dashboard Polish
 
 This update refines the dashboard experience, schedule forecast layout, print workflow, dark mode, employee credentials, and employee request controls.
