@@ -52,7 +52,7 @@ function dayLabel(dayOfWeek) {
 }
 
 function employeeName(employee) {
-  return `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.username || employee.employee_code || "Employee";
+  return `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.account_number || employee.employee_code || "Employee";
 }
 
 async function assertScheduleAccess(user, locationId) {
@@ -275,6 +275,7 @@ router.get("/", requireAuth, async (req, res) => {
          e.preferred_shift_id,
          u.first_name,
          u.last_name,
+         u.account_number,
          u.username,
          u.role,
          u.can_manage_schedule
@@ -522,7 +523,9 @@ router.get("/", requireAuth, async (req, res) => {
             title: employee.title,
             first_name: employee.first_name,
             last_name: employee.last_name,
-            username: employee.username,
+            account_number: employee.account_number,
+            account_number: employee.account_number,
+      username: employee.username,
             role: employee.role,
             can_manage_schedule: employee.can_manage_schedule,
             employment_type: employee.employment_type,
@@ -599,6 +602,7 @@ router.get("/", requireAuth, async (req, res) => {
       preferred_shift_id: employee.preferred_shift_id,
       first_name: employee.first_name,
       last_name: employee.last_name,
+      account_number: employee.account_number,
       username: employee.username,
       role: employee.role,
       can_manage_schedule: employee.can_manage_schedule
