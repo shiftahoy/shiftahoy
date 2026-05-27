@@ -415,14 +415,14 @@ p {
   --bubble-column: 5 / span 2;
   --bubble-row: 1;
   --bubble-x: -20px;
-  --bubble-y: -200px;
+  --bubble-y: -180px;
 }
 
 .metricBubbleLabor {
   --bubble-column: 1 / span 2;
   --bubble-row: 2;
-  --bubble-x: 0;
-  --bubble-y: 0;
+  --bubble-x: -40px;
+  --bubble-y: -80px;
 }
 
 .metricBubblePrint {
