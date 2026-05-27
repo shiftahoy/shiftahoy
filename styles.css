@@ -4224,8 +4224,13 @@ body.theme-dark input.inputInvalid:-webkit-autofill:focus {
   border-color: var(--danger) !important;
 }
 
-.recurringOptionRow {
+.recurringOptionRow,
+.recurringPermissionsSection {
   margin-top: 8px;
+}
+
+.recurringPermissionsSection .permissionsGrid {
+  grid-template-columns: 1fr;
 }
 
 .fullWidthButton {
