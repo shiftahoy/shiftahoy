@@ -426,14 +426,14 @@ p {
 }
 
 .metricBubblePrint {
-  --bubble-column: 1 / span 2;
+  --bubble-column: 3 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
   --bubble-y: 50px;
 }
 
 .metricBubbleClock {
-  --bubble-column: 3 / span 2;
+  --bubble-column: 5 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
   --bubble-y: 50px;
