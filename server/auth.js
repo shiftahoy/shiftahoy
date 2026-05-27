@@ -503,21 +503,29 @@ router.post("/refresh", async (req, res) => {
   });
 });
 
-router.post("/forgot-username", async (req, res) => {
-  const { email } = req.body;
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+}
+
+async function sendIdReminder(req, res) {
+  const email = normalizeEmail(req.body.email);
   const genericMessage = "If that email exists, an ID# reminder has been sent.";
 
-  if (!email) {
-    return res.json({ message: genericMessage });
+  if (!email || !isValidEmail(email)) {
+    return res.status(400).json({ error: "A valid email is required." });
   }
 
   const result = await pool.query(
-    `SELECT email, account_number
+    `SELECT email, account_number, first_name, last_name, role
      FROM users
      WHERE lower(email) = $1
        AND active = true
      ORDER BY created_at ASC`,
-    [String(email).toLowerCase().trim()]
+    [email]
   );
 
   if (result.rows.length === 0) {
@@ -525,17 +533,30 @@ router.post("/forgot-username", async (req, res) => {
   }
 
   const idList = result.rows
-    .map((user) => `<li>${user.account_number}</li>`)
+    .map((user) => {
+      const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Shift Ahoy user";
+      const roleLabel = user.role ? ` (${user.role})` : "";
+      return `<li><strong>${user.account_number}</strong> — ${name}${roleLabel}</li>`;
+    })
     .join("");
 
   await sendEmail({
     to: result.rows[0].email,
     subject: "Your Shift Ahoy ID#",
-    html: `<p>Here are the Shift Ahoy ID# values tied to this email:</p><ul>${idList}</ul>`
+    html: `
+      <p>You requested the Shift Ahoy ID# associated with this email address.</p>
+      <p>Your ID# value${result.rows.length === 1 ? " is" : "s are"}:</p>
+      <ul>${idList}</ul>
+      <p>You can use your ID# or email with your password to log in.</p>
+      <p>If you did not request this reminder, you can ignore this email.</p>
+    `
   });
 
   res.json({ message: genericMessage });
-});
+}
+
+router.post("/forgot-id", sendIdReminder);
+router.post("/forgot-username", sendIdReminder);
 
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -543,8 +564,10 @@ router.post("/forgot-password", async (req, res) => {
   const genericMessage =
     "If that email exists, a password reset link has been sent.";
 
-  if (!email) {
-    return res.json({ message: genericMessage });
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return res.status(400).json({ error: "A valid email is required." });
   }
 
   const result = await pool.query(
@@ -553,7 +576,7 @@ router.post("/forgot-password", async (req, res) => {
      WHERE lower(email) = $1
        AND active = true
      LIMIT 1`,
-    [String(email).toLowerCase().trim()]
+    [normalizedEmail]
   );
 
   if (result.rows.length === 0) {
