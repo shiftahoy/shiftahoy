@@ -295,7 +295,7 @@ p {
 }
 
 .heroPanel {
-  --hero-intro-y: -80px;
+  --hero-intro-y: -44px;
   display: flex;
   flex-direction: column;
   justify-content: center;
