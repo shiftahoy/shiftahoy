@@ -329,19 +329,59 @@ async function saveOwnerSecuritySettings() {
 }
 
 function openRecoveryDialog(mode) {
-  pendingRecoveryMode = mode === "username" ? "username" : "password";
-  if ($("recoveryTitle")) $("recoveryTitle").textContent = pendingRecoveryMode === "username" ? "Forgot ID#" : "Reset Password";
-  if ($("recoveryMessage")) $("recoveryMessage").textContent = pendingRecoveryMode === "username" ? "Enter the verified email on your account and we will send your ID#." : "Enter the verified email on your account and we will send a password-reset link.";
-  if ($("submitRecoveryButton")) $("submitRecoveryButton").textContent = pendingRecoveryMode === "username" ? "Send ID#" : "Send Reset Link";
-  if ($("recoveryEmail")) $("recoveryEmail").value = currentUser?.email || $("loginValue")?.value || "";
+  pendingRecoveryMode = mode === "id" ? "id" : "password";
+  const isIdRecovery = pendingRecoveryMode === "id";
+
+  if ($("recoveryTitle")) $("recoveryTitle").textContent = isIdRecovery ? "Forgot ID#" : "Reset Password";
+  if ($("recoveryMessage")) {
+    $("recoveryMessage").textContent = isIdRecovery
+      ? "Enter the verified email on your account and we will send your permanent Shift Ahoy ID#."
+      : "Enter the verified email on your account and we will send a password-reset link.";
+  }
+  if ($("submitRecoveryButton")) $("submitRecoveryButton").textContent = isIdRecovery ? "Send ID#" : "Send Reset Link";
+
+  const recoveryEmail = $("recoveryEmail");
+  const loginValue = $("loginValue")?.value || "";
+  if (recoveryEmail) {
+    recoveryEmail.value = currentUser?.email || (loginValue.includes("@") ? loginValue : "");
+  }
+
+  resetFieldState("recoveryEmail", "Required");
   setNotice("recoveryNotice", "", "");
   $("recoveryDialog")?.showModal();
+  window.setTimeout(() => recoveryEmail?.focus?.(), 30);
+}
+
+function validateRecoveryEmail(showEmptyErrors = true) {
+  const emailInput = $("recoveryEmail");
+  const email = emailInput?.value?.trim() || "";
+
+  if (!email) {
+    setFieldState("recoveryEmail", showEmptyErrors ? "invalid" : "neutral", "Required");
+    return false;
+  }
+
+  if (!isValidEmailInput(email)) {
+    setFieldState("recoveryEmail", "invalid", "Enter a valid email");
+    return false;
+  }
+
+  setFieldState("recoveryEmail", "valid", "Valid email");
+  return true;
 }
 
 async function submitRecovery(event) {
   event.preventDefault();
+
+  if (!validateRecoveryEmail(true)) {
+    setNotice("recoveryNotice", "error", "Enter a valid email address.");
+    $("recoveryEmail")?.focus?.();
+    return;
+  }
+
   const email = $("recoveryEmail")?.value?.trim();
-  const endpoint = pendingRecoveryMode === "username" ? "/auth/forgot-username" : "/auth/forgot-password";
+  const endpoint = pendingRecoveryMode === "id" ? "/auth/forgot-id" : "/auth/forgot-password";
+
   try {
     const data = await api(endpoint, { method: "POST", body: JSON.stringify({ email }) });
     setNotice("recoveryNotice", "success", data.message || "If that email exists, instructions have been sent.");
@@ -3085,10 +3125,12 @@ function setupEvents() {
   $("clockActionButton")?.addEventListener("click", submitClockAction);
   $("clockAccountNumber")?.addEventListener("input", () => { const input = $("clockAccountNumber"); if (input) input.value = input.value.replace(/\D/g, "").slice(0, 9); pendingClockAction = null; $("clockActionButton")?.classList.add("hidden"); });
   $("forgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
-  $("forgotUsernameButton")?.addEventListener("click", () => openRecoveryDialog("username"));
+  $("forgotIdButton")?.addEventListener("click", () => openRecoveryDialog("id"));
   $("settingsForgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
-  $("settingsForgotUsernameButton")?.addEventListener("click", () => openRecoveryDialog("username"));
+  $("settingsForgotIdButton")?.addEventListener("click", () => openRecoveryDialog("id"));
   $("recoveryForm")?.addEventListener("submit", submitRecovery);
+  $("recoveryEmail")?.addEventListener("input", () => validateRecoveryEmail(false));
+  $("recoveryEmail")?.addEventListener("blur", () => validateRecoveryEmail(true));
   $("cancelRecoveryButton")?.addEventListener("click", () => $("recoveryDialog")?.close());
   $("cancelRecoveryX")?.addEventListener("click", () => $("recoveryDialog")?.close());
   $("appearanceMode")?.addEventListener("change", () => applyAppearanceMode($("appearanceMode").value));
