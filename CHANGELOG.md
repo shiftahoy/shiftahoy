@@ -1,3 +1,36 @@
+# Shift Ahoy Immutable ID# and Payroll Time Clock Update
+
+This update replaces usernames and manually-entered employee numbers with permanent unique 9 digit ID# values and adds the first payroll/time-clock workflow.
+
+## Added
+
+- Automatic permanent 9 digit ID# creation for owner accounts.
+- Automatic permanent 9 digit ID# creation for employees.
+- `issued_account_ids` registry so ID# values cannot be reused, even after employee deletion/deactivation.
+- Login by ID# or email.
+- Clock In / Out panel beside Login on the blue auth screen.
+- Payroll API with settings, clock lookup, clock in/out, employee payroll summary, manager payroll summary, and payroll alerts.
+- Payroll settings in Manager Portal with owner-only first pay-cycle start date and pay-period week controls.
+- Employee Portal payroll log with recent worked dates, clock in/out times, current-period hours, and estimated next pay.
+- Manager Portal payroll view with current period totals, estimated payroll, and early/late/unscheduled clock alerts.
+- Database tables for payroll settings, time clock entries, and payroll alerts.
+
+## Updated
+
+- Create Owner Account no longer asks for Username.
+- Login no longer says Username/Business; it now uses ID# or Email.
+- Employee creation no longer asks for Employee # or Username.
+- Schedule table now labels Employee # as ID#.
+- Dashboard and profile areas now display the permanent ID# with the full name.
+- Employee list, employee portal identity, and settings profile now prefer ID# labels.
+- README documents immutable ID# login and payroll/time-clock behavior.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
 # Shift Ahoy Recurring Dates and Validation Polish
 
 This update adds yearly recurrence for holiday and blocked dates, improves field-level error styling, and adds an in-settings logout workflow.
