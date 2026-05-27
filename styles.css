@@ -401,28 +401,28 @@ p {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -350px;
+  --bubble-y: -450px;
 }
 
 .metricBubblePublish {
-  --bubble-column: 2 / span 2;
+  --bubble-column: 3 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -250px;
+  --bubble-y: -350px;
 }
 
 .metricBubblePortals {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -150px;
+  --bubble-y: -250px;
 }
 
 .metricBubbleLabor {
   --bubble-column: 3 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -50px;
+  --bubble-y: -150px;
 }
 
 .metricBubblePrint {
