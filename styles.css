@@ -401,40 +401,40 @@ p {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
   --bubble-x: -40px;
-  --bubble-y: -280px;
+  --bubble-y: -350px;
 }
 
 .metricBubblePublish {
-  --bubble-column: 3 / span 2;
+  --bubble-column: 4 / span 2;
   --bubble-row: 1;
-  --bubble-x: 0;
-  --bubble-y: 0;
+  --bubble-x: -20px;
+  --bubble-y: -250px;
 }
 
 .metricBubblePortals {
-  --bubble-column: 5 / span 2;
+  --bubble-column: 4 / span 2;
   --bubble-row: 1;
-  --bubble-x: -20px;
-  --bubble-y: -180px;
+  --bubble-x: 0px;
+  --bubble-y: -150px;
 }
 
 .metricBubbleLabor {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
-  --bubble-x: -40px;
-  --bubble-y: -80px;
+  --bubble-x: -20px;
+  --bubble-y: -50px;
 }
 
 .metricBubblePrint {
-  --bubble-column: 3 / span 2;
-  --bubble-row: 2;
+  --bubble-column: 4 / span 2;
+  --bubble-row: 1;
   --bubble-x: 0;
   --bubble-y: 0;
 }
 
 .metricBubbleClock {
-  --bubble-column: 5 / span 2;
-  --bubble-row: 2;
+  --bubble-column: 4 / span 2;
+  --bubble-row: 1;
   --bubble-x: 0;
   --bubble-y: 0;
 }
