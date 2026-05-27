@@ -401,21 +401,21 @@ p {
   --bubble-column: 5 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -500px;
+  --bubble-y: -550px;
 }
 
 .metricBubblePublish {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -450px;
+  --bubble-y: -400px;
 }
 
 .metricBubblePortals {
   --bubble-column: 3 / span 2;
   --bubble-row: 1;
   --bubble-x: 0px;
-  --bubble-y: -300px;
+  --bubble-y: -250px;
 }
 
 .metricBubbleLabor {
