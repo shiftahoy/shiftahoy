@@ -4079,3 +4079,76 @@ body.theme-dark .stackedControls .switchLine {
     grid-row: 2;
   }
 }
+
+
+/* Manager Portal card alignment polish */
+#managerPortalContent {
+  align-items: stretch;
+  gap: 14px;
+}
+
+#managerPortalContent .portalSubcard {
+  width: 100%;
+  align-content: start;
+}
+
+#managerPortalContent .cardTitle.dashboardCardTitleWithAction,
+#managerPortalContent .overrideCardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+}
+
+#managerPortalContent .dashboardTitleGroup {
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+#managerPortalContent .dashboardTitleGroup h2 {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+#managerPortalContent .dashboardTitleGroup .panelHint {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+#managerPortalContent .dashboardTitleGroup .iconBadge {
+  margin-top: 0;
+}
+
+#managerPortalContent #laborPanel,
+#managerPortalContent #timeOffSettingsCard {
+  padding: 16px;
+}
+
+#managerPortalContent #timeOffSettingsCard .inlineToolbar {
+  align-self: start;
+  justify-self: end;
+  margin-left: 0;
+}
+
+@media (max-width: 720px) {
+  #managerPortalContent .cardTitle.dashboardCardTitleWithAction,
+  #managerPortalContent .overrideCardHeader {
+    grid-template-columns: 1fr;
+  }
+
+  #managerPortalContent #timeOffSettingsCard .inlineToolbar {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  #managerPortalContent #timeOffSettingsCard .inlineToolbar .button {
+    width: 100%;
+  }
+}
