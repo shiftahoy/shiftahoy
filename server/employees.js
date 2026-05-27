@@ -5,9 +5,7 @@ const { logAudit } = require("./audit");
 const { requireAuth, requireScheduleManager, requireOwner } = require("./middleware");
 
 const router = express.Router();
-
-const USERNAME_RULE_MESSAGE =
-  "Username must be 3 to 30 characters and can only contain lowercase letters and numbers. No spaces or symbols.";
+const { createUniqueAccountNumber } = require("./id-utils");
 
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
@@ -166,6 +164,7 @@ async function loadEmployeeWithDetails(clientOrPool, employeeId, businessId) {
        e.*,
        u.first_name,
        u.last_name,
+       u.account_number,
        u.username,
        u.full_login,
        u.can_manage_schedule,
@@ -217,11 +216,10 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
          AND u.active = true
          AND (
            e.employee_code ILIKE $3
+           OR u.account_number ILIKE $3
            OR e.title ILIKE $3
            OR u.first_name ILIKE $3
            OR u.last_name ILIKE $3
-           OR u.username ILIKE $3
-           OR u.full_login ILIKE $3
          )`,
       [req.user.businessId, locationId, search]
     );
@@ -236,6 +234,7 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
          e.*,
          u.first_name,
          u.last_name,
+         u.account_number,
          u.username,
          u.full_login,
          u.can_manage_schedule,
@@ -263,11 +262,10 @@ router.get("/", requireAuth, requireScheduleManager, async (req, res) => {
          AND u.active = true
          AND (
            e.employee_code ILIKE $3
+           OR u.account_number ILIKE $3
            OR e.title ILIKE $3
            OR u.first_name ILIKE $3
            OR u.last_name ILIKE $3
-           OR u.username ILIKE $3
-           OR u.full_login ILIKE $3
          )
        GROUP BY e.id, u.id
        ORDER BY e.priority ASC, u.last_name ASC, u.first_name ASC
@@ -293,9 +291,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     locationId,
     firstName,
     lastName,
-    username,
     password,
-    employeeCode,
     title,
     priority,
     employmentType,
@@ -312,14 +308,8 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     canManageSchedule = false
   } = req.body;
 
-  if (!locationId || !username || !password || !employeeCode) {
-    return res.status(400).json({ error: "Location, employee #, username, and password are required." });
-  }
-
-  const normalizedUsername = normalizeUsername(username);
-
-  if (!isValidUsername(normalizedUsername)) {
-    return res.status(400).json({ error: USERNAME_RULE_MESSAGE });
+  if (!locationId || !password) {
+    return res.status(400).json({ error: "Location and password are required. Shift Ahoy will create the employee ID# automatically." });
   }
 
   const normalizedPassword = normalizePassword(password);
@@ -375,11 +365,9 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const businessSlug = await getBusinessSlug(client, req.user.businessId);
-    const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
+    const accountNumber = await createUniqueAccountNumber(client, "employee");
     const passwordHash = await argon2.hash(normalizedPassword, { type: argon2.argon2id });
-    const safeEmployeeCode = String(employeeCode).trim();
-    const safeFirstName = String(firstName || "").trim() || safeEmployeeCode;
+    const safeFirstName = String(firstName || "").trim() || accountNumber;
     const safeLastName = String(lastName || "").trim() || "Employee";
     const safeCanManage = req.user.role === "owner" ? Boolean(canManageSchedule) : false;
     const safeRole = safeCanManage ? "manager" : "employee";
@@ -390,6 +378,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
          first_name,
          last_name,
          email,
+         account_number,
          username,
          full_login,
          password_hash,
@@ -397,14 +386,13 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
          can_manage_schedule,
          email_verified
        )
-       VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8, true)
+       VALUES ($1, $2, $3, NULL, $4, $4, $4, $5, $6, $7, true)
        RETURNING id`,
       [
         req.user.businessId,
         safeFirstName,
         safeLastName,
-        normalizedUsername,
-        fullLogin,
+        accountNumber,
         passwordHash,
         safeRole,
         safeCanManage
@@ -436,7 +424,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
         locationId,
         userResult.rows[0].id,
         safePriority,
-        safeEmployeeCode,
+        accountNumber,
         String(title || "").trim() || "Employee",
         safeEmploymentType,
         safeWeeklyHours,
@@ -477,7 +465,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
       action: "Employee created",
       entityType: "employee",
       entityId: employee.id,
-      details: employee.employee_code || employee.username || "Employee created"
+      details: `Employee ID# ${employee.employee_code} created`
     });
 
     await client.query("COMMIT");
@@ -488,7 +476,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     console.error(err);
 
     if (err.code === "23505") {
-      return res.status(409).json({ error: "Employee #, username, or login already exists." });
+      return res.status(409).json({ error: "A generated ID# was already used. Please try again." });
     }
 
     res.status(500).json({ error: "Employee creation failed." });
@@ -502,9 +490,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   const {
     firstName,
     lastName,
-    username,
     password,
-    employeeCode,
     title,
     priority,
     employmentType,
@@ -566,12 +552,6 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   const safeOvertimeThresholdHours = Math.max(1, Math.min(168, Number(overtimeThresholdHours) || 40));
   const safeMinRestHours = Math.max(0, Math.min(24, Number(minRestHours) || 8));
 
-  const normalizedUsername = normalizeUsername(username);
-
-  if (!isValidUsername(normalizedUsername)) {
-    return res.status(400).json({ error: USERNAME_RULE_MESSAGE });
-  }
-
   if (password && !isValidPassword(password)) {
     return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
   }
@@ -581,9 +561,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const businessSlug = await getBusinessSlug(client, req.user.businessId);
-    const fullLogin = buildFullLogin(normalizedUsername, businessSlug);
-    const safeEmployeeCode = String(employeeCode || "").trim();
+    const safeEmployeeCode = employeeRow.employee_code;
     const safeFirstName = String(firstName || "").trim() || safeEmployeeCode || "Employee";
     const safeLastName = String(lastName || "").trim() || "Employee";
     const safeCanManage = req.user.role === "owner" ? Boolean(canManageSchedule) : false;
@@ -596,19 +574,15 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
         `UPDATE users
          SET first_name = $1,
              last_name = $2,
-             username = $3,
-             full_login = $4,
-             password_hash = $5,
-             role = $6,
-             can_manage_schedule = $7,
+             password_hash = $3,
+             role = $4,
+             can_manage_schedule = $5,
              updated_at = now()
-         WHERE id = $8
-           AND business_id = $9`,
+         WHERE id = $6
+           AND business_id = $7`,
         [
           safeFirstName,
           safeLastName,
-          normalizedUsername,
-          fullLogin,
           passwordHash,
           safeRole,
           safeCanManage,
@@ -621,18 +595,14 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
         `UPDATE users
          SET first_name = $1,
              last_name = $2,
-             username = $3,
-             full_login = $4,
-             role = $5,
-             can_manage_schedule = $6,
+             role = $3,
+             can_manage_schedule = $4,
              updated_at = now()
-         WHERE id = $7
-           AND business_id = $8`,
+         WHERE id = $5
+           AND business_id = $6`,
         [
           safeFirstName,
           safeLastName,
-          normalizedUsername,
-          fullLogin,
           safeRole,
           safeCanManage,
           employeeRow.user_id,
@@ -703,7 +673,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
       action: "Employee updated",
       entityType: "employee",
       entityId: employee.id,
-      details: employee.employee_code || employee.username || "Employee updated"
+      details: employee.employee_code || employee.account_number || "Employee updated"
     });
 
     await client.query("COMMIT");
@@ -714,7 +684,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
     console.error(err);
 
     if (err.code === "23505") {
-      return res.status(409).json({ error: "Employee #, username, or login already exists." });
+      return res.status(409).json({ error: "ID# already exists." });
     }
 
     res.status(500).json({ error: "Employee update failed." });
