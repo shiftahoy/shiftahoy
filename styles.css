@@ -400,8 +400,8 @@ p {
 .metricBubbleForecast {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
-  --bubble-x: -25px;
-  --bubble-y: -200px;
+  --bubble-x: -10px;
+  --bubble-y: -300px;
 }
 
 .metricBubblePublish {
