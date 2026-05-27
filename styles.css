@@ -387,17 +387,6 @@ p {
 
 .metricGrid div {
   grid-column: span 2;
-}
-
-.metricGrid div:nth-child(4) {
-  grid-column: 2 / span 2;
-}
-
-.metricGrid div:nth-child(5) {
-  grid-column: 4 / span 2;
-}
-
-.metricGrid div {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 16px;
@@ -1153,9 +1142,7 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
-  .metricGrid div,
-  .metricGrid div:nth-child(4),
-  .metricGrid div:nth-child(5) {
+  .metricGrid div {
     grid-column: 1 / -1;
   }
 
