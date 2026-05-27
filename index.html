@@ -153,7 +153,7 @@
                 <div class="fieldGroup loginFieldGroup">
                   <label class="fieldLabel" for="loginValue">ID# or Email</label>
                   <input id="loginValue" autocomplete="username" placeholder="ID# or Email" />
-                  <button id="forgotID#Button" class="linkButton fieldUtilityLink" type="button">Forgot ID#</button>
+                  <button id="forgotIdButton" class="linkButton fieldUtilityLink" type="button">Forgot ID#</button>
                 </div>
 
                 <div class="fieldGroup loginFieldGroup">
@@ -706,7 +706,7 @@
               <h3>Account Recovery</h3>
               <p class="panelHint">Use verified email links for password reset and ID# reminders.</p>
               <button id="settingsForgotPasswordButton" class="button secondary" type="button">Send password reset</button>
-              <button id="settingsForgotID#Button" class="button ghost" type="button">Send ID# reminder</button>
+              <button id="settingsForgotIdButton" class="button ghost" type="button">Send ID# reminder</button>
             </section>
           </div>
         </dialog>
@@ -722,7 +722,7 @@
               <button id="cancelRecoveryX" class="button ghost" type="button">Close</button>
             </div>
             <div id="recoveryNotice" class="formNotice hidden" role="status" aria-live="polite"></div>
-            <div class="fieldGroup"><label class="fieldLabel" for="recoveryEmail">Email</label><input id="recoveryEmail" type="email" autocomplete="email" placeholder="owner@example.com" /></div>
+            <div class="fieldGroup" data-field="recoveryEmail"><label class="fieldLabel" for="recoveryEmail">Email <span id="recoveryEmailStatus" class="fieldStatus">(Required)</span></label><input id="recoveryEmail" type="email" autocomplete="email" placeholder="owner@example.com" required /><small class="fieldHelp">Enter the verified email on the account.</small></div>
             <div class="fieldGroup hidden" id="recoveryNewPasswordGroup"><label class="fieldLabel" for="recoveryNewPassword">New Password</label><input id="recoveryNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" /></div>
             <div class="formActions"><button id="submitRecoveryButton" class="button primary" type="submit">Send</button><button id="cancelRecoveryButton" class="button ghost" type="button">Cancel</button></div>
           </form>
