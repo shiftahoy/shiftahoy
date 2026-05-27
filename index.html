@@ -344,7 +344,7 @@
                 </div>
                 <div class="fieldGroup" data-field="employeePassword">
                   <label class="fieldLabel" for="employeePassword">
-                    Password <span class="optionalText editPasswordHint">Required</span>
+                    Password
                     <span id="employeePasswordStatus" class="fieldStatus">Required</span>
                   </label>
                   <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
@@ -558,10 +558,17 @@
                     <input id="holidayDateName" placeholder="Thanksgiving, Christmas Eve, Company holiday, etc." />
                   </div>
                 </div>
-                <label class="toggleRow recurringOptionRow">
-                  <input id="holidayDateYearly" type="checkbox" />
-                  <span>Repeat every year</span>
-                </label>
+                <section class="permissionsSection recurringPermissionsSection" aria-label="Holiday date recurrence">
+                  <div class="permissionsHeader">
+                    <span class="fieldLabel">Permissions</span>
+                  </div>
+                  <div class="permissionsGrid">
+                    <label class="permissionCheck checkboxLine">
+                      <input id="holidayDateYearly" type="checkbox" />
+                      <span>Repeat Yearly</span>
+                    </label>
+                  </div>
+                </section>
                 <div class="formActions">
                   <button id="addHolidayDateButton" class="button primary" type="submit">Save Holiday</button>
                   <button id="cancelHolidayDateButton" class="button ghost" type="button">Cancel</button>
@@ -585,10 +592,17 @@
                     <input id="blockedDateReason" placeholder="Holiday, inventory, blackout date, etc." />
                   </div>
                 </div>
-                <label class="toggleRow recurringOptionRow">
-                  <input id="blockedDateYearly" type="checkbox" />
-                  <span>Repeat every year</span>
-                </label>
+                <section class="permissionsSection recurringPermissionsSection" aria-label="Blocked date recurrence">
+                  <div class="permissionsHeader">
+                    <span class="fieldLabel">Permissions</span>
+                  </div>
+                  <div class="permissionsGrid">
+                    <label class="permissionCheck checkboxLine">
+                      <input id="blockedDateYearly" type="checkbox" />
+                      <span>Repeat Yearly</span>
+                    </label>
+                  </div>
+                </section>
                 <div class="formActions">
                   <button id="addBlockedDateButton" class="button primary" type="submit">Save Blocked Date</button>
                   <button id="cancelBlockedDateButton" class="button ghost" type="button">Cancel</button>
