@@ -410,7 +410,7 @@ p {
 .metricBubbleForecast {
   --bubble-column: 3 / span 2;
   --bubble-row: 1;
-  --bubble-x: 0px;
+  --bubble-x: 50px;
   --bubble-y: -350px;
 }
 
@@ -445,7 +445,7 @@ p {
 .metricBubbleClock {
   --bubble-column: 5 / span 2;
   --bubble-row: 1;
-  --bubble-x: 0px;
+  --bubble-x: -50px;
   --bubble-y: 50px;
 }
 
