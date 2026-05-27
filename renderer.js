@@ -3507,10 +3507,17 @@ function ensureUltimateAutomationLayout() {
   }
 
   const overridePanel = $("timeOffSettingsCard");
-  if (managerPortalContent && overridePanel && overridePanel.parentElement !== managerPortalContent) {
-    overridePanel.classList.add("portalSubcard", "managerOnly");
+  if (managerPortalContent && overridePanel) {
+    overridePanel.classList.add("portalSubcard", "managerOnly", "overridePanel");
     overridePanel.classList.remove("settingsInlineCard", "ownerOnly");
-    const titleContainer = overridePanel.querySelector(".sectionHeader > div:first-child");
+
+    const overrideHeader = overridePanel.querySelector(".cardTitle, .sectionHeader");
+    if (overrideHeader) {
+      overrideHeader.classList.add("cardTitle", "dashboardCardTitle", "dashboardCardTitleWithAction", "overrideCardHeader");
+      overrideHeader.classList.remove("sectionHeader", "compactHeader");
+    }
+
+    const titleContainer = overrideHeader?.querySelector(":scope > .dashboardTitleGroup") || overrideHeader?.querySelector(":scope > div:first-child");
     if (titleContainer && !titleContainer.classList.contains("dashboardTitleGroup")) {
       titleContainer.classList.add("dashboardTitleGroup");
       titleContainer.innerHTML = `<span class="iconBadge">MP-04</span><div>${titleContainer.innerHTML}</div>`;
@@ -3527,7 +3534,13 @@ function ensureUltimateAutomationLayout() {
         title.replaceWith(heading);
       }
     }
-    managerPortalContent.appendChild(overridePanel);
+
+    const hint = overridePanel.querySelector(".panelHint");
+    if (hint) hint.textContent = "Owner controls for employee requests, cover/swap workflow, and blocked dates.";
+
+    if (overridePanel.parentElement !== managerPortalContent) {
+      managerPortalContent.appendChild(overridePanel);
+    }
   }
 
   if (shiftsPanel) {
