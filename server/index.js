@@ -15,6 +15,7 @@ const scheduleRoutes = require("./schedules");
 const timeOffRoutes = require("./timeoff");
 const auditRoutes = require("./audit");
 const automationRoutes = require("./automation");
+const payrollRoutes = require("./payroll");
 const { requireAuth, requireRole } = require("./middleware");
 
 const app = express();
@@ -49,6 +50,7 @@ app.use("/schedules", scheduleRoutes);
 app.use("/time-off", timeOffRoutes);
 app.use("/audit", auditRoutes);
 app.use("/automation", automationRoutes);
+app.use("/payroll", payrollRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
