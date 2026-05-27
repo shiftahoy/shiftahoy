@@ -3,6 +3,14 @@
 Shift Ahoy is a desktop employee scheduling system for small teams and multi-location businesses. It combines an Electron desktop app with a local Node/Express API and PostgreSQL database so owners and managers can build schedules, manage employees, review time-off requests, publish schedules, and monitor coverage health from one organized dashboard.
 
 
+## Latest UI and Request-Control Updates
+
+- Holiday dates and blocked dates can now be saved as one-time dates or yearly recurring dates.
+- Yearly recurring blocked dates are respected when employees submit time-off requests.
+- Create Owner Account, Login, and form validation errors now mark the affected fields with a red outline in both light mode and dark mode.
+- Employee password status now uses the same concise “Required” wording as the other required fields.
+- Settings now includes a matching Log Out action that clears the current session and returns the user to the blue login panel.
+
 ## Recent UX and Workflow Updates
 
 - Dashboard greeting now displays the user's full name instead of their username/login.
@@ -13,6 +21,7 @@ Shift Ahoy is a desktop employee scheduling system for small teams and multi-loc
 - Employee-created usernames and passwords now follow the same rules as owner account creation.
 - Owners can turn employee time-off requests on/off.
 - Owners can turn employee shift cover/swap requests on/off independently from time-off requests.
+- Owners can mark holiday dates and blocked dates as yearly recurring dates.
 
 ## Current Feature Set
 
@@ -53,7 +62,7 @@ Shift Ahoy is a desktop employee scheduling system for small teams and multi-loc
 - Approved time off automatically feeds into schedule forecasting
 - Time-off request enable/disable setting
 - Shift cover/swap request enable/disable setting
-- Blocked dates and holiday dates by location
+- Blocked dates and holiday dates by location, including optional yearly recurrence
 
 ### Open shifts and shift coverage
 
