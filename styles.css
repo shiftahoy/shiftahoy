@@ -426,7 +426,7 @@ p {
 }
 
 .metricBubblePrint {
-  --bubble-column: 4 / span 2;
+  --bubble-column: 1 / span 2;
   --bubble-row: 1;
   --bubble-x: 20;
   --bubble-y: 50;
