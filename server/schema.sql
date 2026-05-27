@@ -198,12 +198,16 @@ CREATE TABLE IF NOT EXISTS time_off_blocked_dates (
   location_id UUID REFERENCES locations(id) ON DELETE CASCADE,
   blocked_date DATE NOT NULL,
   reason TEXT,
+  recurs_yearly BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (business_id, location_id, blocked_date)
 );
 
 ALTER TABLE time_off_blocked_dates
 ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id) ON DELETE CASCADE;
+
+ALTER TABLE time_off_blocked_dates
+ADD COLUMN IF NOT EXISTS recurs_yearly BOOLEAN NOT NULL DEFAULT false;
 
 ALTER TABLE time_off_blocked_dates
 DROP CONSTRAINT IF EXISTS time_off_blocked_dates_business_id_blocked_date_key;
@@ -230,12 +234,16 @@ CREATE TABLE IF NOT EXISTS time_off_holiday_dates (
   location_id UUID REFERENCES locations(id) ON DELETE CASCADE,
   holiday_date DATE NOT NULL,
   name TEXT NOT NULL,
+  recurs_yearly BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (business_id, location_id, holiday_date)
 );
 
 ALTER TABLE time_off_holiday_dates
 ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id) ON DELETE CASCADE;
+
+ALTER TABLE time_off_holiday_dates
+ADD COLUMN IF NOT EXISTS recurs_yearly BOOLEAN NOT NULL DEFAULT false;
 
 ALTER TABLE time_off_holiday_dates
 DROP CONSTRAINT IF EXISTS time_off_holiday_dates_business_id_holiday_date_key;
