@@ -4329,3 +4329,9 @@ body.theme-dark .clockStatusPreview {
     grid-column: span 1;
   }
 }
+
+/* Login panel shape polish: square off the right side of the 02 Login card so it connects cleanly with the 03 Clock In / Out panel. */
+.authMiniGrid > .compactCard:first-child {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
