@@ -410,14 +410,14 @@ p {
 .metricBubbleForecast {
   --bubble-column: 3 / span 2;
   --bubble-row: 1;
-  --bubble-x: 50px;
+  --bubble-x: 75px;
   --bubble-y: -350px;
 }
 
 .metricBubblePublish {
   --bubble-column: 4 / span 2;
   --bubble-row: 1;
-  --bubble-x: 0px;
+  --bubble-x: 25px;
   --bubble-y: -250px;
 }
 
