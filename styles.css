@@ -414,8 +414,8 @@ p {
 .metricBubblePortals {
   --bubble-column: 5 / span 2;
   --bubble-row: 1;
-  --bubble-x: 0;
-  --bubble-y: 0;
+  --bubble-x: -20px;
+  --bubble-y: -200px;
 }
 
 .metricBubbleLabor {
