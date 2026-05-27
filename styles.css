@@ -4152,3 +4152,70 @@ body.theme-dark .stackedControls .switchLine {
     width: 100%;
   }
 }
+
+/* Dark mode validation fix: keep errored and valid form controls dark/readable instead of falling back to light status backgrounds. */
+body.theme-dark .fieldGroup.is-invalid input,
+body.theme-dark .fieldGroup.is-invalid select,
+body.theme-dark input.inputInvalid,
+body.theme-dark select.inputInvalid,
+body.theme-dark input[aria-invalid="true"],
+body.theme-dark select[aria-invalid="true"],
+body.theme-dark input:invalid,
+body.theme-dark select:invalid {
+  background-color: var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--danger) !important;
+  box-shadow: none;
+}
+
+body.theme-dark .fieldGroup.is-invalid input:focus,
+body.theme-dark .fieldGroup.is-invalid select:focus,
+body.theme-dark input.inputInvalid:focus,
+body.theme-dark select.inputInvalid:focus,
+body.theme-dark input[aria-invalid="true"]:focus,
+body.theme-dark select[aria-invalid="true"]:focus,
+body.theme-dark input:invalid:focus,
+body.theme-dark select:invalid:focus {
+  background-color: var(--surface-soft) !important;
+  color: var(--ink) !important;
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18) !important;
+}
+
+body.theme-dark .fieldGroup.is-valid input,
+body.theme-dark .fieldGroup.is-valid select,
+body.theme-dark input[aria-invalid="false"],
+body.theme-dark select[aria-invalid="false"] {
+  background-color: var(--surface-soft) !important;
+  color: var(--ink) !important;
+}
+
+body.theme-dark input::placeholder,
+body.theme-dark select::placeholder {
+  color: var(--muted) !important;
+  opacity: 1;
+}
+
+body.theme-dark input:-webkit-autofill,
+body.theme-dark input:-webkit-autofill:hover,
+body.theme-dark input:-webkit-autofill:focus,
+body.theme-dark select:-webkit-autofill,
+body.theme-dark select:-webkit-autofill:hover,
+body.theme-dark select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink) !important;
+  caret-color: var(--ink) !important;
+  box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
+  border-color: var(--line) !important;
+}
+
+body.theme-dark .fieldGroup.is-invalid input:-webkit-autofill,
+body.theme-dark .fieldGroup.is-invalid input:-webkit-autofill:hover,
+body.theme-dark .fieldGroup.is-invalid input:-webkit-autofill:focus,
+body.theme-dark input.inputInvalid:-webkit-autofill,
+body.theme-dark input.inputInvalid:-webkit-autofill:hover,
+body.theme-dark input.inputInvalid:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink) !important;
+  caret-color: var(--ink) !important;
+  box-shadow: 0 0 0 1000px var(--surface-soft) inset !important;
+  border-color: var(--danger) !important;
+}
