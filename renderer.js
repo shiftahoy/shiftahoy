@@ -66,6 +66,8 @@ const signupFieldIds = [
   "signupUsername",
   "signupPassword"
 ];
+const loginFieldIds = ["loginValue", "loginPassword"];
+
 
 function $(id) {
   return document.getElementById(id);
@@ -401,22 +403,24 @@ function setNotice(id, type, text) {
 
 function setFieldState(inputId, state, message) {
   const input = $(inputId);
-  const group = document.querySelector(`[data-field="${inputId}"]`);
+  const group = document.querySelector(`[data-field="${inputId}"]`) || input?.closest?.(".fieldGroup");
   const status = $(`${inputId}Status`);
 
-  if (!input || !group) return;
+  if (!input) return;
 
-  group.classList.remove("is-valid", "is-invalid");
+  group?.classList.remove("is-valid", "is-invalid");
+  input.classList.remove("inputInvalid");
 
   if (state === "valid") {
-    group.classList.add("is-valid");
+    group?.classList.add("is-valid");
     input.setAttribute("aria-invalid", "false");
-    if (status) status.textContent = `✓ ${message}`;
+    if (status) status.textContent = message ? `✓ ${message}` : "✓";
     return;
   }
 
   if (state === "invalid") {
-    group.classList.add("is-invalid");
+    group?.classList.add("is-invalid");
+    input.classList.add("inputInvalid");
     input.setAttribute("aria-invalid", "true");
     if (status) status.textContent = message;
     return;
@@ -843,6 +847,53 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
+function validateLoginForm(showEmptyErrors = false) {
+  const loginValue = $("loginValue")?.value?.trim() || "";
+  const password = normalizePasswordInput($("loginPassword")?.value || "");
+
+  if (!loginValue) {
+    setFieldState("loginValue", showEmptyErrors ? "invalid" : "neutral", "Required");
+  } else {
+    setFieldState("loginValue", "valid", "Looks good");
+  }
+
+  if (!password) {
+    setFieldState("loginPassword", showEmptyErrors ? "invalid" : "neutral", "Required");
+  } else {
+    setFieldState("loginPassword", "valid", "Password entered");
+  }
+
+  return !!loginValue && !!password;
+}
+
+function clearAuthFieldStates() {
+  signupFieldIds.forEach((id) => resetFieldState(id, id === "signupUsername" ? "3–30" : id === "signupPassword" ? "12–128" : "Required"));
+  loginFieldIds.forEach((id) => resetFieldState(id, "Required"));
+}
+
+function setSignupApiError(err) {
+  const message = err?.message || "Account creation failed.";
+  const lowerMessage = message.toLowerCase();
+  let inputId = err?.field || "signupBusinessName";
+
+  if (lowerMessage.includes("first name")) inputId = "signupFirstName";
+  else if (lowerMessage.includes("last name")) inputId = "signupLastName";
+  else if (lowerMessage.includes("business")) inputId = "signupBusinessName";
+  else if (lowerMessage.includes("email")) inputId = "signupEmail";
+  else if (lowerMessage.includes("username") || lowerMessage.includes("login")) inputId = "signupUsername";
+  else if (lowerMessage.includes("password")) inputId = "signupPassword";
+
+  setFieldState(inputId, "invalid", message);
+  $(inputId)?.focus?.();
+}
+
+function setLoginApiError(err) {
+  const message = err?.message || "Login failed.";
+  setFieldState("loginValue", "invalid", message);
+  setFieldState("loginPassword", "invalid", "Check password");
+  $("loginValue")?.focus?.();
+}
+
 function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
   const button = $(buttonId);
   if (!button) return;
@@ -892,6 +943,7 @@ async function signup(event) {
     if ($("loginPassword")) $("loginPassword").value = "";
     setNotice("loginFormMessage", "success", "Your login has been filled in. Enter your password to open the dashboard.");
   } catch (err) {
+    setSignupApiError(err);
     setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
   } finally {
     setAuthButtonBusy("signupButton", false);
@@ -906,7 +958,7 @@ async function login(event) {
   const loginValue = $("loginValue")?.value?.trim() || "";
   const password = normalizePasswordInput($("loginPassword")?.value || "");
 
-  if (!loginValue || !password) {
+  if (!validateLoginForm(true)) {
     setNotice("loginFormMessage", "error", "Enter your login and password.");
     return;
   }
@@ -938,6 +990,7 @@ async function login(event) {
   } catch (err) {
     accessToken = null;
     currentUser = null;
+    setLoginApiError(err);
     setNotice("loginFormMessage", "error", err.message || "Login failed.");
   } finally {
     setAuthButtonBusy("loginButton", false);
@@ -1746,7 +1799,7 @@ function resetEmployeeForm() {
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
   resetFieldState("employeeUsername", "Required");
-  resetFieldState("employeePassword", "Required for new");
+  resetFieldState("employeePassword", "Required");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
   populatePreferredShiftSelect();
@@ -1849,7 +1902,7 @@ async function saveEmployee(event) {
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeeCode", "Required");
   resetFieldState("employeeUsername", "Required");
-  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required for new");
+  resetFieldState("employeePassword", $("employeeId").value ? "Optional while editing" : "Required");
 
   if (!selectedLocationId) {
     setNotice("employeeFormMessage", "error", "Select a location first.");
@@ -1900,7 +1953,7 @@ async function saveEmployee(event) {
   }
 
   if (!employeeId && !body.password) {
-    setFieldState("employeePassword", "invalid", "Required for new employees");
+    setFieldState("employeePassword", "invalid", "Required");
     isValid = false;
   } else if (body.password && !isValidPasswordInput(body.password)) {
     setFieldState("employeePassword", "invalid", "12–128 characters");
@@ -2060,10 +2113,7 @@ function activeBlockedDateMap() {
   const map = new Map();
 
   for (const item of timeOffSettings.blockedDates || []) {
-    const blockedDate = formatRequestDate(item.blocked_date);
-    if (blockedDate >= today) {
-      map.set(blockedDate, item.reason || "Blocked by owner");
-    }
+    expandRecurringMapItem(map, item, "blocked_date", item.reason || "Blocked by owner");
   }
 
   return map;
@@ -2074,10 +2124,7 @@ function activeHolidayDateMap() {
   const map = new Map();
 
   for (const item of timeOffSettings.holidayDates || []) {
-    const holidayDate = formatRequestDate(item.holiday_date);
-    if (holidayDate >= today) {
-      map.set(holidayDate, item.name || "Holiday");
-    }
+    expandRecurringMapItem(map, item, "holiday_date", item.name || "Holiday");
   }
 
   return map;
@@ -2273,6 +2320,7 @@ function resetBlockedDateForm() {
   const reasonInput = $("blockedDateReason");
   if (blockedDateInput) blockedDateInput.value = "";
   if (reasonInput) reasonInput.value = "";
+  if ($("blockedDateYearly")) $("blockedDateYearly").checked = false;
   resetFieldState("blockedDateInput", "Required");
   resetFieldState("blockedDateReason", "Required");
   resetFieldState("holidayDateInput", "Required");
@@ -2285,6 +2333,7 @@ function resetHolidayDateForm() {
   const nameInput = $("holidayDateName");
   if (holidayDateInput) holidayDateInput.value = "";
   if (nameInput) nameInput.value = "";
+  if ($("holidayDateYearly")) $("holidayDateYearly").checked = false;
   resetFieldState("holidayDateInput", "Required");
   resetFieldState("holidayDateName", "Required");
   setNotice("timeOffFormMessage", "", "");
@@ -2355,6 +2404,48 @@ function showTimeOffRequestForm() {
   $("timeOffCalendarGrid")?.querySelector("button.calendarDay:not([disabled])")?.focus();
 }
 
+function isRecurringDate(item) {
+  return item?.recurs_yearly === true || item?.recursYearly === true;
+}
+
+function recurringDateLabel(item, dateKey) {
+  return isRecurringDate(item) ? `${dateKey} · Yearly` : dateKey;
+}
+
+function annualDateForYear(value, year) {
+  const parsed = parseDateOnly(formatRequestDate(value));
+  if (!parsed) return null;
+  return `${year}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
+
+function expandRecurringMapItem(map, item, dateField, label) {
+  const rawDate = formatRequestDate(item?.[dateField]);
+  if (!rawDate) return;
+
+  if (!isRecurringDate(item)) {
+    if (rawDate >= dateOnly(new Date())) map.set(rawDate, label);
+    return;
+  }
+
+  const monthAnchors = [timeOffCalendarMonth, addMonths(timeOffCalendarMonth, 1), new Date()];
+  const years = new Set(monthAnchors.map((date) => date.getFullYear()));
+  for (const year of years) {
+    const annualDate = annualDateForYear(rawDate, year);
+    if (annualDate) map.set(annualDate, `${label} (yearly)`);
+  }
+}
+
+function effectiveUpcomingDate(item, dateField) {
+  const rawDate = formatRequestDate(item?.[dateField]);
+  if (!rawDate) return "";
+  if (!isRecurringDate(item)) return rawDate;
+
+  const today = dateOnly(new Date());
+  const thisYear = annualDateForYear(rawDate, new Date().getFullYear());
+  if (thisYear && thisYear >= today) return thisYear;
+  return annualDateForYear(rawDate, new Date().getFullYear() + 1) || rawDate;
+}
+
 function renderTimeOffSettings() {
   const enabledInput = $("timeOffRequestsEnabled");
   const shiftSwapsInput = $("shiftSwapsEnabled");
@@ -2396,29 +2487,39 @@ function renderTimeOffSettings() {
 
   if (holidayList) {
     const today = dateOnly(new Date());
-    const holidayDates = (timeOffSettings.holidayDates || []).filter((item) => formatRequestDate(item.holiday_date) >= today);
+    const holidayDates = (timeOffSettings.holidayDates || [])
+      .filter((item) => isRecurringDate(item) || formatRequestDate(item.holiday_date) >= today)
+      .sort((a, b) => effectiveUpcomingDate(a, "holiday_date").localeCompare(effectiveUpcomingDate(b, "holiday_date")));
     holidayList.innerHTML = holidayDates.length
-      ? `<div class="chipListLabel">Holidays</div>` + holidayDates.map((item) => `
+      ? `<div class="chipListLabel">Holidays</div>` + holidayDates.map((item) => {
+          const dateText = formatRequestDate(item.holiday_date);
+          return `
           <span class="dateChip holidayChip">
-            ${escapeHtml(formatRequestDate(item.holiday_date))}
+            ${escapeHtml(recurringDateLabel(item, dateText))}
             <small>${escapeHtml(item.name || "Holiday")}</small>
             <button class="button textDanger miniButton" type="button" data-action="remove-holiday-date" data-id="${escapeHtml(item.id)}">Remove</button>
           </span>
-        `).join("")
+        `;
+        }).join("")
       : `<div class="emptyState compactEmpty">No holiday dates.</div>`;
   }
 
   if (blockedList) {
     const today = dateOnly(new Date());
-    const blockedDates = (timeOffSettings.blockedDates || []).filter((item) => formatRequestDate(item.blocked_date) >= today);
+    const blockedDates = (timeOffSettings.blockedDates || [])
+      .filter((item) => isRecurringDate(item) || formatRequestDate(item.blocked_date) >= today)
+      .sort((a, b) => effectiveUpcomingDate(a, "blocked_date").localeCompare(effectiveUpcomingDate(b, "blocked_date")));
     blockedList.innerHTML = blockedDates.length
-      ? `<div class="chipListLabel">Blocked Dates</div>` + blockedDates.map((item) => `
+      ? `<div class="chipListLabel">Blocked Dates</div>` + blockedDates.map((item) => {
+          const dateText = formatRequestDate(item.blocked_date);
+          return `
           <span class="dateChip">
-            ${escapeHtml(formatRequestDate(item.blocked_date))}
+            ${escapeHtml(recurringDateLabel(item, dateText))}
             <small>${escapeHtml(item.reason || "No reason")}</small>
             <button class="button textDanger miniButton" type="button" data-action="remove-blocked-date" data-id="${escapeHtml(item.id)}">Remove</button>
           </span>
-        `).join("")
+        `;
+        }).join("")
       : `<div class="emptyState compactEmpty">No blocked dates.</div>`;
   }
 
@@ -2502,6 +2603,7 @@ async function addHolidayDate(event) {
   event?.preventDefault?.();
   const holidayDate = $("holidayDateInput")?.value;
   const name = $("holidayDateName")?.value.trim() || "";
+  const recursYearly = !!$("holidayDateYearly")?.checked;
 
   let isValid = true;
   if (!holidayDate) { setFieldState("holidayDateInput", "invalid", "Required"); isValid = false; }
@@ -2515,7 +2617,7 @@ async function addHolidayDate(event) {
   try {
     await api("/time-off/holidays", {
       method: "POST",
-      body: JSON.stringify({ holidayDate, name, locationId: selectedLocationId })
+      body: JSON.stringify({ holidayDate, name, recursYearly, locationId: selectedLocationId })
     });
     hideHolidayDateForm();
     await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
@@ -2540,6 +2642,7 @@ async function addBlockedDate(event) {
   event?.preventDefault?.();
   const blockedDate = $("blockedDateInput")?.value;
   const reason = $("blockedDateReason")?.value.trim() || "";
+  const recursYearly = !!$("blockedDateYearly")?.checked;
 
   let isValid = true;
   if (!blockedDate) { setFieldState("blockedDateInput", "invalid", "Required"); isValid = false; }
@@ -2553,7 +2656,7 @@ async function addBlockedDate(event) {
   try {
     await api("/time-off/blocked-dates", {
       method: "POST",
-      body: JSON.stringify({ blockedDate, reason, locationId: selectedLocationId })
+      body: JSON.stringify({ blockedDate, reason, recursYearly, locationId: selectedLocationId })
     });
     hideBlockedDateForm();
     await Promise.all([loadTimeOffSettings(), loadAuditLog()]);
@@ -2964,6 +3067,35 @@ function printSchedule() {
   }, 250);
 }
 
+async function logout() {
+  try {
+    await api("/auth/logout", { method: "POST", skipRefresh: true }).catch(() => null);
+  } finally {
+    accessToken = null;
+    currentUser = null;
+    selectedLocationId = null;
+    selectedLocationRecord = null;
+    locations = [];
+    shifts = [];
+    employees = [];
+    timeOffRequests = [];
+    auditLogs = [];
+    timeOffSettings = { requestsEnabled: true, shiftSwapsEnabled: true, blockedDates: [], holidayDates: [] };
+    $("settingsDialog")?.close?.();
+    $("appView")?.classList.add("hidden");
+    $("authView")?.classList.remove("hidden");
+    $("settingsButton")?.classList.add("hidden");
+    $("upgradeButton")?.classList.add("hidden");
+    $("currentPlanText")?.classList.add("hidden");
+    document.body.classList.remove("employeePortalOnly");
+    clearAuthFieldStates();
+    setNotice("loginFormMessage", "", "");
+    setNotice("signupFormMessage", "", "");
+    $("loginPassword") && ($("loginPassword").value = "");
+    $("loginValue")?.focus?.();
+  }
+}
+
 function setupEvents() {
   $("signupButton").addEventListener("click", signup);
   $("loginButton").addEventListener("click", login);
@@ -3189,6 +3321,7 @@ function setupEvents() {
     $("settingsDialog").showModal();
   });
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
+  $("settingsLogoutButton")?.addEventListener("click", logout);
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action='select-plan']");
@@ -3215,6 +3348,8 @@ document.addEventListener("DOMContentLoaded", () => {
   resetShiftForm();
   $("shiftForm").classList.add("hidden");
   resetEmployeeForm();
+  resetFieldState("loginValue", "Required");
+  resetFieldState("loginPassword", "Required");
   resetFieldState("timeOffDateRange", "Required");
   resetFieldState("timeOffReason", "Required");
   resetFieldState("blockedDateInput", "Required");
