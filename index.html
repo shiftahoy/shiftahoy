@@ -109,7 +109,7 @@
                   <span id="signupBusinessNameStatus" class="fieldStatus">(Required)</span>
                 </label>
                 <input id="signupBusinessName" autocomplete="organization" placeholder="Business" required />
-                <small class="fieldHelp">Becomes part of your login.</small>
+                <small class="fieldHelp">Used for the workspace name only; login uses ID# or email.</small>
               </div>
 
               <div class="fieldGroup" data-field="signupEmail">
@@ -121,13 +121,9 @@
                 <small class="fieldHelp">Use a valid email address.</small>
               </div>
 
-              <div class="fieldGroup" data-field="signupUsername">
-                <label class="fieldLabel" for="signupUsername">
-                  Username
-                  <span id="signupUsernameStatus" class="fieldStatus">(3–30)</span>
-                </label>
-                <input id="signupUsername" autocomplete="username" placeholder="Username" maxlength="30" required />
-                <small class="fieldHelp">Letters and numbers only.</small>
+              <div class="generatedIdNotice">
+                <strong>ID# auto-created</strong>
+                <span>Shift Ahoy will create a permanent unique 9 digit ID# after the owner account is saved.</span>
               </div>
 
               <div class="fieldGroup" data-field="signupPassword">
@@ -142,30 +138,52 @@
               <button id="signupButton" class="button primary">Create Account</button>
             </section>
 
-            <section class="card formCard compactCard">
-              <div class="cardTitle">
-                <span class="iconBadge">02</span>
-                <div>
-                  <h2>Login</h2>
-                  <p>Open your scheduling dashboard.</p>
+            <section class="authMiniGrid">
+              <section class="card formCard compactCard">
+                <div class="cardTitle">
+                  <span class="iconBadge">02</span>
+                  <div>
+                    <h2>Login</h2>
+                    <p>Open your scheduling dashboard.</p>
+                  </div>
                 </div>
-              </div>
 
-              <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+                <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
-              <div class="fieldGroup loginFieldGroup">
-                <label class="fieldLabel" for="loginValue">Login</label>
-                <input id="loginValue" autocomplete="username" placeholder="Username/Business or Email" />
-                <button id="forgotUsernameButton" class="linkButton fieldUtilityLink" type="button">Forgot username</button>
-              </div>
+                <div class="fieldGroup loginFieldGroup">
+                  <label class="fieldLabel" for="loginValue">ID# or Email</label>
+                  <input id="loginValue" autocomplete="username" placeholder="ID# or Email" />
+                  <button id="forgotID#Button" class="linkButton fieldUtilityLink" type="button">Forgot ID#</button>
+                </div>
 
-              <div class="fieldGroup loginFieldGroup">
-                <label class="fieldLabel" for="loginPassword">Password</label>
-                <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
-                <button id="forgotPasswordButton" class="linkButton fieldUtilityLink" type="button">Forgot password</button>
-              </div>
+                <div class="fieldGroup loginFieldGroup">
+                  <label class="fieldLabel" for="loginPassword">Password</label>
+                  <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
+                  <button id="forgotPasswordButton" class="linkButton fieldUtilityLink" type="button">Forgot password</button>
+                </div>
 
-              <button id="loginButton" class="button primary">Login</button>
+                <button id="loginButton" class="button primary">Login</button>
+              </section>
+
+              <section class="card formCard compactCard clockCard">
+                <div class="cardTitle">
+                  <span class="iconBadge">03</span>
+                  <div>
+                    <h2>Clock In / Out</h2>
+                    <p>Employees can punch with their 9 digit ID#.</p>
+                  </div>
+                </div>
+                <div id="clockFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+                <div class="fieldGroup loginFieldGroup">
+                  <label class="fieldLabel" for="clockAccountNumber">Employee ID#</label>
+                  <input id="clockAccountNumber" inputmode="numeric" maxlength="9" placeholder="9 digit ID#" />
+                </div>
+                <div id="clockStatusPreview" class="clockStatusPreview hidden"></div>
+                <div class="formActions clockActions">
+                  <button id="clockLookupButton" class="button secondary" type="button">Scan ID#</button>
+                  <button id="clockActionButton" class="button primary hidden" type="button">Clock In</button>
+                </div>
+              </section>
             </section>
           </section>
         </section>
@@ -316,12 +334,9 @@
               <input type="hidden" id="employeeId" />
 
               <div class="formGrid twoColumn">
-                <div class="fieldGroup" data-field="employeeCode">
-                  <label class="fieldLabel" for="employeeCode">
-                    Employee #
-                    <span id="employeeCodeStatus" class="fieldStatus">Required</span>
-                  </label>
-                  <input id="employeeCode" placeholder="Employee #" />
+                <div class="generatedIdNotice employeeGeneratedIdNotice">
+                  <strong>Employee ID# auto-created</strong>
+                  <span id="employeeGeneratedIdText">A permanent unique 9 digit ID# will be assigned when this employee is saved.</span>
                 </div>
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employeeTitle">Title</label>
@@ -334,13 +349,6 @@
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employeeLastName">Last Name <span class="optionalText">(optional)</span></label>
                   <input id="employeeLastName" autocomplete="family-name" placeholder="Last Name" />
-                </div>
-                <div class="fieldGroup" data-field="employeeUsername">
-                  <label class="fieldLabel" for="employeeUsername">
-                    Username
-                    <span id="employeeUsernameStatus" class="fieldStatus">Required</span>
-                  </label>
-                  <input id="employeeUsername" autocomplete="username" placeholder="Username" />
                 </div>
                 <div class="fieldGroup" data-field="employeePassword">
                   <label class="fieldLabel" for="employeePassword">
@@ -667,7 +675,7 @@
                 <div class="profileSettingsInfo">
                   <h3>Profile</h3>
                   <p id="settingsProfileName" class="profileNameLine">Name</p>
-                  <p id="settingsProfileUsername" class="profileMetaLine">Username</p>
+                  <p id="settingsProfileID#" class="profileMetaLine">ID#</p>
                   <p id="settingsProfileEmail" class="profileMetaLine">Email</p>
                 </div>
               </div>
@@ -696,9 +704,9 @@
             </section>
             <section class="settingsCard nonEmployeeOnly">
               <h3>Account Recovery</h3>
-              <p class="panelHint">Use verified email links for password reset and username reminders.</p>
+              <p class="panelHint">Use verified email links for password reset and ID# reminders.</p>
               <button id="settingsForgotPasswordButton" class="button secondary" type="button">Send password reset</button>
-              <button id="settingsForgotUsernameButton" class="button ghost" type="button">Send username reminder</button>
+              <button id="settingsForgotID#Button" class="button ghost" type="button">Send ID# reminder</button>
             </section>
           </div>
         </dialog>
