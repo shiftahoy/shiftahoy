@@ -574,6 +574,9 @@ ON time_clock_entries (business_id, employee_id, clock_in_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS time_clock_entries_one_open_per_employee
 ON time_clock_entries (employee_id)
 WHERE clock_out_at IS NULL;
+CREATE INDEX IF NOT EXISTS time_clock_entries_open_business_employee_idx
+ON time_clock_entries (business_id, employee_id)
+WHERE clock_out_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS payroll_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -594,3 +597,275 @@ INSERT INTO payroll_settings (business_id)
 SELECT id
 FROM businesses
 ON CONFLICT (business_id) DO NOTHING;
+
+-- Shift Ahoy business-scoped identity, secure clock access, 2FA, leave accrual, bonuses, and plan location limits.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS account_number CHAR(9) UNIQUE CHECK (account_number ~ '^\d{9}$');
+
+CREATE UNIQUE INDEX IF NOT EXISTS businesses_account_number_unique
+ON businesses (account_number)
+WHERE account_number IS NOT NULL;
+
+-- Move permanent generated 9 digit IDs to businesses. Existing businesses without one receive one.
+DO $$
+DECLARE
+  business_row RECORD;
+  candidate CHAR(9);
+BEGIN
+  FOR business_row IN SELECT id FROM businesses WHERE account_number IS NULL LOOP
+    LOOP
+      candidate := lpad((100000000 + floor(random() * 900000000)::int)::text, 9, '0');
+      BEGIN
+        INSERT INTO issued_account_ids (account_number, issued_to) VALUES (candidate, 'business');
+        UPDATE businesses SET account_number = candidate WHERE id = business_row.id;
+        EXIT;
+      EXCEPTION WHEN unique_violation THEN
+        -- try again
+      END;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- Employee IDs are now company-provided and only unique inside the same business.
+DROP INDEX IF EXISTS users_account_number_unique;
+DROP INDEX IF EXISTS employees_employee_code_global_unique;
+
+DO $$
+DECLARE
+  constraint_row RECORD;
+BEGIN
+  FOR constraint_row IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'users'::regclass
+      AND contype = 'u'
+      AND pg_get_constraintdef(oid) ILIKE '%account_number%'
+  LOOP
+    EXECUTE format('ALTER TABLE users DROP CONSTRAINT IF EXISTS %I', constraint_row.conname);
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_business_account_number_unique
+ON users (business_id, account_number)
+WHERE account_number IS NOT NULL AND active = true;
+
+CREATE UNIQUE INDEX IF NOT EXISTS employees_business_employee_code_unique
+ON employees (business_id, employee_code)
+WHERE active = true;
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS orientation_start TIMESTAMPTZ NOT NULL DEFAULT now();
+UPDATE employees SET orientation_start = COALESCE(orientation_start, created_at, now());
+ALTER TABLE employees ALTER COLUMN orientation_start SET NOT NULL;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS two_factor_login_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  attempts_count INTEGER NOT NULL DEFAULT 0 CHECK (attempts_count BETWEEN 0 AND 20),
+  sent_to TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS two_factor_login_codes_user_created_idx
+ON two_factor_login_codes (user_id, created_at DESC);
+ALTER TABLE two_factor_login_codes ADD COLUMN IF NOT EXISTS attempts_count INTEGER NOT NULL DEFAULT 0 CHECK (attempts_count BETWEEN 0 AND 20);
+ALTER TABLE two_factor_login_codes ADD COLUMN IF NOT EXISTS sent_to TEXT;
+
+CREATE INDEX IF NOT EXISTS two_factor_login_codes_active_user_idx
+ON two_factor_login_codes (user_id, expires_at DESC)
+WHERE used_at IS NULL;
+
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS in_app_clock_enabled BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS require_clock_session BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS enforce_scheduled_clock_in BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS clock_in_early_grace_minutes INTEGER NOT NULL DEFAULT 0 CHECK (clock_in_early_grace_minutes BETWEEN 0 AND 240);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS clock_in_late_grace_minutes INTEGER NOT NULL DEFAULT 5 CHECK (clock_in_late_grace_minutes BETWEEN 0 AND 240);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS clock_out_grace_minutes INTEGER NOT NULL DEFAULT 15 CHECK (clock_out_grace_minutes BETWEEN 0 AND 240);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS pto_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS sick_leave_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS bonus_enabled BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE time_clock_entries ADD COLUMN IF NOT EXISTS employee_code CHAR(9) CHECK (employee_code ~ '^\d{9}$');
+UPDATE time_clock_entries SET employee_code = COALESCE(employee_code, account_number);
+ALTER TABLE time_clock_entries ALTER COLUMN employee_code SET NOT NULL;
+
+CREATE TABLE IF NOT EXISTS payroll_violations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  time_clock_entry_id UUID REFERENCES time_clock_entries(id) ON DELETE SET NULL,
+  violation_type TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  scheduled_at TIMESTAMPTZ,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS payroll_violations_employee_attempted_idx
+ON payroll_violations (employee_id, attempted_at DESC);
+
+CREATE INDEX IF NOT EXISTS payroll_violations_business_location_attempted_idx
+ON payroll_violations (business_id, location_id, attempted_at DESC);
+
+CREATE TABLE IF NOT EXISTS leave_accrual_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  leave_type TEXT NOT NULL CHECK (leave_type IN ('pto', 'sick')),
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  years_of_service_min NUMERIC(6,2) NOT NULL DEFAULT 0,
+  accrual_hours_per_worked_hour NUMERIC(10,6) NOT NULL DEFAULT 0,
+  annual_cap_hours NUMERIC(8,2),
+  carryover_cap_hours NUMERIC(8,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (business_id, leave_type, years_of_service_min)
+);
+
+CREATE TABLE IF NOT EXISTS employee_leave_balances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  leave_type TEXT NOT NULL CHECK (leave_type IN ('pto', 'sick')),
+  balance_minutes INTEGER NOT NULL DEFAULT 0,
+  accrued_minutes_lifetime INTEGER NOT NULL DEFAULT 0,
+  used_minutes_lifetime INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, leave_type)
+);
+
+CREATE TABLE IF NOT EXISTS employee_leave_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  leave_type TEXT NOT NULL CHECK (leave_type IN ('pto', 'sick')),
+  minutes_delta INTEGER NOT NULL,
+  reason TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS bonus_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  hours_threshold NUMERIC(10,2) NOT NULL,
+  bonus_cents INTEGER NOT NULL DEFAULT 0 CHECK (bonus_cents >= 0),
+  pay_bump_cents INTEGER NOT NULL DEFAULT 0 CHECK (pay_bump_cents >= 0),
+  recurring BOOLEAN NOT NULL DEFAULT false,
+  max_cycles INTEGER CHECK (max_cycles IS NULL OR max_cycles >= 1),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS employee_bonus_awards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  bonus_rule_id UUID NOT NULL REFERENCES bonus_rules(id) ON DELETE CASCADE,
+  cycle_number INTEGER NOT NULL DEFAULT 1,
+  hours_at_award NUMERIC(10,2) NOT NULL DEFAULT 0,
+  bonus_cents INTEGER NOT NULL DEFAULT 0,
+  pay_bump_cents INTEGER NOT NULL DEFAULT 0,
+  awarded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, bonus_rule_id, cycle_number)
+);
+
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS location_limit INTEGER;
+UPDATE plans SET location_limit = CASE code
+  WHEN 'free' THEN 1
+  WHEN 'plus' THEN 3
+  WHEN 'premium' THEN 5
+  WHEN 'pro' THEN NULL
+  ELSE location_limit
+END;
+
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan_location_limit INTEGER;
+UPDATE businesses b
+SET plan_location_limit = p.location_limit
+FROM plans p
+WHERE p.code = b.plan_code;
+
+-- Shift Ahoy complete PTO, sick leave, bonus, pay bump, and time-off balance engine.
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS leave_year_reset_month INTEGER NOT NULL DEFAULT 1 CHECK (leave_year_reset_month BETWEEN 1 AND 12);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS leave_year_reset_day INTEGER NOT NULL DEFAULT 1 CHECK (leave_year_reset_day BETWEEN 1 AND 31);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS allow_negative_leave_balance BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS auto_accrue_on_clock_out BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS auto_award_bonuses_on_clock_out BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS leave_type TEXT CHECK (leave_type IN ('unpaid', 'pto', 'sick')) DEFAULT 'unpaid';
+ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS requested_minutes INTEGER NOT NULL DEFAULT 0 CHECK (requested_minutes >= 0);
+ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS leave_transaction_id UUID;
+UPDATE time_off_requests SET leave_type = COALESCE(leave_type, 'unpaid');
+UPDATE time_off_requests SET paid = leave_type IN ('pto', 'sick') WHERE paid = false;
+
+ALTER TABLE leave_accrual_rules ADD COLUMN IF NOT EXISTS accrual_method TEXT NOT NULL DEFAULT 'worked_hours' CHECK (accrual_method IN ('worked_hours', 'pay_period_flat'));
+ALTER TABLE leave_accrual_rules ADD COLUMN IF NOT EXISTS flat_hours_per_pay_period NUMERIC(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE leave_accrual_rules ADD COLUMN IF NOT EXISTS max_balance_hours NUMERIC(8,2);
+ALTER TABLE leave_accrual_rules ADD COLUMN IF NOT EXISTS reset_unused_at_year_end BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE leave_accrual_rules ADD COLUMN IF NOT EXISTS notes TEXT;
+
+ALTER TABLE employee_leave_transactions ADD COLUMN IF NOT EXISTS time_off_request_id UUID REFERENCES time_off_requests(id) ON DELETE SET NULL;
+ALTER TABLE employee_leave_transactions ADD COLUMN IF NOT EXISTS source_key TEXT;
+ALTER TABLE employee_leave_transactions ADD COLUMN IF NOT EXISTS period_start DATE;
+ALTER TABLE employee_leave_transactions ADD COLUMN IF NOT EXISTS period_end DATE;
+CREATE UNIQUE INDEX IF NOT EXISTS employee_leave_transactions_source_key_unique
+ON employee_leave_transactions (business_id, employee_id, leave_type, source, source_key)
+WHERE source_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS leave_accrual_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  run_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes TEXT,
+  UNIQUE (business_id, location_id, period_start, period_end)
+);
+
+CREATE TABLE IF NOT EXISTS leave_year_end_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  leave_year INTEGER NOT NULL,
+  run_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes TEXT,
+  UNIQUE (business_id, leave_year)
+);
+
+ALTER TABLE bonus_rules ADD COLUMN IF NOT EXISTS award_type TEXT NOT NULL DEFAULT 'all_time_hours' CHECK (award_type IN ('all_time_hours', 'pay_period_hours'));
+ALTER TABLE bonus_rules ADD COLUMN IF NOT EXISTS apply_pay_bump_to_employee BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE bonus_rules ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE employee_bonus_awards ADD COLUMN IF NOT EXISTS period_start DATE;
+ALTER TABLE employee_bonus_awards ADD COLUMN IF NOT EXISTS period_end DATE;
+ALTER TABLE employee_bonus_awards ADD COLUMN IF NOT EXISTS applied_to_pay_rate BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE employee_bonus_awards ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS employee_leave_balances_business_employee_idx
+ON employee_leave_balances (business_id, employee_id);
+CREATE INDEX IF NOT EXISTS employee_leave_transactions_employee_created_idx
+ON employee_leave_transactions (employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS bonus_rules_business_enabled_idx
+ON bonus_rules (business_id, enabled);
+CREATE INDEX IF NOT EXISTS employee_bonus_awards_employee_awarded_idx
+ON employee_bonus_awards (employee_id, awarded_at DESC);
+
+-- Reasonable defaults: off by default until owners opt in, with visible editable rule rows.
+INSERT INTO leave_accrual_rules (business_id, leave_type, enabled, years_of_service_min, accrual_method, accrual_hours_per_worked_hour, flat_hours_per_pay_period, annual_cap_hours, carryover_cap_hours, max_balance_hours, reset_unused_at_year_end, notes)
+SELECT b.id, 'pto', false, 0, 'worked_hours', 0.000000, 0, NULL, NULL, NULL, false, 'Default PTO rule. Enable and edit from Payroll / Leave settings.'
+FROM businesses b
+ON CONFLICT (business_id, leave_type, years_of_service_min) DO NOTHING;
+
+INSERT INTO leave_accrual_rules (business_id, leave_type, enabled, years_of_service_min, accrual_method, accrual_hours_per_worked_hour, flat_hours_per_pay_period, annual_cap_hours, carryover_cap_hours, max_balance_hours, reset_unused_at_year_end, notes)
+SELECT b.id, 'sick', false, 0, 'worked_hours', 0.000000, 0, NULL, NULL, NULL, false, 'Default sick leave rule. Enable and edit from Payroll / Leave settings.'
+FROM businesses b
+ON CONFLICT (business_id, leave_type, years_of_service_min) DO NOTHING;
