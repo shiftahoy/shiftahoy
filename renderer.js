@@ -56,6 +56,9 @@ let ownerSecuritySettings = { twoFactorEnabled: false };
 let lastPrintedScheduleTitle = "Shift Ahoy Schedule";
 let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null };
 let pendingClockAction = null;
+let selectedBusinessAccountNumber = localStorage.getItem("shiftAhoyBusinessAccountNumber") || "";
+let selectedBusinessName = localStorage.getItem("shiftAhoyBusinessName") || "";
+let clockSessionToken = sessionStorage.getItem("shiftAhoyClockSessionToken") || "";
 
 const message = document.getElementById("message");
 
@@ -66,7 +69,7 @@ const signupFieldIds = [
   "signupEmail",
   "signupPassword"
 ];
-const loginFieldIds = ["loginValue", "loginPassword"];
+const loginFieldIds = ["businessAccountNumber", "loginValue", "loginPassword"];
 
 
 function $(id) {
@@ -243,7 +246,7 @@ function userDisplayName() {
 }
 
 function userAccountNumber() {
-  return currentUser?.accountNumber || currentUser?.account_number || currentUser?.employeeCode || currentUser?.employee_code || "";
+  return currentUser?.accountNumber || currentUser?.account_number || currentUser?.employeeCode || currentUser?.employee_code || currentUser?.businessAccountNumber || currentUser?.business_account_number || "";
 }
 
 function userDisplayNameWithId() {
@@ -313,7 +316,7 @@ async function saveOwnerSecuritySettings() {
   const enabled = !!$("ownerTwoFactorEnabled")?.checked;
   const saved = await runOwnerCredentialAction({
     title: enabled ? "Enable Owner 2FA" : "Disable Owner 2FA",
-    message: "Enter your owner password to update the owner security setting.",
+    message: "Enter your password to update the owner security setting.",
     confirmLabel: enabled ? "Enable 2FA" : "Disable 2FA",
     onConfirm: (actorPassword) => api("/auth/settings", {
       method: "PUT",
@@ -420,6 +423,14 @@ function cleanUsernameInput(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
     .slice(0, 30);
+}
+
+function normalizeIdInput(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 9);
+}
+
+function isValidIdInput(value) {
+  return /^\d{9}$/.test(String(value || ""));
 }
 
 function normalizePasswordInput(value) {
@@ -630,7 +641,7 @@ function isOwnerCredentialError(err) {
   return (
     message.includes("wrong password") ||
     message.includes("owner credentials") ||
-    message.includes("owner password") ||
+    message.includes("password") ||
     message.includes("no refresh token") ||
     message.includes("not authenticated") ||
     message.includes("invalid or expired token")
@@ -648,7 +659,7 @@ async function runOwnerCredentialAction({ title, message, confirmLabel = "Delete
   const passwordInput = $("credentialPassword");
 
   if (!dialog || !form || typeof dialog.showModal !== "function") {
-    const actorPassword = window.prompt(message || "Enter your owner password to continue.");
+    const actorPassword = window.prompt(message || "Enter your password to continue.");
     if (!actorPassword || !onConfirm) return false;
     await onConfirm(actorPassword);
     return true;
@@ -656,7 +667,7 @@ async function runOwnerCredentialAction({ title, message, confirmLabel = "Delete
 
   resetCredentialDialog();
   if (titleEl) titleEl.textContent = title || "Confirm Delete";
-  if (messageEl) messageEl.textContent = message || "Enter your owner password to continue.";
+  if (messageEl) messageEl.textContent = message || "Enter your password to continue.";
   if (confirmButton) {
     confirmButton.textContent = confirmLabel;
     confirmButton.disabled = true;
@@ -698,7 +709,7 @@ async function runOwnerCredentialAction({ title, message, confirmLabel = "Delete
       event.preventDefault();
 
       if (!validateCredentialPassword(true)) {
-        setNotice("credentialDialogNotice", "error", "Owner password is required.");
+        setNotice("credentialDialogNotice", "error", "Password is required.");
         passwordInput?.focus();
         return;
       }
@@ -762,12 +773,12 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
   const passwordInput = $("credentialPassword");
 
   if (!dialog || !form || typeof dialog.showModal !== "function") {
-    return Promise.resolve(window.prompt(message || "Enter your owner password to continue."));
+    return Promise.resolve(window.prompt(message || "Enter your password to continue."));
   }
 
   resetCredentialDialog();
   if (titleEl) titleEl.textContent = title || "Confirm Delete";
-  if (messageEl) messageEl.textContent = message || "Enter your owner password to continue.";
+  if (messageEl) messageEl.textContent = message || "Enter your password to continue.";
   if (confirmButton) {
     confirmButton.textContent = confirmLabel;
     confirmButton.disabled = true;
@@ -806,7 +817,7 @@ function requestOwnerPassword({ title, message, confirmLabel = "Delete" } = {}) 
       const password = passwordInput?.value || "";
 
       if (!validateCredentialPassword(true)) {
-        setNotice("credentialDialogNotice", "error", "Owner password is required.");
+        setNotice("credentialDialogNotice", "error", "Password is required.");
         passwordInput?.focus();
         return;
       }
@@ -899,9 +910,70 @@ function validateSignupForm(showEmptyErrors = false) {
   return signupFieldIds.map((id) => validateSignupField(id, showEmptyErrors)).every(Boolean);
 }
 
+function currentBusinessAccountNumber() {
+  return normalizeIdInput(selectedBusinessAccountNumber || $("businessAccountNumber")?.value || currentUser?.businessAccountNumber || "");
+}
+
+function renderBusinessGate() {
+  const input = $("businessAccountNumber");
+  if (input && selectedBusinessAccountNumber) input.value = selectedBusinessAccountNumber;
+
+  const grid = $("authMiniGrid");
+  if (grid) grid.classList.toggle("hidden", !selectedBusinessAccountNumber);
+
+  const active = $("businessGateActive");
+  if (active) {
+    active.classList.toggle("hidden", !selectedBusinessAccountNumber);
+    active.textContent = selectedBusinessAccountNumber
+      ? `Business active: ${selectedBusinessName || "Shift Ahoy"} · Business ID# ${selectedBusinessAccountNumber}`
+      : "";
+  }
+}
+
+async function activateBusinessGate() {
+  const input = $("businessAccountNumber");
+  const businessAccountNumber = normalizeIdInput(input?.value || "");
+
+  if (!isValidIdInput(businessAccountNumber)) {
+    setNotice("businessGateMessage", "error", "Enter a valid 9 digit Business ID#.");
+    setFieldState("businessAccountNumber", "invalid", "Required");
+    return;
+  }
+
+  try {
+    const data = await api("/auth/business/lookup", {
+      method: "POST",
+      body: JSON.stringify({ businessAccountNumber })
+    });
+
+    selectedBusinessAccountNumber = data.business?.businessAccountNumber || businessAccountNumber;
+    selectedBusinessName = data.business?.businessName || "";
+    localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
+    localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
+    setFieldState("businessAccountNumber", "valid", "Business found");
+    setNotice("businessGateMessage", "success", "Business found. Login and Clock In / Out are now available.");
+    renderBusinessGate();
+  } catch (err) {
+    selectedBusinessAccountNumber = "";
+    selectedBusinessName = "";
+    localStorage.removeItem("shiftAhoyBusinessAccountNumber");
+    localStorage.removeItem("shiftAhoyBusinessName");
+    renderBusinessGate();
+    setNotice("businessGateMessage", "error", err.message || "Business lookup failed.");
+    setFieldState("businessAccountNumber", "invalid", "Not found");
+  }
+}
+
 function validateLoginForm(showEmptyErrors = false) {
+  const businessAccountNumber = currentBusinessAccountNumber();
   const loginValue = $("loginValue")?.value?.trim() || "";
   const password = normalizePasswordInput($("loginPassword")?.value || "");
+
+  if (!isValidIdInput(businessAccountNumber)) {
+    setFieldState("businessAccountNumber", showEmptyErrors ? "invalid" : "neutral", "Required");
+  } else {
+    setFieldState("businessAccountNumber", "valid", "Business active");
+  }
 
   if (!loginValue) {
     setFieldState("loginValue", showEmptyErrors ? "invalid" : "neutral", "Required");
@@ -915,7 +987,7 @@ function validateLoginForm(showEmptyErrors = false) {
     setFieldState("loginPassword", "valid", "Password entered");
   }
 
-  return !!loginValue && !!password;
+  return isValidIdInput(businessAccountNumber) && !!loginValue && !!password;
 }
 
 function clearAuthFieldStates() {
@@ -989,9 +1061,16 @@ async function signup(event) {
 
     setNotice("signupFormMessage", "success", data.message || "Owner account created.");
 
-    if ($("loginValue") && (data.accountNumber || data.fullLogin)) $("loginValue").value = data.accountNumber || data.fullLogin;
+    if (data.businessAccountNumber) {
+      selectedBusinessAccountNumber = data.businessAccountNumber;
+      selectedBusinessName = data.businessName || payload.businessName;
+      localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
+      localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
+      renderBusinessGate();
+    }
+    if ($("loginValue")) $("loginValue").value = payload.email;
     if ($("loginPassword")) $("loginPassword").value = "";
-    setNotice("loginFormMessage", "success", "Your ID# has been filled in. Enter your password to open the dashboard.");
+    setNotice("loginFormMessage", "success", "Your Business ID# has been filled in. Enter your email and password to open the dashboard.");
   } catch (err) {
     setSignupApiError(err);
     setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
@@ -1009,7 +1088,7 @@ async function login(event) {
   const password = normalizePasswordInput($("loginPassword")?.value || "");
 
   if (!validateLoginForm(true)) {
-    setNotice("loginFormMessage", "error", "Enter your ID# or email and password.");
+    setNotice("loginFormMessage", "error", "Enter your Business ID#, Employee ID# or email, and password.");
     return;
   }
 
@@ -1019,11 +1098,23 @@ async function login(event) {
     const data = await api("/auth/login", {
       method: "POST",
       skipRefresh: true,
-      body: JSON.stringify({ login: loginValue, password })
+      body: JSON.stringify({ login: loginValue, password, businessAccountNumber: currentBusinessAccountNumber() })
     });
 
-    accessToken = data.accessToken;
-    currentUser = data.user;
+    if (data.twoFactorRequired) {
+      const twoFactorCode = window.prompt("Enter the 6 digit verification code sent to your email.");
+      if (!twoFactorCode) throw new Error("Verification code is required.");
+      const verified = await api("/auth/login", {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({ login: loginValue, password, businessAccountNumber: currentBusinessAccountNumber(), twoFactorCode })
+      });
+      accessToken = verified.accessToken;
+      currentUser = verified.user;
+    } else {
+      accessToken = data.accessToken;
+      currentUser = data.user;
+    }
 
     renderProfileSettings();
     updateProfileAvatars();
@@ -1100,6 +1191,10 @@ async function api(path, options = {}, retry = true) {
   }
 
   return data;
+}
+
+function desktopClockHeaders() {
+  return { "X-ShiftAhoy-Desktop-Clock": "1" };
 }
 
 function applyRoleUI() {
@@ -1346,7 +1441,7 @@ async function deleteLocation(locationId) {
 
   const deleted = await runOwnerCredentialAction({
     title: "Delete Location",
-    message: `Enter your owner password to delete ${location.name}. This also removes its shifts and employees.`,
+    message: `Enter your password to delete ${location.name}. This also removes its shifts and employees.`,
     confirmLabel: "Delete Location",
     onConfirm: (actorPassword) =>
       api(`/locations/${encodeURIComponent(locationId)}/delete`, {
@@ -1747,7 +1842,7 @@ async function deleteShift(shiftId) {
 
   const deleted = await runOwnerCredentialAction({
     title: "Delete Shift",
-    message: `Enter your owner password to delete shift ${shift.name}.`,
+    message: `Enter your password to delete shift ${shift.name}.`,
     confirmLabel: "Delete Shift",
     onConfirm: (actorPassword) =>
       api(`/shifts/${encodeURIComponent(shiftId)}/delete`, {
@@ -1832,7 +1927,10 @@ function resetEmployeeForm() {
   $("employeeTitle").value = "";
   $("employeeFirstName").value = "";
   $("employeeLastName").value = "";
+  if ($("employeeCode")) $("employeeCode").value = "";
   $("employeePassword").value = "";
+  if ($("employeePassword")) $("employeePassword").type = "password";
+  if ($("showEmployeePasswordButton")) $("showEmployeePasswordButton").textContent = "Show";
   $("employmentType").value = "full_time";
   $("weeklyHours").value = "40";
   $("dailyHours").value = "8";
@@ -1841,10 +1939,11 @@ function resetEmployeeForm() {
   if ($("overtimeThresholdHours")) $("overtimeThresholdHours").value = "40";
   if ($("minRestHours")) $("minRestHours").value = "8";
   $("employeePriority").value = "1";
-  $("orientationStart").value = "";
+  $("orientationStart").value = dateOnly(new Date());
   $("canManageSchedule").checked = false;
   employeeDaysOff = new Set();
   setNotice("employeeFormMessage", "", "");
+  resetFieldState("employeeCode", "Required");
   resetFieldState("employeePassword", "Required");
   renderAvailabilityEditor(defaultAvailability());
   renderDaysOffList();
@@ -1897,7 +1996,7 @@ function renderEmployees() {
     return `
       <article class="listItem">
         <div>
-          <strong>ID# ${escapeHtml(employee.account_number || employee.employee_code)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
+          <strong>Employee ID# ${escapeHtml(employee.employee_code || employee.account_number)} — ${escapeHtml(`${employee.first_name || ""} ${employee.last_name || ""}`.trim())}</strong>
           <span>${escapeHtml(employee.title)} · ${escapeHtml(employee.employment_type)} · ${escapeHtml(employee.weekly_hours)} hrs/week · Pay $${escapeHtml(((Number(employee.pay_rate_cents || 0) / 100).toFixed(2)))} · Available: ${escapeHtml(availableDays)}</span>
           <span>Days off: ${escapeHtml(daysOff.join(", ") || "None")}</span>
         </div>
@@ -1918,7 +2017,8 @@ function editEmployee(employeeId) {
   setNotice("employeeFormMessage", "", "");
   resetFieldState("employeePassword", "Optional while editing");
   $("employeeId").value = employee.id;
-  if ($("employeeGeneratedIdText")) $("employeeGeneratedIdText").textContent = `Assigned permanent ID# ${employee.account_number || employee.employee_code || ""}`;
+  if ($("employeeGeneratedIdText")) $("employeeGeneratedIdText").textContent = `Employee Company ID# ${employee.employee_code || employee.account_number || ""}`;
+  if ($("employeeCode")) $("employeeCode").value = employee.employee_code || employee.account_number || "";
   $("employeeTitle").value = employee.title || "";
   $("employeeFirstName").value = employee.first_name || "";
   $("employeeLastName").value = employee.last_name || "";
@@ -1953,6 +2053,7 @@ async function saveEmployee(event) {
   const employeeId = $("employeeId").value;
   const body = {
     locationId: selectedLocationId,
+    employeeCode: normalizeIdInput($("employeeCode")?.value || ""),
     title: $("employeeTitle").value.trim(),
     firstName: $("employeeFirstName").value.trim(),
     lastName: $("employeeLastName").value.trim(),
@@ -1973,6 +2074,20 @@ async function saveEmployee(event) {
   };
 
   let isValid = true;
+
+  if (!isValidIdInput(body.employeeCode)) {
+    setFieldState("employeeCode", "invalid", "9 digits required");
+    isValid = false;
+  } else {
+    setFieldState("employeeCode", "valid", "Looks good");
+  }
+
+  if (!body.orientationStart) {
+    setFieldState("orientationStart", "invalid", "Required");
+    isValid = false;
+  } else {
+    setFieldState("orientationStart", "valid", "Looks good");
+  }
 
   if (!employeeId && !body.password) {
     setFieldState("employeePassword", "invalid", "Required");
@@ -2002,13 +2117,36 @@ async function saveEmployee(event) {
   }
 }
 
+function toggleEmployeePasswordVisibility() {
+  const input = $("employeePassword");
+  const button = $("showEmployeePasswordButton");
+  if (!input) return;
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  if (button) button.textContent = showing ? "Show" : "Hide";
+}
+
+async function copyEmployeePassword() {
+  const value = $("employeePassword")?.value || "";
+  if (!value) {
+    setNotice("employeeFormMessage", "error", "Enter a password before copying it.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    setNotice("employeeFormMessage", "success", "Password copied.");
+  } catch {
+    setNotice("employeeFormMessage", "error", "Copy failed. Select and copy the password manually.");
+  }
+}
+
 async function deleteEmployee(employeeId) {
   const employee = employees.find((item) => item.id === employeeId);
   if (!employee) return;
 
   const deleted = await runOwnerCredentialAction({
     title: "Delete Employee",
-    message: `Enter your owner password to delete employee ID# ${employee.account_number || employee.employee_code}.`,
+    message: `Enter your password to delete employee ID# ${employee.employee_code || employee.account_number}.`,
     confirmLabel: "Delete Employee",
     onConfirm: (actorPassword) =>
       api(`/employees/${encodeURIComponent(employeeId)}/delete`, {
@@ -2106,7 +2244,7 @@ async function changePlan(planCode) {
   const actionWord = planRank(selectedPlan) > planRank(currentPlanRecord) ? "upgrade" : planRank(selectedPlan) < planRank(currentPlanRecord) ? "downgrade" : "switch";
   const confirmed = await runOwnerCredentialAction({
     title: `${actionWord[0].toUpperCase()}${actionWord.slice(1)} Plan`,
-    message: `Are you sure you want to ${actionWord} from ${currentPlanRecord?.name || currentPlanCode} to ${selectedPlan.name}? Enter the owner password to continue.`,
+    message: `Are you sure you want to ${actionWord} from ${currentPlanRecord?.name || currentPlanCode} to ${selectedPlan.name}? Enter the password to continue.`,
     confirmLabel: `${actionWord[0].toUpperCase()}${actionWord.slice(1)} Plan`,
     onConfirm: (actorPassword) => api("/plans/change", {
       method: "POST",
@@ -2567,8 +2705,8 @@ async function saveTimeOffSettings(event) {
     ? (nextShiftSwapsValue ? "Turn On Shift Cover / Swap" : "Turn Off Shift Cover / Swap")
     : (nextRequestsValue ? "Turn On Time Off Requests" : "Turn Off Time Off Requests");
   const message = isShiftSwapToggle
-    ? `Enter your owner password to ${nextShiftSwapsValue ? "turn on" : "turn off"} employee shift cover and swap requests.`
-    : `Enter your owner password to ${nextRequestsValue ? "turn on" : "turn off"} employee time off requests.`;
+    ? `Enter your password to ${nextShiftSwapsValue ? "turn on" : "turn off"} employee shift cover and swap requests.`
+    : `Enter your password to ${nextRequestsValue ? "turn on" : "turn off"} employee time off requests.`;
 
   const updated = await runOwnerCredentialAction({
     title,
@@ -2880,7 +3018,9 @@ async function submitTimeOffRequest(event) {
   const body = {
     startDate: $("timeOffStartDate").value,
     endDate: $("timeOffEndDate").value,
-    reason: $("timeOffReason").value.trim()
+    reason: $("timeOffReason").value.trim(),
+    leaveType: $("timeOffLeaveType")?.value || "unpaid",
+    requestedHours: $("timeOffRequestedHours")?.value || ""
   };
 
   let isValid = true;
@@ -3121,9 +3261,16 @@ async function logout() {
 function setupEvents() {
   $("signupButton").addEventListener("click", signup);
   $("loginButton").addEventListener("click", login);
+  $("businessGateButton")?.addEventListener("click", activateBusinessGate);
+  $("businessAccountNumber")?.addEventListener("input", () => { const input = $("businessAccountNumber"); if (input) input.value = normalizeIdInput(input.value); });
+  $("clockUnlockButton")?.addEventListener("click", unlockClockPortal);
   $("clockLookupButton")?.addEventListener("click", lookupClockStatus);
   $("clockActionButton")?.addEventListener("click", submitClockAction);
-  $("clockAccountNumber")?.addEventListener("input", () => { const input = $("clockAccountNumber"); if (input) input.value = input.value.replace(/\D/g, "").slice(0, 9); pendingClockAction = null; $("clockActionButton")?.classList.add("hidden"); });
+  $("clockAccountNumber")?.addEventListener("input", () => { const input = $("clockAccountNumber"); if (input) input.value = normalizeIdInput(input.value); pendingClockAction = null; $("clockActionButton")?.classList.add("hidden"); });
+  $("employeeCode")?.addEventListener("input", () => { const input = $("employeeCode"); if (input) input.value = normalizeIdInput(input.value); });
+  $("showEmployeePasswordButton")?.addEventListener("click", toggleEmployeePasswordVisibility);
+  $("copyEmployeePasswordButton")?.addEventListener("click", copyEmployeePassword);
+  renderBusinessGate();
   $("forgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
   $("forgotIdButton")?.addEventListener("click", () => openRecoveryDialog("id"));
   $("settingsForgotPasswordButton")?.addEventListener("click", () => openRecoveryDialog("password"));
@@ -3695,14 +3842,46 @@ function ensureUltimateAutomationLayout() {
           <div class="formGrid twoColumn">
             <div class="fieldGroup"><label class="fieldLabel" for="payrollStartDate">First Pay Cycle Start Date</label><input id="payrollStartDate" type="date" /></div>
             <div class="fieldGroup"><label class="fieldLabel" for="payPeriodWeeks">Pay Every X Weeks</label><input id="payPeriodWeeks" type="number" min="1" max="12" value="2" /></div>
+            <label class="checkRow"><input id="inAppClockEnabled" type="checkbox" checked /> In-app desktop clock enabled</label>
+            <label class="checkRow"><input id="requireClockSession" type="checkbox" checked /> Require manager/owner unlock for clock portal</label>
+            <label class="checkRow"><input id="enforceScheduledClockIn" type="checkbox" checked /> Enforce scheduled clock-in window</label>
+            <div class="fieldGroup"><label class="fieldLabel" for="clockInEarlyGraceMinutes">Clock-in Early Grace Minutes</label><input id="clockInEarlyGraceMinutes" type="number" min="0" max="240" value="0" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="clockInLateGraceMinutes">Clock-in Late Grace Minutes</label><input id="clockInLateGraceMinutes" type="number" min="0" max="240" value="5" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="clockOutGraceMinutes">Clock-out Grace Minutes</label><input id="clockOutGraceMinutes" type="number" min="0" max="240" value="15" /></div>
           </div>
-          <div class="formActions"><button class="button primary" type="submit">Save Payroll Settings</button></div>
+          <div class="automationDivider">PTO, Sick Leave, Bonuses & Pay Bumps</div>
+          <div class="formGrid twoColumn">
+            <label class="checkRow"><input id="ptoEnabled" type="checkbox" /> PTO enabled</label>
+            <label class="checkRow"><input id="sickLeaveEnabled" type="checkbox" /> Sick leave enabled</label>
+            <label class="checkRow"><input id="bonusEnabled" type="checkbox" /> Cash bonus rules enabled</label>
+            <label class="checkRow"><input id="payBumpEnabled" type="checkbox" /> Automatic pay bump enabled</label>
+            <label class="checkRow"><input id="allowNegativeLeaveBalance" type="checkbox" /> Allow negative leave balances</label>
+            <label class="checkRow"><input id="autoAccrueOnClockOut" type="checkbox" checked /> Auto-accrue on clock out</label>
+            <label class="checkRow"><input id="autoAwardBonusesOnClockOut" type="checkbox" checked /> Auto-award bonuses on clock out</label>
+            <div class="fieldGroup"><label class="fieldLabel" for="leaveYearResetMonth">Leave Year Reset Month</label><input id="leaveYearResetMonth" type="number" min="1" max="12" value="1" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="leaveYearResetDay">Leave Year Reset Day</label><input id="leaveYearResetDay" type="number" min="1" max="31" value="1" /></div>
+          </div>
+          <div class="formGrid twoColumn leaveRuleGrid">
+            <div class="fieldGroup"><label class="fieldLabel" for="ptoAccrualRate">PTO Hours Earned Per Worked Hour</label><input id="ptoAccrualRate" type="number" min="0" step="0.0001" value="0" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="ptoMaxBalanceHours">PTO Max Balance Hours</label><input id="ptoMaxBalanceHours" type="number" min="0" step="0.25" placeholder="No cap" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="sickAccrualRate">Sick Hours Earned Per Worked Hour</label><input id="sickAccrualRate" type="number" min="0" step="0.0001" value="0" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="sickMaxBalanceHours">Sick Max Balance Hours</label><input id="sickMaxBalanceHours" type="number" min="0" step="0.25" placeholder="No cap" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="bonusRuleName">Reward Rule Name</label><input id="bonusRuleName" placeholder="Example: 500 hour pay bump" /><small class="fieldHelp">Used in payroll award history and audit-friendly manager views.</small></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="bonusHoursThreshold">Hours Required Before Reward</label><input id="bonusHoursThreshold" type="number" min="0" step="0.25" /><small class="fieldHelp">Uses total worked hours unless reset by creating a new rule.</small></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="bonusAmountDollars">Optional Cash Bonus</label><input id="bonusAmountDollars" type="number" min="0" step="0.01" /><small class="fieldHelp">Set to 0 when only using pay bumps.</small></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="payBumpDollars">Pay Bump Amount / Hour</label><input id="payBumpDollars" type="number" min="0" step="0.01" /><small class="fieldHelp">Added to the employee hourly pay rate when the threshold is reached.</small></div>
+            <label class="checkRow"><input id="bonusRecurring" type="checkbox" /> Repeat reward every threshold cycle</label>
+            <div class="fieldGroup"><label class="fieldLabel" for="bonusMaxCycles">Maximum Pay Bump / Reward Cycles</label><input id="bonusMaxCycles" type="number" min="1" placeholder="No cap" /><small class="fieldHelp">Caps raises so employees stop receiving bumps after this many cycles.</small></div>
+          </div>
+          <div class="formActions"><button class="button primary" type="submit">Save Payroll / Leave Settings</button><button id="runLeaveAccrualButton" class="button secondary" type="button">Run Accrual Now</button><button id="evaluateBonusRulesButton" class="button ghost" type="button">Evaluate Bonuses</button></div>
         </form>
         <div id="managerPayrollList" class="listStack"></div>
       </section>
     `);
     $("refreshManagerPayrollButton")?.addEventListener("click", loadManagerPayrollSummary);
     $("payrollSettingsForm")?.addEventListener("submit", savePayrollSettings);
+    $("runLeaveAccrualButton")?.addEventListener("click", runLeaveAccrualNow);
+    $("evaluateBonusRulesButton")?.addEventListener("click", evaluateBonusRulesNow);
   } else if (managerPortalContent && $("managerPayrollPanel") && $("managerPayrollPanel").parentElement !== managerPortalContent) {
     managerPortalContent.appendChild($("managerPayrollPanel"));
   }
@@ -4089,16 +4268,48 @@ function formatHoursFromMinutes(minutes) {
   return (Math.max(0, Number(minutes || 0)) / 60).toFixed(2);
 }
 
+async function unlockClockPortal() {
+  const businessAccountNumber = currentBusinessAccountNumber();
+  const password = normalizePasswordInput($("clockManagerPassword")?.value || "");
+
+  if (!isValidIdInput(businessAccountNumber)) {
+    setNotice("clockFormMessage", "error", "Enter and activate a valid Business ID# first.");
+    return;
+  }
+
+  if (!password) {
+    setNotice("clockFormMessage", "error", "Enter an owner or manager password to unlock the clock portal.");
+    return;
+  }
+
+  try {
+    const data = await api("/payroll/clock/session", {
+      method: "POST",
+      skipRefresh: true,
+      headers: desktopClockHeaders(),
+      body: JSON.stringify({ businessAccountNumber, password })
+    });
+    clockSessionToken = data.clockSessionToken || "";
+    sessionStorage.setItem("shiftAhoyClockSessionToken", clockSessionToken);
+    if ($("clockManagerPassword")) $("clockManagerPassword").value = "";
+    setNotice("clockFormMessage", "success", data.message || "Clock portal unlocked.");
+  } catch (err) {
+    clockSessionToken = "";
+    sessionStorage.removeItem("shiftAhoyClockSessionToken");
+    setNotice("clockFormMessage", "error", err.message || "Clock unlock failed.");
+  }
+}
+
 async function lookupClockStatus() {
   const input = $("clockAccountNumber");
-  const number = String(input?.value || "").replace(/\D/g, "").slice(0, 9);
+  const number = normalizeIdInput(input?.value || "");
   if (input) input.value = number;
   pendingClockAction = null;
   $("clockActionButton")?.classList.add("hidden");
   $("clockStatusPreview")?.classList.add("hidden");
 
   if (number.length !== 9) {
-    setNotice("clockFormMessage", "error", "Enter a 9 digit ID#.");
+    setNotice("clockFormMessage", "error", "Enter a 9 digit Employee Company ID#.");
     return;
   }
 
@@ -4106,7 +4317,8 @@ async function lookupClockStatus() {
     const data = await api("/payroll/clock/lookup", {
       method: "POST",
       skipRefresh: true,
-      body: JSON.stringify({ accountNumber: number })
+      headers: desktopClockHeaders(),
+      body: JSON.stringify({ businessAccountNumber: currentBusinessAccountNumber(), employeeCode: number, accountNumber: number, clockSessionToken })
     });
     pendingClockAction = data.clockedIn ? "clock_out" : "clock_in";
     const actionButton = $("clockActionButton");
@@ -4127,7 +4339,7 @@ async function lookupClockStatus() {
 
 async function submitClockAction() {
   const input = $("clockAccountNumber");
-  const number = String(input?.value || "").replace(/\D/g, "").slice(0, 9);
+  const number = normalizeIdInput(input?.value || "");
   if (!pendingClockAction || number.length !== 9) {
     await lookupClockStatus();
     return;
@@ -4137,7 +4349,8 @@ async function submitClockAction() {
     const data = await api("/payroll/clock", {
       method: "POST",
       skipRefresh: true,
-      body: JSON.stringify({ accountNumber: number, action: pendingClockAction })
+      headers: desktopClockHeaders(),
+      body: JSON.stringify({ businessAccountNumber: currentBusinessAccountNumber(), employeeCode: number, accountNumber: number, action: pendingClockAction, clockSessionToken })
     });
     setNotice("clockFormMessage", "success", `${data.message || "Clock action successful."} Status: ${String(data.status || "on_time").replaceAll("_", " ")}.`);
     if (input) input.value = "";
@@ -4159,15 +4372,185 @@ async function savePayrollSettings(event) {
       method: "PUT",
       body: JSON.stringify({
         firstPayPeriodStart: $("payrollStartDate")?.value || "",
-        payPeriodWeeks: Number($("payPeriodWeeks")?.value || 2)
+        payPeriodWeeks: Number($("payPeriodWeeks")?.value || 2),
+        inAppClockEnabled: !!$("inAppClockEnabled")?.checked,
+        requireClockSession: !!$("requireClockSession")?.checked,
+        enforceScheduledClockIn: !!$("enforceScheduledClockIn")?.checked,
+        clockInEarlyGraceMinutes: Number($("clockInEarlyGraceMinutes")?.value || 0),
+        clockInLateGraceMinutes: Number($("clockInLateGraceMinutes")?.value || 5),
+        clockOutGraceMinutes: Number($("clockOutGraceMinutes")?.value || 15),
+        ptoEnabled: !!$("ptoEnabled")?.checked,
+        sickLeaveEnabled: !!$("sickLeaveEnabled")?.checked,
+        bonusEnabled: !!$("bonusEnabled")?.checked || !!$("payBumpEnabled")?.checked
       })
     });
-    setNotice("payrollSettingsNotice", "success", "Payroll settings saved.");
+
+    await api("/payroll/leave/settings", {
+      method: "PUT",
+      body: JSON.stringify(buildLeaveSettingsPayload())
+    });
+
+    setNotice("payrollSettingsNotice", "success", "Payroll, leave, and bonus settings saved.");
     await loadPayrollPanels();
   } catch (err) {
     setNotice("payrollSettingsNotice", "error", err.message || "Failed to save payroll settings.");
   }
 }
+
+
+function dollarsToCents(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number < 0) return 0;
+  return Math.round(number * 100);
+}
+
+function setChecked(id, value) {
+  const element = $(id);
+  if (element) element.checked = !!value;
+}
+
+function setValue(id, value) {
+  const element = $(id);
+  if (element && value !== undefined && value !== null) element.value = value;
+}
+
+function buildLeaveSettingsPayload() {
+  const bonusRuleName = String($("bonusRuleName")?.value || "").trim();
+  const bonusRules = [];
+  const cashBonusEnabled = !!$("bonusEnabled")?.checked;
+  const payBumpEnabled = !!$("payBumpEnabled")?.checked;
+  const hoursThreshold = Number($("bonusHoursThreshold")?.value || 0);
+  const bonusCents = cashBonusEnabled ? dollarsToCents($("bonusAmountDollars")?.value) : 0;
+  const payBumpCents = payBumpEnabled ? dollarsToCents($("payBumpDollars")?.value) : 0;
+
+  if ((cashBonusEnabled || payBumpEnabled || bonusRuleName || hoursThreshold > 0) && hoursThreshold > 0) {
+    bonusRules.push({
+      name: bonusRuleName || (payBumpEnabled ? "Automatic hours-based pay bump" : "Hours milestone bonus"),
+      enabled: cashBonusEnabled || payBumpEnabled,
+      awardType: "all_time_hours",
+      hoursThreshold,
+      bonusCents,
+      payBumpCents,
+      recurring: !!$("bonusRecurring")?.checked,
+      maxCycles: $("bonusMaxCycles")?.value ? Number($("bonusMaxCycles")?.value) : null,
+      applyPayBumpToEmployee: payBumpEnabled
+    });
+  }
+
+  return {
+    ptoEnabled: !!$("ptoEnabled")?.checked,
+    sickLeaveEnabled: !!$("sickLeaveEnabled")?.checked,
+    bonusEnabled: !!$("bonusEnabled")?.checked || !!$("payBumpEnabled")?.checked,
+    allowNegativeLeaveBalance: !!$("allowNegativeLeaveBalance")?.checked,
+    autoAccrueOnClockOut: !!$("autoAccrueOnClockOut")?.checked,
+    autoAwardBonusesOnClockOut: !!$("autoAwardBonusesOnClockOut")?.checked,
+    leaveYearResetMonth: Number($("leaveYearResetMonth")?.value || 1),
+    leaveYearResetDay: Number($("leaveYearResetDay")?.value || 1),
+    leaveRules: [
+      {
+        leaveType: "pto",
+        enabled: !!$("ptoEnabled")?.checked,
+        yearsOfServiceMin: 0,
+        accrualMethod: "worked_hours",
+        accrualHoursPerWorkedHour: Number($("ptoAccrualRate")?.value || 0),
+        maxBalanceHours: $("ptoMaxBalanceHours")?.value || null
+      },
+      {
+        leaveType: "sick",
+        enabled: !!$("sickLeaveEnabled")?.checked,
+        yearsOfServiceMin: 0,
+        accrualMethod: "worked_hours",
+        accrualHoursPerWorkedHour: Number($("sickAccrualRate")?.value || 0),
+        maxBalanceHours: $("sickMaxBalanceHours")?.value || null
+      }
+    ],
+    bonusRules
+  };
+}
+
+function hydrateLeaveSettings(settings = {}, leaveRules = [], bonusRules = []) {
+  setChecked("inAppClockEnabled", settings.in_app_clock_enabled !== false);
+  setChecked("requireClockSession", settings.require_clock_session !== false);
+  setChecked("enforceScheduledClockIn", settings.enforce_scheduled_clock_in !== false);
+  setValue("clockInEarlyGraceMinutes", settings.clock_in_early_grace_minutes ?? 0);
+  setValue("clockInLateGraceMinutes", settings.clock_in_late_grace_minutes ?? 5);
+  setValue("clockOutGraceMinutes", settings.clock_out_grace_minutes ?? 15);
+  setChecked("ptoEnabled", settings.pto_enabled === true);
+  setChecked("sickLeaveEnabled", settings.sick_leave_enabled === true);
+  setChecked("bonusEnabled", settings.bonus_enabled === true);
+  setChecked("allowNegativeLeaveBalance", settings.allow_negative_leave_balance === true);
+  setChecked("autoAccrueOnClockOut", settings.auto_accrue_on_clock_out !== false);
+  setChecked("autoAwardBonusesOnClockOut", settings.auto_award_bonuses_on_clock_out !== false);
+  setValue("leaveYearResetMonth", settings.leave_year_reset_month ?? 1);
+  setValue("leaveYearResetDay", settings.leave_year_reset_day ?? 1);
+
+  const ptoRule = leaveRules.find((rule) => rule.leave_type === "pto" && Number(rule.years_of_service_min || 0) === 0) || leaveRules.find((rule) => rule.leave_type === "pto") || {};
+  const sickRule = leaveRules.find((rule) => rule.leave_type === "sick" && Number(rule.years_of_service_min || 0) === 0) || leaveRules.find((rule) => rule.leave_type === "sick") || {};
+  setValue("ptoAccrualRate", ptoRule.accrual_hours_per_worked_hour ?? 0);
+  setValue("ptoMaxBalanceHours", ptoRule.max_balance_hours ?? "");
+  setValue("sickAccrualRate", sickRule.accrual_hours_per_worked_hour ?? 0);
+  setValue("sickMaxBalanceHours", sickRule.max_balance_hours ?? "");
+
+  const bonusRule = bonusRules[0] || {};
+  setValue("bonusRuleName", bonusRule.name || "");
+  setValue("bonusHoursThreshold", bonusRule.hours_threshold ?? "");
+  setValue("bonusAmountDollars", bonusRule.bonus_cents ? (Number(bonusRule.bonus_cents) / 100).toFixed(2) : "");
+  setValue("payBumpDollars", bonusRule.pay_bump_cents ? (Number(bonusRule.pay_bump_cents) / 100).toFixed(2) : "");
+  setChecked("payBumpEnabled", Number(bonusRule.pay_bump_cents || 0) > 0 && bonusRule.enabled !== false);
+  setChecked("bonusEnabled", Number(bonusRule.bonus_cents || 0) > 0 && bonusRule.enabled !== false);
+  setChecked("bonusRecurring", bonusRule.recurring === true);
+  setValue("bonusMaxCycles", bonusRule.max_cycles ?? "");
+}
+
+async function loadLeaveSettingsForForm() {
+  if (!accessToken || !canManageSchedule()) return null;
+  try {
+    const data = await api("/payroll/leave/settings");
+    hydrateLeaveSettings(data.settings || {}, data.leaveRules || [], data.bonusRules || []);
+    return data;
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to load leave settings.");
+    return null;
+  }
+}
+
+async function runLeaveAccrualNow() {
+  try {
+    const body = selectedLocationId ? { locationId: selectedLocationId } : {};
+    const data = await api("/payroll/leave/accrue", { method: "POST", body: JSON.stringify(body) });
+    setNotice("payrollSettingsNotice", "success", `Accrual complete for ${escapeHtml(data.periodStart || "current period")} to ${escapeHtml(data.periodEnd || "current period")}.`);
+    await loadPayrollPanels();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to run accrual.");
+  }
+}
+
+async function evaluateBonusRulesNow() {
+  try {
+    const body = selectedLocationId ? { locationId: selectedLocationId } : {};
+    const data = await api("/payroll/bonuses/evaluate", { method: "POST", body: JSON.stringify(body) });
+    setNotice("payrollSettingsNotice", "success", `${(data.awards || []).length} new bonus/pay-bump award(s) created.`);
+    await loadPayrollPanels();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to evaluate bonuses.");
+  }
+}
+
+function leaveBalanceCardsHtml(leaveBalances = []) {
+  if (!leaveBalances.length) return "";
+  return `
+    <div class="automationDivider">PTO & Sick Leave Balances</div>
+    <section class="automationMetrics healthMetricGrid">
+      ${leaveBalances.map((row) => `<article><strong>${escapeHtml(formatHoursFromMinutes(row.balance_minutes))}</strong><span>${escapeHtml(String(row.leave_type || "leave").toUpperCase())} balance · ${escapeHtml(formatHoursFromMinutes(row.used_minutes_lifetime))} used</span></article>`).join("")}
+    </section>
+  `;
+}
+
+function bonusAwardsHtml(bonusAwards = []) {
+  if (!bonusAwards.length) return `<div class="emptyState compactEmpty">No bonus or pay-bump awards yet.</div>`;
+  return bonusAwards.map((award) => `<article class="listItem"><div><strong>${escapeHtml(award.rule_name || "Bonus award")}</strong><span>${moneyFromCents(award.bonus_cents || 0)} bonus · ${moneyFromCents(award.pay_bump_cents || 0)}/hr bump · ${escapeHtml(Number(award.hours_at_award || 0).toFixed(2))} hours at award</span></div></article>`).join("");
+}
+
 
 async function loadPayrollPanels() {
   if (!accessToken) return;
@@ -4186,13 +4569,21 @@ async function loadEmployeePayrollSummary() {
     const data = await api("/payroll/employee-summary");
     const period = data.currentPeriod || {};
     const entries = data.entries || [];
+    const violations = data.violations || [];
+    const allTime = data.allTime || {};
     target.innerHTML = `
       <section class="automationMetrics healthMetricGrid">
         <article><strong>${escapeHtml(formatHoursFromMinutes(period.minutes_worked))}</strong><span>current period hours</span></article>
+        <article><strong>${escapeHtml(formatHoursFromMinutes(allTime.minutes_worked))}</strong><span>all-time hours</span></article>
         <article><strong>${moneyFromCents(period.estimated_pay_cents || 0)}</strong><span>estimated next pay</span></article>
       </section>
+      ${leaveBalanceCardsHtml(data.leaveBalances || [])}
       <div class="automationDivider">Recent Clock Activity</div>
       ${entries.length ? entries.map((entry) => `<article class="listItem"><div><strong>${escapeHtml(new Date(entry.clock_in_at).toLocaleString())}</strong><span>Out: ${escapeHtml(entry.clock_out_at ? new Date(entry.clock_out_at).toLocaleString() : "Still clocked in")} · ${escapeHtml(formatHoursFromMinutes(entry.minutes_worked))} hours · In ${escapeHtml(entry.clock_in_status || "on_time")} / Out ${escapeHtml(entry.clock_out_status || "pending")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No payroll time entries yet.</div>`}
+      <div class="automationDivider">Violations</div>
+      ${violations.length ? violations.map((violation) => `<article class="listItem"><div><strong>${escapeHtml(new Date(violation.attempted_at || violation.created_at).toLocaleString())}</strong><span>${escapeHtml(String(violation.violation_type || "violation").replaceAll("_", " "))} · ${escapeHtml(violation.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No violations logged.</div>`}
+      <div class="automationDivider">Bonus / Pay Bump Awards</div>
+      ${bonusAwardsHtml(data.bonusAwards || [])}
     `;
   } catch (err) {
     target.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
@@ -4208,18 +4599,27 @@ async function loadManagerPayrollSummary() {
     const settings = data.settings || {};
     if ($("payrollStartDate") && settings.first_pay_period_start) $("payrollStartDate").value = String(settings.first_pay_period_start).slice(0, 10);
     if ($("payPeriodWeeks") && settings.pay_period_weeks) $("payPeriodWeeks").value = settings.pay_period_weeks;
+    hydrateLeaveSettings(settings, [], []);
+    await loadLeaveSettingsForForm();
     const employees = data.employees || [];
     const alerts = data.alerts || [];
+    const violations = data.violations || [];
     const totalPay = employees.reduce((sum, row) => sum + Number(row.estimated_pay_cents || 0), 0);
     target.innerHTML = `
       <section class="automationMetrics healthMetricGrid">
         <article><strong>${escapeHtml(employees.length)}</strong><span>employees</span></article>
         <article><strong>${moneyFromCents(totalPay)}</strong><span>estimated payroll</span></article>
         <article><strong>${escapeHtml(alerts.length)}</strong><span>recent alerts</span></article>
+        <article><strong>${escapeHtml(violations.length)}</strong><span>violations</span></article>
       </section>
       ${alerts.length ? `<div class="scheduleWarningsList"><strong>Payroll alerts</strong><ul>${alerts.map((alert) => `<li>${escapeHtml(alert.message)}</li>`).join("")}</ul></div>` : `<div class="scheduleWarningsList success">No recent early/late clock alerts.</div>`}
+      ${violations.length ? `<div class="scheduleWarningsList"><strong>Violations</strong><ul>${violations.slice(0, 10).map((violation) => `<li>${escapeHtml(`${violation.employee_code || ""} — ${String(violation.violation_type || "").replaceAll("_", " ")} · ${violation.reason || ""}`)}</li>`).join("")}</ul></div>` : `<div class="scheduleWarningsList success">No recent clock violations.</div>`}
+      <div class="automationDivider">PTO / Sick Leave Balances</div>
+      ${(data.leaveBalances || []).length ? (data.leaveBalances || []).slice(0, 20).map((row) => `<article class="listItem"><div><strong>${escapeHtml(`${row.first_name || ""} ${row.last_name || ""}`.trim() || row.employee_code)}</strong><span>${escapeHtml(String(row.leave_type || "leave").toUpperCase())}: ${escapeHtml(formatHoursFromMinutes(row.balance_minutes))} available · ${escapeHtml(formatHoursFromMinutes(row.used_minutes_lifetime))} used lifetime</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No PTO or sick leave balances yet.</div>`}
+      <div class="automationDivider">Recent Bonus / Pay Bump Awards</div>
+      ${(data.bonusAwards || []).length ? (data.bonusAwards || []).slice(0, 10).map((award) => `<article class="listItem"><div><strong>${escapeHtml(`${award.first_name || ""} ${award.last_name || ""}`.trim() || award.employee_code)}</strong><span>${escapeHtml(award.rule_name || "Bonus award")} · ${moneyFromCents(award.bonus_cents || 0)} bonus · ${moneyFromCents(award.pay_bump_cents || 0)}/hr bump</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No bonus or pay-bump awards yet.</div>`}
       <div class="automationDivider">Current Pay Period</div>
-      ${employees.length ? employees.map((row) => `<article class="listItem"><div><strong>${escapeHtml(`${row.first_name || ""} ${row.last_name || ""}`.trim() || row.account_number || row.employee_code)}</strong><span>ID# ${escapeHtml(row.account_number || row.employee_code)} · ${escapeHtml(formatHoursFromMinutes(row.minutes_worked))} hours · ${moneyFromCents(row.estimated_pay_cents || 0)} estimated pay</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No active employees in this payroll view.</div>`}
+      ${employees.length ? employees.map((row) => `<article class="listItem"><div><strong>${escapeHtml(`${row.first_name || ""} ${row.last_name || ""}`.trim() || row.account_number || row.employee_code)}</strong><span>ID# ${escapeHtml(row.employee_code || row.account_number)} · ${escapeHtml(formatHoursFromMinutes(row.minutes_worked))} period hours · ${escapeHtml(formatHoursFromMinutes(row.all_time_minutes_worked))} all-time hours · ${moneyFromCents(row.estimated_pay_cents || 0)} estimated pay</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No active employees in this payroll view.</div>`}
     `;
   } catch (err) {
     target.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
