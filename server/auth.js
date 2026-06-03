@@ -7,7 +7,7 @@ const { sendEmail } = require("./mailer");
 const { requireAuth } = require("./middleware");
 
 const router = express.Router();
-const { normalizeAccountNumber, isValidAccountNumber, createUniqueAccountNumber } = require("./id-utils");
+const { normalizeAccountNumber, isValidAccountNumber, createUniqueBusinessAccountNumber } = require("./id-utils");
 
 const ACCOUNT_ID_RULE_MESSAGE = "ID# must be exactly 9 digits.";
 
@@ -16,12 +16,24 @@ const PASSWORD_MAX_LENGTH = 128;
 const PASSWORD_RULE_MESSAGE =
   `Password must be ${PASSWORD_MIN_LENGTH} to ${PASSWORD_MAX_LENGTH} characters. Spaces and symbols are allowed.`;
 
+const TWO_FACTOR_CODE_TTL_MINUTES = 10;
+const TWO_FACTOR_CODE_RESEND_SECONDS = 60;
+const TWO_FACTOR_CODE_MAX_ATTEMPTS = 5;
+
 function makeToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function hashTwoFactorCode(userId, code) {
+  const secret = process.env.TWO_FACTOR_CODE_SECRET || process.env.JWT_ACCESS_SECRET || "shiftahoy-local-dev-secret";
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`${userId}:${String(code || "").replace(/\D/g, "")}`)
+    .digest("hex");
 }
 
 function normalizeUsername(username) {
@@ -64,6 +76,32 @@ function buildFullLogin(username, businessSlug) {
   return `${username}/${businessSlug}`;
 }
 
+function publicBusiness(business) {
+  if (!business) return null;
+  return {
+    id: business.id,
+    businessName: business.business_name,
+    businessSlug: business.business_slug,
+    businessAccountNumber: business.account_number,
+    planCode: business.plan_code
+  };
+}
+
+async function findBusinessByAccountNumber(value) {
+  const accountNumber = normalizeAccountNumber(value);
+  if (!isValidAccountNumber(accountNumber)) return null;
+
+  const result = await pool.query(
+    `SELECT id, business_name, business_slug, account_number, plan_code
+     FROM businesses
+     WHERE account_number = $1
+     LIMIT 1`,
+    [accountNumber]
+  );
+
+  return result.rows[0] || null;
+}
+
 async function createUniqueBusinessSlug(client, businessName) {
   const baseSlug = normalizeBusinessSlugForSignup(businessName);
 
@@ -90,35 +128,47 @@ async function createUniqueBusinessSlug(client, businessName) {
   return `${baseSlug}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-async function findUserForLogin(login) {
+async function findUserForLogin(login, businessAccountNumber = null) {
   const normalizedLogin = String(login || "").toLowerCase().trim();
 
   if (!normalizedLogin) {
     return null;
   }
 
+  const business = await findBusinessByAccountNumber(businessAccountNumber);
+
+  if (!business) {
+    return null;
+  }
+
   const selectSql = `SELECT
-         id,
-         business_id,
-         first_name,
-         last_name,
-         email,
-         account_number,
-         username,
-         full_login,
-         password_hash,
-         role,
-         can_manage_schedule,
-         email_verified
-       FROM users
-       WHERE active = true`;
+         u.id,
+         u.business_id,
+         u.first_name,
+         u.last_name,
+         u.email,
+         u.account_number,
+         u.username,
+         u.full_login,
+         u.password_hash,
+         u.role,
+         u.can_manage_schedule,
+         u.email_verified,
+         u.two_factor_enabled,
+         b.account_number AS business_account_number,
+         b.business_name,
+         b.business_slug
+       FROM users u
+       JOIN businesses b ON b.id = u.business_id
+       WHERE u.active = true
+         AND u.business_id = $1`;
 
   if (normalizedLogin.includes("@")) {
     const emailResult = await pool.query(
       `${selectSql}
-         AND lower(email) = $1
+         AND lower(u.email) = $2
        LIMIT 1`,
-      [normalizedLogin]
+      [business.id, normalizedLogin]
     );
 
     return emailResult.rows[0] || null;
@@ -131,9 +181,9 @@ async function findUserForLogin(login) {
 
   const idResult = await pool.query(
     `${selectSql}
-       AND account_number = $1
+       AND u.account_number = $2
      LIMIT 1`,
-    [accountNumber]
+    [business.id, accountNumber]
   );
 
   return idResult.rows[0] || null;
@@ -144,9 +194,10 @@ async function verifyActorPassword(userId, password) {
 
   const result = await pool.query(
     `SELECT password_hash
-     FROM users
-     WHERE id = $1
-       AND active = true`,
+     FROM users u
+     JOIN businesses b ON b.id = u.business_id
+     WHERE u.id = $1
+       AND u.active = true`,
     [userId]
   );
 
@@ -165,7 +216,9 @@ function createAccessToken(user) {
       accountNumber: user.account_number,
       role: user.role,
       canManageSchedule: user.can_manage_schedule,
-      emailVerified: user.email_verified
+      emailVerified: user.email_verified,
+      twoFactorEnabled: user.two_factor_enabled === true,
+      businessAccountNumber: user.business_account_number
     },
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: "15m" }
@@ -185,7 +238,7 @@ function createRefreshToken(user) {
 function setRefreshCookie(res, token) {
   res.cookie("shiftahoy_refresh", token, {
     httpOnly: true,
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
@@ -203,7 +256,10 @@ function publicUser(user) {
     canManageSchedule: user.can_manage_schedule,
     emailVerified: user.email_verified,
     firstName: user.first_name,
-    lastName: user.last_name
+    lastName: user.last_name,
+    businessAccountNumber: user.business_account_number,
+    businessName: user.business_name,
+    twoFactorEnabled: user.two_factor_enabled === true
   };
 }
 
@@ -242,14 +298,14 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    const accountNumber = await createUniqueAccountNumber(client, "owner");
-    const fullLogin = accountNumber;
+    const businessAccountNumber = await createUniqueBusinessAccountNumber(client, "business");
+    const fullLogin = `owner/${businessAccountNumber}`;
 
     const businessResult = await client.query(
-      `INSERT INTO businesses (business_name, business_slug, plan_code, plan_employee_limit)
-       VALUES ($1, $2, 'free', 1)
-       RETURNING id, business_name, business_slug, plan_code, plan_employee_limit`,
-      [businessName.trim(), businessSlug]
+      `INSERT INTO businesses (business_name, business_slug, account_number, plan_code, plan_employee_limit)
+       VALUES ($1, $2, $3, 'free', 1)
+       RETURNING id, business_name, business_slug, account_number, plan_code, plan_employee_limit`,
+      [businessName.trim(), businessSlug, businessAccountNumber]
     );
 
     const business = businessResult.rows[0];
@@ -267,7 +323,7 @@ router.post("/signup", async (req, res) => {
          role,
          can_manage_schedule
        )
-       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, 'owner', true)
+       VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, 'owner', true)
        RETURNING
          id,
          business_id,
@@ -285,7 +341,7 @@ router.post("/signup", async (req, res) => {
         firstName.trim(),
         lastName.trim(),
         normalizedEmail,
-        accountNumber,
+        businessAccountNumber,
         fullLogin,
         passwordHash
       ]
@@ -322,12 +378,13 @@ router.post("/signup", async (req, res) => {
     await sendEmail({
       to: user.email,
       subject: "Verify your Shift Ahoy email",
-      html: `<p>Verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>Your permanent Shift Ahoy ID# is <strong>${accountNumber}</strong>.</p>`
+      html: `<p>Verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>Your permanent Shift Ahoy Business ID# is <strong>${businessAccountNumber}</strong>.</p>`
     });
 
     res.status(201).json({
-      message: `Owner account created. Your permanent ID# is ${accountNumber}. Check your email for the verification link.`,
-      accountNumber,
+      message: `Owner account created. Your permanent Business ID# is ${businessAccountNumber}. Check your email for the verification link.`,
+      businessAccountNumber,
+      accountNumber: businessAccountNumber,
       fullLogin,
       businessName: business.business_name,
       businessSlug: business.business_slug
@@ -388,24 +445,124 @@ router.get("/verify-email", async (req, res) => {
   res.send("Email verified. You can now return to Shift Ahoy.");
 });
 
-router.post("/login", async (req, res) => {
-  const { login, password } = req.body;
+router.post("/business/lookup", async (req, res) => {
+  const business = await findBusinessByAccountNumber(req.body.businessAccountNumber || req.body.businessId);
 
-  if (!login || !password) {
-    return res.status(400).json({ error: "Login and password are required." });
+  if (!business) {
+    return res.status(404).json({ error: "No business was found for that Business ID#." });
   }
 
-  const user = await findUserForLogin(login);
+  res.json({ business: publicBusiness(business) });
+});
+
+router.post("/login", async (req, res) => {
+  const { login, password, businessAccountNumber, twoFactorCode } = req.body;
+
+  if (!businessAccountNumber || !login || !password) {
+    return res.status(400).json({ error: "Business ID#, login, and password are required." });
+  }
+
+  const user = await findUserForLogin(login, businessAccountNumber);
 
   if (!user) {
-    return res.status(401).json({ error: "Invalid login or password." });
+    return res.status(401).json({ error: "Invalid Business ID#, login, or password." });
   }
 
   const normalizedPassword = normalizePassword(password);
   const valid = await argon2.verify(user.password_hash, normalizedPassword);
 
   if (!valid) {
-    return res.status(401).json({ error: "Invalid login or password." });
+    return res.status(401).json({ error: "Invalid Business ID#, login, or password." });
+  }
+
+  if (user.two_factor_enabled === true) {
+    const cleanCode = String(twoFactorCode || "").replace(/\D/g, "").slice(0, 6);
+
+    if (!cleanCode) {
+      const recentCode = await pool.query(
+        `SELECT id, created_at
+         FROM two_factor_login_codes
+         WHERE user_id = $1
+           AND used_at IS NULL
+           AND expires_at > now()
+           AND created_at > now() - ($2::int * interval '1 second')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [user.id, TWO_FACTOR_CODE_RESEND_SECONDS]
+      );
+
+      if (recentCode.rows.length > 0) {
+        return res.status(429).json({
+          twoFactorRequired: true,
+          error: `A verification code was already sent. Please wait ${TWO_FACTOR_CODE_RESEND_SECONDS} seconds before requesting another one.`
+        });
+      }
+
+      const rawCode = String(crypto.randomInt(100000, 1000000));
+      await pool.query(
+        `UPDATE two_factor_login_codes
+         SET used_at = now()
+         WHERE user_id = $1
+           AND used_at IS NULL`,
+        [user.id]
+      );
+      await pool.query(
+        `INSERT INTO two_factor_login_codes (user_id, code_hash, expires_at, sent_to)
+         VALUES ($1, $2, now() + ($3::int * interval '1 minute'), $4)`,
+        [user.id, hashTwoFactorCode(user.id, rawCode), TWO_FACTOR_CODE_TTL_MINUTES, user.email || null]
+      );
+
+      if (user.email) {
+        await sendEmail({
+          to: user.email,
+          subject: "Your Shift Ahoy verification code",
+          html: `<p>Your Shift Ahoy verification code is <strong>${rawCode}</strong>.</p><p>This code expires in ${TWO_FACTOR_CODE_TTL_MINUTES} minutes. Shift Ahoy will never ask for this code outside the login screen.</p>`
+        });
+      }
+
+      return res.status(202).json({
+        twoFactorRequired: true,
+        message: "A verification code was sent to the email on this profile."
+      });
+    }
+
+    const codeResult = await pool.query(
+      `SELECT id, code_hash, attempts_count
+       FROM two_factor_login_codes
+       WHERE user_id = $1
+         AND expires_at > now()
+         AND used_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id]
+    );
+
+    if (codeResult.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid or expired verification code." });
+    }
+
+    const codeRow = codeResult.rows[0];
+    if (Number(codeRow.attempts_count || 0) >= TWO_FACTOR_CODE_MAX_ATTEMPTS) {
+      await pool.query(`UPDATE two_factor_login_codes SET used_at = now() WHERE id = $1`, [codeRow.id]);
+      return res.status(401).json({ error: "Too many verification attempts. Request a new code." });
+    }
+
+    if (codeRow.code_hash !== hashTwoFactorCode(user.id, cleanCode)) {
+      const attempts = Number(codeRow.attempts_count || 0) + 1;
+      await pool.query(
+        `UPDATE two_factor_login_codes
+         SET attempts_count = $2,
+             used_at = CASE WHEN $2 >= $3 THEN now() ELSE used_at END
+         WHERE id = $1`,
+        [codeRow.id, attempts, TWO_FACTOR_CODE_MAX_ATTEMPTS]
+      );
+      return res.status(401).json({ error: "Invalid or expired verification code." });
+    }
+
+    await pool.query(
+      `UPDATE two_factor_login_codes SET used_at = now() WHERE id = $1`,
+      [codeRow.id]
+    );
   }
 
   const accessToken = createAccessToken(user);
@@ -458,21 +615,26 @@ router.post("/refresh", async (req, res) => {
 
   const userResult = await pool.query(
     `SELECT
-       id,
-       business_id,
-       first_name,
-       last_name,
-       email,
-       account_number,
-       username,
-       full_login,
-       password_hash,
-       role,
-       can_manage_schedule,
-       email_verified
-     FROM users
-     WHERE id = $1
-       AND active = true`,
+       u.id,
+       u.business_id,
+       u.first_name,
+       u.last_name,
+       u.email,
+       u.account_number,
+       u.username,
+       u.full_login,
+       u.password_hash,
+       u.role,
+       u.can_manage_schedule,
+       u.email_verified,
+       u.two_factor_enabled,
+       b.account_number AS business_account_number,
+       b.business_name,
+       b.business_slug
+     FROM users u
+     JOIN businesses b ON b.id = u.business_id
+     WHERE u.id = $1
+       AND u.active = true`,
     [payload.id]
   );
 
@@ -662,6 +824,87 @@ router.post("/reset-password", async (req, res) => {
   res.json({ message: "Password reset successful. Please log in again." });
 });
 
+router.put("/profile", requireAuth, async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const currentPassword = req.body.currentPassword;
+
+  if (!currentPassword) {
+    return res.status(400).json({ error: "Current password is required." });
+  }
+
+  if (email && !isValidEmail(email)) {
+    return res.status(400).json({ error: "Enter a valid email address." });
+  }
+
+  const passwordOk = await verifyActorPassword(req.user.id, currentPassword);
+  if (!passwordOk) {
+    return res.status(403).json({ error: "Wrong password." });
+  }
+
+  const result = await pool.query(
+    `UPDATE users
+     SET email = $1,
+         email_verified = CASE WHEN lower(COALESCE(email, '')) = lower(COALESCE($1, '')) THEN email_verified ELSE false END,
+         updated_at = now()
+     WHERE id = $2
+       AND business_id = $3
+     RETURNING id, business_id, first_name, last_name, email, account_number, username, full_login, role, can_manage_schedule, email_verified, two_factor_enabled`,
+    [email || null, req.user.id, req.user.businessId]
+  );
+
+  res.json({ user: publicUser({ ...result.rows[0], business_account_number: req.user.businessAccountNumber }) });
+});
+
+router.put("/profile/password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Current password and new password are required." });
+  }
+
+  const normalizedPassword = normalizePassword(newPassword);
+  if (!isValidPassword(normalizedPassword)) {
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
+  }
+
+  const passwordOk = await verifyActorPassword(req.user.id, currentPassword);
+  if (!passwordOk) {
+    return res.status(403).json({ error: "Wrong password." });
+  }
+
+  const passwordHash = await argon2.hash(normalizedPassword, { type: argon2.argon2id });
+  await pool.query(
+    `UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2 AND business_id = $3`,
+    [passwordHash, req.user.id, req.user.businessId]
+  );
+  await pool.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [req.user.id]);
+
+  res.json({ message: "Password changed. Please log in again." });
+});
+
+router.put("/profile/2fa", requireAuth, async (req, res) => {
+  const enabled = req.body.twoFactorEnabled === true;
+  const passwordOk = await verifyActorPassword(req.user.id, req.body.currentPassword);
+
+  if (!passwordOk) {
+    return res.status(403).json({ error: "Wrong password." });
+  }
+
+  if (enabled) {
+    const emailResult = await pool.query(`SELECT email FROM users WHERE id = $1`, [req.user.id]);
+    if (!emailResult.rows[0]?.email) {
+      return res.status(400).json({ error: "Add an email address before enabling 2FA." });
+    }
+  }
+
+  await pool.query(
+    `UPDATE users SET two_factor_enabled = $1, updated_at = now() WHERE id = $2 AND business_id = $3`,
+    [enabled, req.user.id, req.user.businessId]
+  );
+
+  res.json({ settings: { twoFactorEnabled: enabled } });
+});
+
 router.post("/logout", async (req, res) => {
   const refreshToken = req.cookies.shiftahoy_refresh;
 
@@ -703,7 +946,7 @@ router.put("/settings", requireAuth, async (req, res) => {
   try {
     const passwordOk = await verifyActorPassword(req.user.id, req.body.actorPassword);
     if (!passwordOk) {
-      return res.status(403).json({ error: "Wrong owner password." });
+      return res.status(403).json({ error: "Wrong password." });
     }
 
     const twoFactorEnabled = req.body.twoFactorEnabled === true;
