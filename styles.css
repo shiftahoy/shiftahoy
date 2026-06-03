@@ -4382,3 +4382,29 @@ body.theme-dark .clockStatusPreview {
   border-top-right-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
 }
+
+/* Business scoped login / clock gate and secure employee password controls. */
+.businessGateCard {
+  margin-bottom: 14px;
+}
+
+.passwordFieldRow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.passwordFieldRow input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inlinePasswordButton {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding-inline: 12px;
+}
+
+.theme-dark .passwordFieldRow input {
+  color: inherit;
+}
