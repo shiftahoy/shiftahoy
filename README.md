@@ -1,13 +1,66 @@
 # Shift Ahoy
 
+## Complete PTO, Sick Leave, Bonus, and Pay-Bump Engine
+
+This package expands the earlier leave foundation into a working operational balance system:
+
+- PTO and sick leave can be enabled separately from Payroll / Leave settings.
+- Owners/managers can configure accrual by worked hour, max balances, yearly reset dates, negative-balance policy, and automatic accrual on clock-out.
+- Employees now see PTO and sick leave balances, lifetime used/accrued totals, recent leave transactions, violations, and bonus/pay-bump awards in the Employee Portal payroll area.
+- Time-off requests now support Unpaid, PTO, or Sick Leave plus requested paid hours. Approved PTO/sick requests deduct the matching balance; denials of previously approved requests restore the balance.
+- Managers can run pay-period accruals, manually adjust balances with required reasons, and review balances by location.
+- Bonus rules can reward employees after reaching hour milestones with one-time or recurring bonuses. A separate automatic pay-bump toggle can raise hourly pay after a configured number of worked hours, repeat per cycle, and stop after a manager-defined cap.
+- Bonus/pay-bump evaluation can run automatically on clock-out or manually from the Manager Portal.
+- All balance changes are stored as append-only leave transactions for auditability instead of silently overwriting balances.
+
+> PTO, sick leave, bonuses, pay bumps, overtime, final payroll, and leave compliance vary by jurisdiction. Treat Shift Ahoy calculations as operational records and confirm final payroll/legal compliance with your payroll provider and local requirements.
+
+
+## Web-verified hardening pass
+
+This package includes a second implementation pass based on current security and reliability guidance for Electron, PostgreSQL-backed clocking, and email-based verification codes. The time clock now uses both database protection and a transaction-scoped advisory lock to prevent duplicate concurrent punches. Email 2FA codes are hashed with a server-side secret, expire quickly, are single-use, include attempt counters, and throttle rapid resend attempts. The Electron shell now includes a restrictive Content Security Policy and keeps clock routes limited to requests from the desktop clock UI.
+
 Shift Ahoy is a desktop employee scheduling system for small teams and multi-location businesses. It combines an Electron desktop app with a local Node/Express API and PostgreSQL database so owners and managers can build schedules, manage employees, review time-off requests, publish schedules, and monitor coverage health from one organized dashboard.
 
+## Business ID#, Company Employee IDs, Secure Clock, 2FA, Leave, and Plan Limits
+
+This update changes Shift Ahoy identity from globally generated employee/user ID# values to a business-scoped model:
+
+- New owner signup creates a permanent unique 9 digit **Business ID#** for the business workspace.
+- Employee creation now requires the company's existing 9 digit **Employee Company ID#** instead of auto-generating one.
+- Employee Company ID# values must be unique inside the same Business ID#, but the same employee number may exist in a different business.
+- Login starts with a Business ID# gate. After the Business ID# is validated, the Login and Clock In / Out panels become available for that business.
+- Users log in with Business ID# + Employee Company ID# or email + password. When 2FA is enabled, an email verification code is required after the password step.
+- Employees can update their profile email, change their password, and enable or disable email-based 2FA from their profile/security workflow.
+- Clock In / Out requires Business ID# context and, by default, a manager or owner unlocks the clock portal with their own password before employees can punch.
+- Clock In / Out uses row locking plus a database-level one-open-entry-per-employee rule to prevent duplicate clock-ins from multiple devices.
+- Payroll settings include in-app clock enablement, manager/owner clock-session requirement, scheduled clock-in enforcement, early grace, late grace, and clock-out grace controls.
+- Early blocked clock-in attempts and late/unscheduled punches are logged as employee violations with date, time, and reason.
+- Employee payroll summaries include current pay-period hours, all-time hours, recent clock history, and violation history.
+- Manager payroll summaries include current period hours, all-time hours, estimated pay, alerts, and violations.
+- Leave and rewards foundations were added for PTO, sick leave, accrual tiers by years of service, employee balances, leave transactions, recurring/capped bonus rules, bonus awards, and pay bump tracking.
+- Employee orientation/start date is required so service-based PTO, sick leave, bonuses, and pay bumps can be calculated consistently.
+- Plan location limits are now stored and enforced: Free = 1 location, Plus = 3, Premium = 5, Pro = unlimited.
+
+
+
+## Manager-Controlled Automatic Pay Bump Rules
+
+Shift Ahoy now includes a dedicated Manager Portal pay-bump control that can be turned on or off separately from cash bonuses. Managers can set:
+
+- the number of worked hours required before a raise is earned;
+- the hourly pay bump amount;
+- whether the bump repeats every threshold cycle;
+- the maximum number of bump/reward cycles so raises stop after the cap;
+- whether the award engine runs automatically on clock-out or only when manually evaluated.
+
+When enabled, Shift Ahoy evaluates completed clock entries against the rule, creates an award record, and applies the hourly pay-rate increase to the employee record only once per eligible cycle. Duplicate awards are prevented with the employee/rule/cycle uniqueness constraint, so employees cannot receive the same bump twice for the same milestone.
 
 ## ID# Login and Payroll Time Clock Updates
 
-- Owner accounts no longer collect a username during signup. Shift Ahoy automatically creates a permanent unique 9 digit ID# for the owner.
-- Employee creation no longer asks for Employee # or Username. Shift Ahoy automatically creates a permanent unique 9 digit ID# for each employee and stores it as the employee code used throughout schedules.
-- ID# values are issued through `issued_account_ids` and are never reused, even if an employee is deleted or deactivated.
+- Owner accounts no longer collect a username during signup. Shift Ahoy automatically creates a permanent unique 9 digit Business ID# for the business workspace.
+- Employee creation now requires the company's existing 9 digit Employee Company ID# and stores it as the employee code used throughout schedules.
+- Business ID# values are issued through `issued_account_ids` and are never reused. Employee Company ID# values are unique inside each business.
 - Login now accepts ID# or verified email plus password. The old Username/Business login flow has been removed from the UI.
 - The dashboard greeting, settings profile, employee portal identity, employee list, and schedule table display ID# instead of username or Employee #.
 - The login screen now includes a compact Clock In / Out panel. Employees enter their 9 digit ID#, scan it, and Shift Ahoy shows the correct Clock In or Clock Out action based on their current status. After a successful punch, the ID# field is cleared.
