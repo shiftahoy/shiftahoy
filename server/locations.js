@@ -131,6 +131,23 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
   }
 
   try {
+    const limitResult = await pool.query(
+      `SELECT COALESCE(b.plan_location_limit, p.location_limit) AS location_limit, count(l.id)::int AS location_count
+       FROM businesses b
+       LEFT JOIN plans p ON p.code = b.plan_code
+       LEFT JOIN locations l ON l.business_id = b.id
+       WHERE b.id = $1
+       GROUP BY b.id, p.location_limit`,
+      [req.user.businessId]
+    );
+
+    const limit = limitResult.rows[0]?.location_limit;
+    const count = Number(limitResult.rows[0]?.location_count || 0);
+
+    if (limit !== null && limit !== undefined && count >= Number(limit)) {
+      return res.status(402).json({ error: "Location limit reached for your current plan. Upgrade to add more locations." });
+    }
+
     const result = await pool.query(
       `INSERT INTO locations (business_id, name, address)
        VALUES ($1, $2, $3)
