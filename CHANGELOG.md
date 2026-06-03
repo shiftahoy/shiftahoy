@@ -1,3 +1,115 @@
+
+# Shift Ahoy Dedicated Automatic Pay Bump Control
+
+This update expands the v3 rewards engine with a clearer Manager Portal pay-bump workflow.
+
+## Added
+
+- Dedicated Automatic Pay Bump toggle in the Manager Portal payroll settings.
+- Configurable hours-required threshold for pay bumps.
+- Configurable hourly bump amount.
+- Repeat-every-cycle option for milestone raises.
+- Maximum pay-bump/reward cycle cap so raises stop after the configured limit.
+- Help text and labels that match the existing Shift Ahoy card, field, and portal design system.
+
+## Updated
+
+- Cash bonuses and hourly pay bumps are now presented as separate controls while still using the same audited reward engine.
+- Saving payroll settings now enables the reward engine when either cash bonuses or automatic pay bumps are enabled.
+- README now documents manager-controlled pay bump automation and cap behavior.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+# Shift Ahoy Complete PTO, Sick Leave, Bonus, and Pay-Bump Engine
+
+This update expands the business-ID and secure-clock update into a complete leave and reward workflow.
+
+## Added
+
+- PTO and sick leave balance tables, transaction ledger, accrual run tracking, and year-end run tracking.
+- Time-off request fields for unpaid/PTO/sick leave and requested paid hours.
+- PTO/sick approval deductions and denial restoration logic.
+- Automatic leave accrual on clock-out when enabled.
+- Manual pay-period accrual endpoint with duplicate-run protection.
+- Manager manual balance adjustments with required reasons and audit logs.
+- Bonus and pay-bump rules with hour thresholds, recurring cycles, max cycles, and optional automatic pay-rate updates.
+- Automatic bonus/pay-bump evaluation on clock-out when enabled.
+- Manager Portal controls for PTO, sick leave, accrual, clock grace windows, bonus rules, and manual accrual/evaluation actions.
+- Employee Portal display for leave balances, leave usage, clock violations, all-time hours, and bonus/pay-bump awards.
+
+## Updated
+
+- Payroll summary APIs now include PTO/sick balances and recent bonus awards.
+- Manager payroll summaries now include location-filtered leave balances and bonus award history.
+- README now documents the complete PTO, sick leave, bonus, and pay-bump workflow.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
+# Shift Ahoy Web-Verified Reliability and Security Expansion
+
+This follow-up pass hardens the previous Business ID#, clock portal, 2FA, and payroll update after reviewing current implementation guidance.
+
+## Added
+
+- Transaction-scoped PostgreSQL advisory locking around clock in/out actions, in addition to the existing unique open-entry guard.
+- Desktop-only clock request header required by clock session, lookup, and punch routes.
+- Email 2FA attempt counters, resend throttling, single-use invalidation, and sent-to tracking.
+- Restrictive Electron Content Security Policy in the desktop HTML shell.
+
+## Updated
+
+- 2FA code hashing now uses an HMAC keyed by `TWO_FACTOR_CODE_SECRET` when present, falling back to the JWT secret for local development.
+- Clock punch transaction flow now serializes per business + employee ID# to prevent device-race exploits before checking/inserting open entries.
+- README now documents the web-verified hardening pass and implementation notes.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
+# Shift Ahoy Business ID, Secure Clock, 2FA, Leave, Bonus, and Plan Location Limit Update
+
+## Added
+
+- Permanent unique 9 digit Business ID# generation during owner signup.
+- Business ID# gate before Login and Clock In / Out become visible.
+- Business-scoped login using Business ID# plus Employee Company ID# or email and password.
+- Email-based 2FA support for users who enable it on their profile.
+- Profile endpoints for changing email, changing password, and enabling/disabling 2FA.
+- Manager/owner clock portal unlock with a signed clock session token.
+- Clock portal settings for in-app clock enablement, manager/owner session requirement, scheduled clock-in enforcement, early grace, late grace, and clock-out grace.
+- Payroll violation log with employee, date/time, scheduled time, violation type, and reason.
+- Employee payroll all-time hours and violation history.
+- Manager payroll all-time hours, alerts, and violations.
+- PTO and sick leave data model with accrual rules, employee balances, and leave transactions.
+- Bonus and pay-bump data model with hour thresholds, recurring rules, caps, and award tracking.
+- Plan location limits: Free 1, Plus 3, Premium 5, Pro unlimited.
+
+## Updated
+
+- Employee creation now requires a company-provided 9 digit Employee Company ID# instead of auto-generating one.
+- Employee Company ID# values are unique inside the same Business ID#.
+- Owner signup messaging now refers to Business ID# instead of employee/user ID#.
+- Clock In / Out now uses Business ID# + Employee Company ID# and prevents duplicate open punches with database constraints and transactional row locks.
+- Manager credential prompts now ask for the current authorized user password instead of saying owner password where a manager can perform the action.
+- Employee password fields are masked by default and include Show and Copy controls.
+- Orientation / Start Date is required for new employees.
+- README updated for the new identity, security, clock, leave, bonus, and plan-limit workflows.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
+
+---
+
 # Shift Ahoy Immutable ID# and Payroll Time Clock Update
 
 This update replaces usernames and manually-entered employee numbers with permanent unique 9 digit ID# values and adds the first payroll/time-clock workflow.
