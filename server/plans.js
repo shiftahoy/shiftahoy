@@ -24,13 +24,13 @@ async function verifyActorPassword(userId, password) {
 router.get("/", requireAuth, async (req, res) => {
   try {
     const plansResult = await pool.query(
-      `SELECT code, name, monthly_price_cents, employee_limit
+      `SELECT code, name, monthly_price_cents, employee_limit, location_limit
        FROM plans
        ORDER BY monthly_price_cents`
     );
 
     const businessResult = await pool.query(
-      `SELECT plan_code
+      `SELECT plan_code, plan_location_limit
        FROM businesses
        WHERE id = $1`,
       [req.user.businessId]
@@ -56,11 +56,11 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
   try {
     const passwordOk = await verifyActorPassword(req.user.id, actorPassword);
     if (!passwordOk) {
-      return res.status(403).json({ error: "Wrong owner password." });
+      return res.status(403).json({ error: "Wrong password." });
     }
 
     const planResult = await pool.query(
-      `SELECT code, name, monthly_price_cents, employee_limit
+      `SELECT code, name, monthly_price_cents, employee_limit, location_limit
        FROM plans
        WHERE code = $1`,
       [planCode]
@@ -73,7 +73,7 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
     const plan = planResult.rows[0];
 
     const currentResult = await pool.query(
-      `SELECT plan_code
+      `SELECT plan_code, plan_location_limit
        FROM businesses
        WHERE id = $1`,
       [req.user.businessId]
@@ -84,9 +84,10 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
       `UPDATE businesses
        SET plan_code = $1,
            plan_employee_limit = $2,
+           plan_location_limit = $3,
            updated_at = now()
-       WHERE id = $3`,
-      [plan.code, plan.employee_limit, req.user.businessId]
+       WHERE id = $4`,
+      [plan.code, plan.employee_limit, plan.location_limit, req.user.businessId]
     );
 
     await logAudit({
@@ -101,7 +102,8 @@ router.post("/change", requireAuth, requireOwner, async (req, res) => {
     res.json({
       message: "Plan updated immediately. Employee records were not deleted.",
       currentPlan: plan.code,
-      employeeLimit: plan.employee_limit
+      employeeLimit: plan.employee_limit,
+      locationLimit: plan.location_limit
     });
   } catch (err) {
     console.error(err);
