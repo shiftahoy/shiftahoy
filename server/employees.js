@@ -5,7 +5,7 @@ const { logAudit } = require("./audit");
 const { requireAuth, requireScheduleManager, requireOwner } = require("./middleware");
 
 const router = express.Router();
-const { createUniqueAccountNumber } = require("./id-utils");
+const { normalizeAccountNumber, isValidAccountNumber } = require("./id-utils");
 
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
@@ -58,6 +58,25 @@ function normalizeDaysOff(daysOff) {
   }
 
   return [...unique].sort();
+}
+
+function normalizeDate(value) {
+  const text = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+async function employeeCodeAvailable(clientOrPool, businessId, employeeCode, excludingEmployeeId = null) {
+  const result = await clientOrPool.query(
+    `SELECT id
+     FROM employees
+     WHERE business_id = $1
+       AND employee_code = $2
+       AND active = true
+       AND ($3::uuid IS NULL OR id <> $3::uuid)
+     LIMIT 1`,
+    [businessId, employeeCode, excludingEmployeeId]
+  );
+  return result.rows.length === 0;
 }
 
 async function verifyActorPassword(userId, password) {
@@ -292,6 +311,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     firstName,
     lastName,
     password,
+    employeeCode,
     title,
     priority,
     employmentType,
@@ -301,15 +321,21 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     overtimeAllowed = true,
     overtimeThresholdHours = 40,
     minRestHours = 8,
-    orientationStart,
     preferredShiftId,
     availability,
     daysOff,
     canManageSchedule = false
   } = req.body;
 
-  if (!locationId || !password) {
-    return res.status(400).json({ error: "Location and password are required. Shift Ahoy will create the employee ID# automatically." });
+  const safeEmployeeCode = normalizeAccountNumber(employeeCode);
+  const safeOrientationStart = normalizeDate(req.body.orientationStart || req.body.orientation_start);
+
+  if (!locationId || !password || !safeEmployeeCode || !safeOrientationStart) {
+    return res.status(400).json({ error: "Location, Employee Company ID#, orientation start date, and password are required." });
+  }
+
+  if (!isValidAccountNumber(safeEmployeeCode)) {
+    return res.status(400).json({ error: "Employee Company ID# must be exactly 9 digits." });
   }
 
   const normalizedPassword = normalizePassword(password);
@@ -365,9 +391,13 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const accountNumber = await createUniqueAccountNumber(client, "employee");
+    if (!(await employeeCodeAvailable(client, req.user.businessId, safeEmployeeCode))) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "That Employee Company ID# already exists for this business." });
+    }
+
     const passwordHash = await argon2.hash(normalizedPassword, { type: argon2.argon2id });
-    const safeFirstName = String(firstName || "").trim() || accountNumber;
+    const safeFirstName = String(firstName || "").trim() || safeEmployeeCode;
     const safeLastName = String(lastName || "").trim() || "Employee";
     const safeCanManage = req.user.role === "owner" ? Boolean(canManageSchedule) : false;
     const safeRole = safeCanManage ? "manager" : "employee";
@@ -392,7 +422,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
         req.user.businessId,
         safeFirstName,
         safeLastName,
-        accountNumber,
+        safeEmployeeCode,
         passwordHash,
         safeRole,
         safeCanManage
@@ -424,7 +454,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
         locationId,
         userResult.rows[0].id,
         safePriority,
-        accountNumber,
+        safeEmployeeCode,
         String(title || "").trim() || "Employee",
         safeEmploymentType,
         safeWeeklyHours,
@@ -433,7 +463,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
         safeOvertimeAllowed,
         safeOvertimeThresholdHours,
         safeMinRestHours,
-        orientationStart || null,
+        safeOrientationStart,
         preferredShiftId || null
       ]
     );
@@ -465,7 +495,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
       action: "Employee created",
       entityType: "employee",
       entityId: employee.id,
-      details: `Employee ID# ${employee.employee_code} created`
+      details: `Employee Company ID# ${employee.employee_code} created`
     });
 
     await client.query("COMMIT");
@@ -476,7 +506,7 @@ router.post("/", requireAuth, requireScheduleManager, async (req, res) => {
     console.error(err);
 
     if (err.code === "23505") {
-      return res.status(409).json({ error: "A generated ID# was already used. Please try again." });
+      return res.status(409).json({ error: "That Employee Company ID# already exists for this business." });
     }
 
     res.status(500).json({ error: "Employee creation failed." });
@@ -491,6 +521,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
     firstName,
     lastName,
     password,
+    employeeCode,
     title,
     priority,
     employmentType,
@@ -500,7 +531,6 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
     overtimeAllowed = true,
     overtimeThresholdHours = 40,
     minRestHours = 8,
-    orientationStart,
     preferredShiftId,
     availability,
     daysOff,
@@ -551,6 +581,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   const safeOvertimeAllowed = overtimeAllowed !== false;
   const safeOvertimeThresholdHours = Math.max(1, Math.min(168, Number(overtimeThresholdHours) || 40));
   const safeMinRestHours = Math.max(0, Math.min(24, Number(minRestHours) || 8));
+  const safeOrientationStart = normalizeDate(req.body.orientationStart || req.body.orientation_start) || employeeRow.orientation_start;
 
   if (password && !isValidPassword(password)) {
     return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
@@ -561,7 +592,15 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const safeEmployeeCode = employeeRow.employee_code;
+    const safeEmployeeCode = normalizeAccountNumber(employeeCode || employeeRow.employee_code);
+
+    if (!isValidAccountNumber(safeEmployeeCode)) {
+      return res.status(400).json({ error: "Employee Company ID# must be exactly 9 digits." });
+    }
+
+    if (!(await employeeCodeAvailable(pool, req.user.businessId, safeEmployeeCode, id))) {
+      return res.status(409).json({ error: "That Employee Company ID# already exists for this business." });
+    }
     const safeFirstName = String(firstName || "").trim() || safeEmployeeCode || "Employee";
     const safeLastName = String(lastName || "").trim() || "Employee";
     const safeCanManage = req.user.role === "owner" ? Boolean(canManageSchedule) : false;
@@ -639,7 +678,7 @@ router.put("/:id", requireAuth, requireScheduleManager, async (req, res) => {
         safeOvertimeAllowed,
         safeOvertimeThresholdHours,
         safeMinRestHours,
-        orientationStart || null,
+        safeOrientationStart,
         preferredShiftId || null,
         id,
         req.user.businessId
