@@ -19,6 +19,28 @@ function normalizeBoolean(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+function normalizeLeaveType(value) {
+  const text = String(value || "unpaid").trim().toLowerCase();
+  return ["unpaid", "pto", "sick"].includes(text) ? text : "unpaid";
+}
+
+function businessDaysBetween(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  let days = 0;
+  for (let date = start; date <= end; date = new Date(date.getTime() + 24 * 60 * 60 * 1000)) {
+    const day = date.getUTCDay();
+    if (day !== 0 && day !== 6) days += 1;
+  }
+  return Math.max(1, days);
+}
+
+function requestedMinutesForRange(startDate, endDate, providedHours) {
+  const hours = Number(providedHours);
+  if (Number.isFinite(hours) && hours > 0) return Math.round(Math.min(hours, 24 * 365) * 60);
+  return businessDaysBetween(startDate, endDate) * 8 * 60;
+}
+
 async function verifyActorPassword(userId, password) {
   if (!password) return false;
 
@@ -260,6 +282,8 @@ router.post("/settings/toggle", requireAuth, requireOwner, async (req, res) => {
 router.post("/blocked-dates", requireAuth, requireOwner, async (req, res) => {
   const blockedDate = normalizeDate(req.body.blockedDate);
   const reason = cleanText(req.body.reason);
+  const leaveType = normalizeLeaveType(req.body.leaveType);
+  const requestedMinutes = leaveType === "unpaid" ? 0 : requestedMinutesForRange(startDate, endDate, req.body.requestedHours);
   const recursYearly = normalizeBoolean(req.body.recursYearly);
   let auditLocationId;
   try {
@@ -507,6 +531,8 @@ router.post("/", requireAuth, async (req, res) => {
   const startDate = normalizeDate(req.body.startDate);
   const endDate = normalizeDate(req.body.endDate || req.body.startDate);
   const reason = cleanText(req.body.reason);
+  const leaveType = normalizeLeaveType(req.body.leaveType);
+  const requestedMinutes = leaveType === "unpaid" ? 0 : requestedMinutesForRange(startDate, endDate, req.body.requestedHours);
 
   if (!startDate || !endDate) {
     return res.status(400).json({ error: "Start and end dates are required.", field: "dateRange" });
@@ -536,10 +562,10 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO time_off_requests (business_id, location_id, employee_id, start_date, end_date, reason)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO time_off_requests (business_id, location_id, employee_id, start_date, end_date, reason, leave_type, requested_minutes, paid)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [req.user.businessId, employee.location_id, employee.id, startDate, endDate, reason]
+      [req.user.businessId, employee.location_id, employee.id, startDate, endDate, reason, leaveType, requestedMinutes, leaveType !== "unpaid"]
     );
 
     await logAudit({
@@ -569,7 +595,7 @@ async function decideRequest(req, res, status) {
 
   try {
     const requestResult = await pool.query(
-      `SELECT id, location_id, start_date, end_date
+      `SELECT id, location_id, employee_id, start_date, end_date, leave_type, requested_minutes, leave_transaction_id, status
        FROM time_off_requests
        WHERE id = $1
          AND business_id = $2`,
@@ -580,20 +606,111 @@ async function decideRequest(req, res, status) {
       return res.status(404).json({ error: "Time off request not found." });
     }
 
-    await assertManagerLocationAccess(req.user, requestResult.rows[0].location_id);
+    const request = requestResult.rows[0];
+    await assertManagerLocationAccess(req.user, request.location_id);
 
-    const result = await pool.query(
-      `UPDATE time_off_requests
-       SET status = $1,
-           decided_by = $2,
-           decided_at = now(),
-           decision_reason = $3,
-           updated_at = now()
-       WHERE id = $4
-         AND business_id = $5
-       RETURNING *`,
-      [status, req.user.id, decisionReason, id, req.user.businessId]
-    );
+    let leaveTransactionId = request.leave_transaction_id || null;
+    const client = await pool.connect();
+    let result;
+    try {
+      await client.query("BEGIN");
+
+      if (status === "approved" && ["pto", "sick"].includes(request.leave_type) && Number(request.requested_minutes || 0) > 0 && !leaveTransactionId) {
+        await client.query(
+          `INSERT INTO employee_leave_balances (business_id, employee_id, leave_type)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (employee_id, leave_type) DO NOTHING`,
+          [req.user.businessId, request.employee_id, request.leave_type]
+        );
+
+        const settingsResult = await client.query(
+          `SELECT allow_negative_leave_balance FROM payroll_settings WHERE business_id = $1`,
+          [req.user.businessId]
+        );
+        const allowNegative = settingsResult.rows[0]?.allow_negative_leave_balance === true;
+        const balanceResult = await client.query(
+          `SELECT balance_minutes FROM employee_leave_balances WHERE employee_id = $1 AND leave_type = $2 FOR UPDATE`,
+          [request.employee_id, request.leave_type]
+        );
+        const currentBalance = Number(balanceResult.rows[0]?.balance_minutes || 0);
+        const deduction = Number(request.requested_minutes || 0);
+        if (!allowNegative && currentBalance < deduction) {
+          const error = new Error(`Insufficient ${request.leave_type === "pto" ? "PTO" : "sick leave"} balance for this approval.`);
+          error.status = 409;
+          throw error;
+        }
+
+        const tx = await client.query(
+          `INSERT INTO employee_leave_transactions (business_id, employee_id, leave_type, minutes_delta, reason, source, source_key, time_off_request_id, created_by)
+           VALUES ($1, $2, $3, $4, $5, 'time_off_approval', $6, $7, $8)
+           ON CONFLICT (business_id, employee_id, leave_type, source, source_key)
+           WHERE source_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [req.user.businessId, request.employee_id, request.leave_type, -deduction, `Approved time off: ${decisionReason}`, `time-off:${request.id}`, request.id, req.user.id]
+        );
+        leaveTransactionId = tx.rows[0]?.id || leaveTransactionId;
+        if (tx.rows[0]) {
+          await client.query(
+            `UPDATE employee_leave_balances
+             SET balance_minutes = balance_minutes - $1,
+                 used_minutes_lifetime = used_minutes_lifetime + $1,
+                 updated_at = now()
+             WHERE employee_id = $2
+               AND leave_type = $3`,
+            [deduction, request.employee_id, request.leave_type]
+          );
+        }
+      }
+
+      if (status === "denied" && request.status === "approved" && ["pto", "sick"].includes(request.leave_type) && request.leave_transaction_id) {
+        const previous = await client.query(
+          `SELECT minutes_delta FROM employee_leave_transactions WHERE id = $1 AND business_id = $2`,
+          [request.leave_transaction_id, req.user.businessId]
+        );
+        const restoreMinutes = Math.abs(Number(previous.rows[0]?.minutes_delta || request.requested_minutes || 0));
+        if (restoreMinutes > 0) {
+          await client.query(
+            `INSERT INTO employee_leave_transactions (business_id, employee_id, leave_type, minutes_delta, reason, source, source_key, time_off_request_id, created_by)
+             VALUES ($1, $2, $3, $4, $5, 'time_off_restored', $6, $7, $8)
+             ON CONFLICT (business_id, employee_id, leave_type, source, source_key)
+             WHERE source_key IS NOT NULL
+             DO NOTHING`,
+            [req.user.businessId, request.employee_id, request.leave_type, restoreMinutes, `Restored after denial: ${decisionReason}`, `time-off-restore:${request.id}`, request.id, req.user.id]
+          );
+          await client.query(
+            `UPDATE employee_leave_balances
+             SET balance_minutes = balance_minutes + $1,
+                 updated_at = now()
+             WHERE employee_id = $2
+               AND leave_type = $3`,
+            [restoreMinutes, request.employee_id, request.leave_type]
+          );
+        }
+        leaveTransactionId = null;
+      }
+
+      result = await client.query(
+        `UPDATE time_off_requests
+         SET status = $1,
+             decided_by = $2,
+             decided_at = now(),
+             decision_reason = $3,
+             leave_transaction_id = $4,
+             updated_at = now()
+         WHERE id = $5
+           AND business_id = $6
+         RETURNING *`,
+        [status, req.user.id, decisionReason, leaveTransactionId, id, req.user.businessId]
+      );
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     await logAudit({
       businessId: req.user.businessId,
