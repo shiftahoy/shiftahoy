@@ -14,7 +14,7 @@ function generateNineDigitAccountNumber() {
   return String(crypto.randomInt(100000000, 1000000000));
 }
 
-async function createUniqueAccountNumber(client, issuedTo = "user") {
+async function createUniqueBusinessAccountNumber(client, issuedTo = "business") {
   for (let attempt = 0; attempt < 250; attempt += 1) {
     const accountNumber = generateNineDigitAccountNumber();
 
@@ -30,12 +30,17 @@ async function createUniqueAccountNumber(client, issuedTo = "user") {
     }
   }
 
-  throw new Error("Unable to generate a unique 9 digit ID#. Please try again.");
+  throw new Error("Unable to generate a unique 9 digit Business ID#. Please try again.");
+}
+
+async function createUniqueAccountNumber(client, issuedTo = "business") {
+  return createUniqueBusinessAccountNumber(client, issuedTo);
 }
 
 module.exports = {
   ACCOUNT_ID_PATTERN,
   normalizeAccountNumber,
   isValidAccountNumber,
-  createUniqueAccountNumber
+  createUniqueAccountNumber,
+  createUniqueBusinessAccountNumber
 };
