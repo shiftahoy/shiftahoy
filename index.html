@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' http://localhost:3001; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
     <title>Shift Ahoy</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -125,8 +126,8 @@
               </div>
 
               <div class="generatedIdNotice">
-                <strong>ID# auto-created</strong>
-                <span>Shift Ahoy will create a permanent unique 9 digit ID# after the owner account is saved.</span>
+                <strong>Business ID# auto-created</strong>
+                <span>Shift Ahoy will create a permanent unique 9 digit Business ID# after the owner account is saved.</span>
               </div>
 
               <div class="fieldGroup" data-field="signupPassword">
@@ -141,7 +142,25 @@
               <button id="signupButton" class="button primary">Create Account</button>
             </section>
 
-            <section class="authMiniGrid">
+
+            <section class="card formCard compactCard businessGateCard">
+              <div class="cardTitle">
+                <span class="iconBadge">00</span>
+                <div>
+                  <h2>Business ID#</h2>
+                  <p>Enter a valid Business ID# to reveal Login and Clock In / Out for that business.</p>
+                </div>
+              </div>
+              <div id="businessGateMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
+              <div class="fieldGroup loginFieldGroup" data-field="businessAccountNumber">
+                <label class="fieldLabel" for="businessAccountNumber">Business ID#</label>
+                <input id="businessAccountNumber" inputmode="numeric" maxlength="9" placeholder="9 digit Business ID#" />
+              </div>
+              <button id="businessGateButton" class="button primary" type="button">Continue</button>
+              <div id="businessGateActive" class="formNotice success hidden" role="status"></div>
+            </section>
+
+            <section id="authMiniGrid" class="authMiniGrid hidden">
               <section class="card formCard compactCard">
                 <div class="cardTitle">
                   <span class="iconBadge">02</span>
@@ -154,8 +173,8 @@
                 <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
                 <div class="fieldGroup loginFieldGroup">
-                  <label class="fieldLabel" for="loginValue">ID# or Email</label>
-                  <input id="loginValue" autocomplete="username" placeholder="ID# or Email" />
+                  <label class="fieldLabel" for="loginValue">Employee ID# or Email</label>
+                  <input id="loginValue" autocomplete="username" placeholder="Employee ID# or Email" />
                   <button id="forgotIdButton" class="linkButton fieldUtilityLink" type="button">Forgot ID#</button>
                 </div>
 
@@ -178,9 +197,14 @@
                 </div>
                 <div id="clockFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
                 <div class="fieldGroup loginFieldGroup">
-                  <label class="fieldLabel" for="clockAccountNumber">Employee ID#</label>
-                  <input id="clockAccountNumber" inputmode="numeric" maxlength="9" placeholder="9 digit ID#" />
+                  <label class="fieldLabel" for="clockAccountNumber">Employee Company ID#</label>
+                  <input id="clockAccountNumber" inputmode="numeric" maxlength="9" placeholder="9 digit Employee ID#" />
                 </div>
+                <div class="fieldGroup loginFieldGroup">
+                  <label class="fieldLabel" for="clockManagerPassword">Owner / Manager Password</label>
+                  <input id="clockManagerPassword" type="password" autocomplete="current-password" placeholder="Unlock clock portal" />
+                </div>
+                <button id="clockUnlockButton" class="button secondary" type="button">Unlock Clock Portal</button>
                 <div id="clockStatusPreview" class="clockStatusPreview hidden"></div>
                 <div class="formActions clockActions">
                   <button id="clockLookupButton" class="button secondary" type="button">Scan ID#</button>
@@ -338,9 +362,12 @@
 
               <div class="formGrid twoColumn">
                 <div class="generatedIdNotice employeeGeneratedIdNotice">
-                  <strong>Employee ID# auto-created</strong>
-                  <span id="employeeGeneratedIdText">A permanent unique 9 digit ID# will be assigned when this employee is saved.</span>
+                  <strong>Employee Company ID#</strong>
+                  <span id="employeeGeneratedIdText">Enter the 9 digit employee ID# already used by this business. It must be unique inside this Business ID#.</span>
                 </div>
+                <div class="fieldGroup" data-field="employeeCode">
+                  <label class="fieldLabel" for="employeeCode">Employee Company ID# <span id="employeeCodeStatus" class="fieldStatus">Required</span></label>
+                  <input id="employeeCode" inputmode="numeric" maxlength="9" placeholder="9 digit Employee ID#" />
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employeeTitle">Title</label>
                   <input id="employeeTitle" placeholder="Crew Member" />
@@ -358,7 +385,7 @@
                     Password
                     <span id="employeePasswordStatus" class="fieldStatus">Required</span>
                   </label>
-                  <input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" />
+                  <div class="passwordFieldRow"><input id="employeePassword" type="password" autocomplete="new-password" maxlength="128" placeholder="Password" /><button id="showEmployeePasswordButton" class="button ghost inlinePasswordButton" type="button">Show</button><button id="copyEmployeePasswordButton" class="button ghost inlinePasswordButton" type="button">Copy</button></div>
                 </div>
                 <div class="fieldGroup">
                   <label class="fieldLabel" for="employmentType">Employment Type</label>
@@ -396,8 +423,8 @@
                   <select id="preferredShiftId"></select>
                 </div>
                 <div class="fieldGroup">
-                  <label class="fieldLabel" for="orientationStart">Orientation Start</label>
-                  <input id="orientationStart" type="date" />
+                  <label class="fieldLabel" for="orientationStart">Orientation / Start Date <span class="fieldStatus">Required</span></label>
+                  <input id="orientationStart" type="date" required />
                 </div>
               </div>
 
@@ -497,6 +524,21 @@
                       <span><span class="legendDot blocked"></span>Blocked</span>
                       <span><span class="legendDot holiday"></span>Holiday</span>
                     </div>
+                  </div>
+                </div>
+                <div class="formGrid twoColumn">
+                  <div class="fieldGroup" data-field="timeOffLeaveType">
+                    <label class="fieldLabel" for="timeOffLeaveType">Leave Type</label>
+                    <select id="timeOffLeaveType">
+                      <option value="unpaid">Unpaid Time Off</option>
+                      <option value="pto">PTO</option>
+                      <option value="sick">Sick Leave</option>
+                    </select>
+                    <small class="fieldHelp">Paid requests deduct from the matching balance when approved.</small>
+                  </div>
+                  <div class="fieldGroup" data-field="timeOffRequestedHours">
+                    <label class="fieldLabel" for="timeOffRequestedHours">Requested Paid Hours</label>
+                    <input id="timeOffRequestedHours" type="number" min="0" step="0.25" placeholder="Auto: 8 hours per weekday" />
                   </div>
                 </div>
                 <div class="fieldGroup" data-field="timeOffReason">
@@ -763,9 +805,9 @@
           <form id="credentialForm" method="dialog">
             <div class="sectionHeader">
               <div>
-                <p class="eyebrow">Owner credentials</p>
+                <p class="eyebrow">Authorized credentials</p>
                 <h2 id="credentialDialogTitle">Confirm Delete</h2>
-                <p id="credentialDialogMessage" class="panelHint">Enter your owner password to continue.</p>
+                <p id="credentialDialogMessage" class="panelHint">Enter your password to continue.</p>
               </div>
 
               <button id="cancelCredentialX" class="button ghost" type="button">Close</button>
@@ -775,10 +817,10 @@
 
             <div class="fieldGroup" data-field="credentialPassword">
               <label class="fieldLabel" for="credentialPassword">
-                Owner Password
+                Password
                 <span id="credentialPasswordStatus" class="fieldStatus">Required</span>
               </label>
-              <input id="credentialPassword" type="password" autocomplete="current-password" placeholder="Owner password" required />
+              <input id="credentialPassword" type="password" autocomplete="current-password" placeholder="Password" required />
             </div>
 
             <div class="formActions">
