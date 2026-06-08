@@ -927,12 +927,42 @@ function setAuthTransition(message = "") {
 
   if (!selectedBusinessAccountNumber) {
     banner.className = "formNotice success authTransitionBanner hidden";
-    banner.textContent = "";
+    banner.innerHTML = "";
     return;
   }
 
-  banner.className = "formNotice success authTransitionBanner";
-  banner.textContent = message || `Business selected: ${businessActiveLabel()}. Login or use Clock In / Out below.`;
+  const text = message || `Business selected: ${businessActiveLabel()}. Login or use Clock In / Out below.`;
+  banner.className = "formNotice success authTransitionBanner businessSelectedBanner";
+  banner.innerHTML = `
+    <span>${escapeHtml(text)}</span>
+    <button id="changeBusinessButton" class="linkButton changeBusinessButton" type="button">Back / Change Business ID#</button>
+  `;
+  $("changeBusinessButton")?.addEventListener("click", changeSelectedBusiness);
+}
+
+function changeSelectedBusiness() {
+  selectedBusinessAccountNumber = "";
+  selectedBusinessName = "";
+  businessGatePendingActivation = false;
+  clockSessionToken = "";
+  localStorage.removeItem("shiftAhoyBusinessAccountNumber");
+  localStorage.removeItem("shiftAhoyBusinessName");
+  sessionStorage.removeItem("shiftAhoyClockSessionToken");
+
+  const businessInput = $("businessAccountNumber");
+  if (businessInput) businessInput.value = "";
+  if ($("loginValue")) $("loginValue").value = "";
+  if ($("loginPassword")) $("loginPassword").value = "";
+  if ($("clockManagerPassword")) $("clockManagerPassword").value = "";
+  if ($("clockAccountNumber")) $("clockAccountNumber").value = "";
+
+  clearClockPunchState();
+  setNotice("businessGateMessage", "", "");
+  setNotice("loginFormMessage", "", "");
+  setNotice("clockFormMessage", "", "");
+  clearAuthFieldStates();
+  renderBusinessGate({ message: "Enter the Business ID# you want to use." });
+  window.setTimeout(() => businessInput?.focus?.(), 30);
 }
 
 function renderBusinessGate(options = {}) {
@@ -3317,28 +3347,66 @@ async function logout() {
   try {
     await api("/auth/logout", { method: "POST", skipRefresh: true }).catch(() => null);
   } finally {
-    accessToken = null;
-    currentUser = null;
-    selectedLocationId = null;
-    selectedLocationRecord = null;
-    locations = [];
-    shifts = [];
-    employees = [];
-    timeOffRequests = [];
-    auditLogs = [];
-    timeOffSettings = { requestsEnabled: true, shiftSwapsEnabled: true, blockedDates: [], holidayDates: [] };
-    $("settingsDialog")?.close?.();
-    $("appView")?.classList.add("hidden");
-    $("authView")?.classList.remove("hidden");
-    $("settingsButton")?.classList.add("hidden");
-    $("upgradeButton")?.classList.add("hidden");
-    $("currentPlanText")?.classList.add("hidden");
-    document.body.classList.remove("employeePortalOnly");
-    clearAuthFieldStates();
-    setNotice("loginFormMessage", "", "");
-    setNotice("signupFormMessage", "", "");
-    $("loginPassword") && ($("loginPassword").value = "");
-    $("loginValue")?.focus?.();
+    resetAuthenticatedSessionView();
+  }
+}
+
+function resetAuthenticatedSessionView() {
+  accessToken = null;
+  currentUser = null;
+  selectedLocationId = null;
+  selectedLocationRecord = null;
+  locations = [];
+  shifts = [];
+  employees = [];
+  timeOffRequests = [];
+  auditLogs = [];
+  timeOffSettings = { requestsEnabled: true, shiftSwapsEnabled: true, blockedDates: [], holidayDates: [] };
+  clockSessionToken = "";
+  sessionStorage.removeItem("shiftAhoyClockSessionToken");
+  $("settingsDialog")?.close?.();
+  $("appView")?.classList.add("hidden");
+  $("authView")?.classList.remove("hidden");
+  $("settingsButton")?.classList.add("hidden");
+  $("upgradeButton")?.classList.add("hidden");
+  $("currentPlanText")?.classList.add("hidden");
+  document.body.classList.remove("employeePortalOnly");
+  clearAuthFieldStates();
+  clearClockPunchState();
+  setNotice("loginFormMessage", "", "");
+  setNotice("signupFormMessage", "", "");
+  setNotice("clockFormMessage", "", "");
+  if ($("loginPassword")) $("loginPassword").value = "";
+  renderBusinessGate();
+  $("loginValue")?.focus?.();
+}
+
+async function deleteCurrentAccount() {
+  if (!currentUser) return;
+  const owner = isOwner();
+  const password = await runOwnerCredentialAction({
+    title: owner ? "Delete Business Workspace" : "Delete Account",
+    message: owner
+      ? "This permanently deletes this owner account and the entire business workspace, including employees, locations, schedules, clock records, payroll records, and audit logs. Enter your password to continue."
+      : "This deactivates your account and removes your desktop session. Enter your password to continue.",
+    confirmLabel: owner ? "Delete Business" : "Delete Account"
+  });
+
+  if (!password) return;
+
+  try {
+    const data = await api("/auth/account", {
+      method: "DELETE",
+      body: JSON.stringify({ currentPassword: password })
+    });
+    selectedBusinessAccountNumber = "";
+    selectedBusinessName = "";
+    localStorage.removeItem("shiftAhoyBusinessAccountNumber");
+    localStorage.removeItem("shiftAhoyBusinessName");
+    resetAuthenticatedSessionView();
+    setNotice("businessGateMessage", "success", data.message || "Account deleted.");
+  } catch (err) {
+    setNotice("ownerSecurityNotice", "error", err.message || "Failed to delete account.");
   }
 }
 
@@ -3587,6 +3655,7 @@ function setupEvents() {
   });
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   $("settingsLogoutButton")?.addEventListener("click", logout);
+  $("settingsDeleteAccountButton")?.addEventListener("click", deleteCurrentAccount);
   $("closePlanDialog").addEventListener("click", () => $("planDialog").close());
   $("planList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action='select-plan']");
