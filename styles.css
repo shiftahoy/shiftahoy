@@ -4534,50 +4534,71 @@ body.theme-dark .clockStatusPreview {
   }
 }
 
-/* Signup gate refinement: keep 01 visible, place the selected-business confirmation above the owner fields, and compress the auth cards so 02/03 actions stay visible. */
+/* Signup gate refinement: keep the selected-business confirmation tucked directly under the 01 subtitle without stretching the owner card. */
+#ownerSignupCard .cardTitle > div {
+  min-width: 0;
+}
+
 #ownerSignupCard .authTransitionBanner {
-  order: 3;
-  margin: 0 0 2px;
-  padding: 9px 11px;
-  border-radius: 14px;
-  font-size: 0.82rem;
-  line-height: 1.28;
+  margin: 5px 0 0;
+  padding: 6px 10px;
+  min-height: 28px;
+  max-height: 36px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  line-height: 1.18;
+  box-shadow: none;
 }
 
-#ownerSignupCard > .formGrid.twoColumn {
-  order: 4;
+.authCards.businessActive,
+.authCards.businessPendingActivation {
+  gap: 10px;
+  overflow: hidden;
 }
 
-#ownerSignupCard > .fieldGroup[data-field="signupBusinessName"] {
-  order: 5;
+.authCards.businessActive {
+  grid-template-rows: auto minmax(220px, 1fr);
 }
 
-#ownerSignupCard > .fieldGroup[data-field="signupEmail"] {
-  order: 6;
+.authCards.businessPendingActivation {
+  grid-template-rows: auto auto;
 }
 
-#ownerSignupCard > .generatedIdNotice {
-  order: 7;
-}
-
-#ownerSignupCard > .fieldGroup[data-field="signupPassword"] {
-  order: 8;
-}
-
-#ownerSignupCard > #signupButton {
-  order: 9;
+.authCards.businessActive #businessGateCard {
+  display: none !important;
 }
 
 .authCards.businessActive #ownerSignupCard,
 .authCards.businessPendingActivation #ownerSignupCard {
-  gap: 4px;
+  display: grid;
+  gap: 6px;
   padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-bottom: 12px !important;
+}
+
+.authCards.businessPendingActivation #businessGateCard {
+  display: grid;
+}
+
+.authCards.businessPendingActivation .authMiniGrid {
+  display: none !important;
+}
+
+.authCards.businessActive .authMiniGrid {
+  min-height: 0;
+  align-self: stretch;
+  gap: 10px;
+}
+
+.authCards.businessActive .authMiniGrid > .card {
+  min-height: 0;
+  align-content: start;
 }
 
 .authCards.businessActive #ownerSignupCard .cardTitle,
 .authCards.businessPendingActivation #ownerSignupCard .cardTitle {
   gap: 8px;
+  align-items: flex-start;
 }
 
 .authCards.businessActive #ownerSignupCard .cardTitle h2,
@@ -4588,7 +4609,13 @@ body.theme-dark .clockStatusPreview {
 .authCards.businessActive #ownerSignupCard .cardTitle p,
 .authCards.businessPendingActivation #ownerSignupCard .cardTitle p {
   font-size: 0.76rem;
-  line-height: 1.22;
+  line-height: 1.2;
+}
+
+.authCards.businessActive #ownerSignupCard .fieldGroup,
+.authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
+  gap: 3px;
+  margin-bottom: 0;
 }
 
 .authCards.businessActive #ownerSignupCard .fieldHelp,
@@ -4596,16 +4623,11 @@ body.theme-dark .clockStatusPreview {
   display: none;
 }
 
-.authCards.businessActive #ownerSignupCard .fieldGroup,
-.authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
-  gap: 3px;
-}
-
 .authCards.businessActive #ownerSignupCard input,
 .authCards.businessPendingActivation #ownerSignupCard input {
-  min-height: 34px;
-  padding-top: 7px;
-  padding-bottom: 7px;
+  min-height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .authCards.businessActive #ownerSignupCard .generatedIdNotice,
@@ -4628,53 +4650,7 @@ body.theme-dark .clockStatusPreview {
   padding-bottom: 8px;
 }
 
-.authCards.businessActive {
-  grid-template-rows: minmax(0, auto) minmax(220px, 1fr);
-}
-
-.authCards.businessActive .authMiniGrid {
-  gap: 10px;
-}
-
-.authCards.businessActive .authMiniGrid > .card {
-  min-height: 0;
-}
-
-/* Professional clock portal refinement: selected business banner, 01 field breathing room, and audited clock status colors. */
-#ownerSignupCard .authTransitionBanner {
-  order: 2;
-  margin: -6px 0 8px;
-  padding: 10px 13px;
-  min-height: 0;
-  max-height: none;
-  align-items: flex-start;
-}
-
-.authCards.businessActive #ownerSignupCard,
-.authCards.businessPendingActivation #ownerSignupCard {
-  gap: 10px;
-  padding-top: 12px !important;
-  padding-bottom: 14px !important;
-}
-
-.authCards.businessActive #ownerSignupCard .fieldGroup,
-.authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
-  gap: 6px;
-  margin-bottom: 3px;
-}
-
-.authCards.businessActive #ownerSignupCard .fieldHelp,
-.authCards.businessPendingActivation #ownerSignupCard .fieldHelp {
-  display: block;
-}
-
-.authCards.businessActive #ownerSignupCard input,
-.authCards.businessPendingActivation #ownerSignupCard input {
-  min-height: 42px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
+/* Professional clock portal refinement: audited clock status colors and aligned clock actions. */
 .clockCard {
   position: relative;
   overflow: hidden;
