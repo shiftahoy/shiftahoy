@@ -1352,4 +1352,359 @@ router.post("/bonuses/evaluate", requireAuth, requireScheduleManager, async (req
 });
 
 
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function amountCents(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.round(number * 100);
+}
+
+async function managerLocationFilter(user, requestedLocationId, alias = "e") {
+  const params = [user.businessId];
+  if (requestedLocationId) {
+    params.push(requestedLocationId);
+    return { sql: `AND ${alias}.location_id = $2`, params };
+  }
+  if (user.role !== "owner") {
+    const assigned = await pool.query(
+      `SELECT DISTINCT location_id FROM employees WHERE business_id = $1 AND user_id = $2 AND active = true`,
+      [user.businessId, user.id]
+    );
+    const ids = assigned.rows.map((row) => row.location_id).filter(Boolean);
+    if (!ids.length) return { sql: "AND false", params };
+    params.push(ids);
+    return { sql: `AND ${alias}.location_id = ANY($2::uuid[])`, params };
+  }
+  return { sql: "", params };
+}
+
+async function currentOrRequestedPeriod(businessId, query = {}) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(query.periodStart || "")) && /^\d{4}-\d{2}-\d{2}$/.test(String(query.periodEnd || ""))) {
+    return { period_start: String(query.periodStart).slice(0, 10), period_end: String(query.periodEnd).slice(0, 10) };
+  }
+  return currentPayPeriodForBusiness(businessId);
+}
+
+async function ensurePayrollBatch({ businessId, locationId = null, periodStart, periodEnd, provider = "csv" }) {
+  const result = await pool.query(
+    `INSERT INTO payroll_batches (business_id, location_id, period_start, period_end, provider)
+     VALUES ($1, $2::uuid, $3::date, $4::date, $5)
+     ON CONFLICT (business_id, location_id, period_start, period_end)
+     DO UPDATE SET updated_at = now()
+     RETURNING *`,
+    [businessId, locationId || null, periodStart, periodEnd, provider]
+  );
+  return result.rows[0];
+}
+
+async function payrollRows({ user, locationId = null, periodStart, periodEnd }) {
+  const filter = await managerLocationFilter(user, locationId, "e");
+  const params = [...filter.params, periodStart, periodEnd];
+  const startParam = `$${params.length - 1}`;
+  const endParam = `$${params.length}`;
+  const result = await pool.query(
+    `WITH break_minutes AS (
+       SELECT tcb.time_clock_entry_id,
+              COALESCE(SUM(CASE WHEN tcb.paid THEN 0 ELSE FLOOR(EXTRACT(EPOCH FROM (COALESCE(tcb.break_end_at, now()) - tcb.break_start_at)) / 60)::int END), 0)::int AS unpaid_break_minutes
+       FROM time_clock_breaks tcb
+       GROUP BY tcb.time_clock_entry_id
+     ), entry_lines AS (
+       SELECT e.id AS employee_id,
+              e.location_id,
+              e.employee_code,
+              e.pay_rate_cents,
+              u.first_name,
+              u.last_name,
+              u.account_number,
+              l.name AS location_name,
+              tce.id AS entry_id,
+              tce.clock_in_at,
+              tce.clock_out_at,
+              tce.clock_in_at::date AS work_date,
+              GREATEST(0, COALESCE(tce.minutes_worked, 0) - COALESCE(bm.unpaid_break_minutes, 0)) AS net_minutes,
+              COALESCE(bm.unpaid_break_minutes, 0) AS unpaid_break_minutes
+       FROM employees e
+       JOIN users u ON u.id = e.user_id
+       JOIN locations l ON l.id = e.location_id
+       LEFT JOIN time_clock_entries tce
+         ON tce.employee_id = e.id
+        AND tce.clock_out_at IS NOT NULL
+        AND tce.clock_in_at::date BETWEEN ${startParam}::date AND ${endParam}::date
+       LEFT JOIN break_minutes bm ON bm.time_clock_entry_id = tce.id
+       WHERE e.business_id = $1
+         AND e.active = true
+         AND u.active = true
+         ${filter.sql}
+     ), daily AS (
+       SELECT employee_id, work_date, SUM(net_minutes)::int AS daily_minutes
+       FROM entry_lines
+       WHERE entry_id IS NOT NULL
+       GROUP BY employee_id, work_date
+     ), weekly AS (
+       SELECT employee_id, SUM(net_minutes)::int AS period_minutes
+       FROM entry_lines
+       WHERE entry_id IS NOT NULL
+       GROUP BY employee_id
+     ), adjustments AS (
+       SELECT employee_id, COALESCE(SUM(amount_cents), 0)::int AS adjustment_cents
+       FROM payroll_adjustments
+       WHERE business_id = $1
+         AND created_at::date BETWEEN ${startParam}::date AND ${endParam}::date
+       GROUP BY employee_id
+     )
+     SELECT el.employee_id,
+            el.location_id,
+            el.employee_code,
+            el.account_number,
+            el.first_name,
+            el.last_name,
+            el.location_name,
+            el.pay_rate_cents,
+            COALESCE(SUM(el.net_minutes), 0)::int AS net_minutes,
+            COALESCE(SUM(el.unpaid_break_minutes), 0)::int AS unpaid_break_minutes,
+            ROUND((COALESCE(SUM(el.net_minutes), 0)::numeric / 60) * el.pay_rate_cents)::int AS regular_pay_cents,
+            GREATEST(0, COALESCE(MAX(w.period_minutes), 0) - 2400)::int AS overtime_minutes,
+            ROUND((GREATEST(0, COALESCE(MAX(w.period_minutes), 0) - 2400)::numeric / 60) * el.pay_rate_cents * 0.5)::int AS overtime_premium_cents,
+            COALESCE(MAX(a.adjustment_cents), 0)::int AS adjustment_cents,
+            ROUND((COALESCE(SUM(el.net_minutes), 0)::numeric / 60) * el.pay_rate_cents)::int
+              + ROUND((GREATEST(0, COALESCE(MAX(w.period_minutes), 0) - 2400)::numeric / 60) * el.pay_rate_cents * 0.5)::int
+              + COALESCE(MAX(a.adjustment_cents), 0)::int AS gross_pay_cents
+     FROM entry_lines el
+     LEFT JOIN weekly w ON w.employee_id = el.employee_id
+     LEFT JOIN adjustments a ON a.employee_id = el.employee_id
+     GROUP BY el.employee_id, el.location_id, el.employee_code, el.account_number, el.first_name, el.last_name, el.location_name, el.pay_rate_cents
+     ORDER BY el.location_name, el.last_name, el.first_name, el.employee_code`,
+    params
+  );
+  return result.rows;
+}
+
+router.get("/suite", requireAuth, requireScheduleManager, async (req, res) => {
+  try {
+    const period = await currentOrRequestedPeriod(req.user.businessId, req.query);
+    const locationId = req.query.locationId || null;
+    const settings = await settingsForBusiness(req.user.businessId);
+    const rows = await payrollRows({ user: req.user, locationId, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end) });
+    const batch = await ensurePayrollBatch({ businessId: req.user.businessId, locationId, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end), provider: settings.payroll_provider || "csv" });
+    const adjustments = await pool.query(
+      `SELECT pa.*, e.employee_code, u.first_name, u.last_name
+       FROM payroll_adjustments pa
+       JOIN employees e ON e.id = pa.employee_id
+       JOIN users u ON u.id = e.user_id
+       WHERE pa.business_id = $1
+         AND pa.created_at::date BETWEEN $2::date AND $3::date
+       ORDER BY pa.created_at DESC
+       LIMIT 50`,
+      [req.user.businessId, toDateOnly(period.period_start), toDateOnly(period.period_end)]
+    );
+    const corrections = await pool.query(
+      `SELECT pc.*, e.employee_code, u.first_name, u.last_name
+       FROM punch_corrections pc
+       JOIN employees e ON e.id = pc.employee_id
+       JOIN users u ON u.id = e.user_id
+       WHERE pc.business_id = $1
+         AND pc.created_at::date BETWEEN $2::date AND $3::date
+       ORDER BY pc.created_at DESC
+       LIMIT 50`,
+      [req.user.businessId, toDateOnly(period.period_start), toDateOnly(period.period_end)]
+    );
+    res.json({ settings, batch, rows, adjustments: adjustments.rows, corrections: corrections.rows, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load payroll suite." });
+  }
+});
+
+router.get("/export.csv", requireAuth, requireScheduleManager, async (req, res) => {
+  try {
+    const period = await currentOrRequestedPeriod(req.user.businessId, req.query);
+    const locationId = req.query.locationId || null;
+    const settings = await settingsForBusiness(req.user.businessId);
+    const batch = await ensurePayrollBatch({ businessId: req.user.businessId, locationId, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end), provider: settings.payroll_provider || "csv" });
+    if (settings.require_payroll_approval_lock !== false && !["approved", "finalized", "exported"].includes(batch.status)) {
+      return res.status(409).json({ error: "Approve and lock this payroll period before exporting." });
+    }
+    const rows = await payrollRows({ user: req.user, locationId, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end) });
+    const header = ["provider","period_start","period_end","location","employee_id","employee_code","employee_name","regular_hours","overtime_hours","unpaid_break_hours","regular_pay","overtime_premium","adjustments","gross_pay"];
+    const lines = [header.join(",")].concat(rows.map((row) => [
+      settings.payroll_provider || "csv",
+      toDateOnly(period.period_start),
+      toDateOnly(period.period_end),
+      row.location_name,
+      row.employee_id,
+      row.employee_code,
+      `${row.first_name || ""} ${row.last_name || ""}`.trim(),
+      (Number(row.net_minutes || 0) / 60).toFixed(2),
+      (Number(row.overtime_minutes || 0) / 60).toFixed(2),
+      (Number(row.unpaid_break_minutes || 0) / 60).toFixed(2),
+      (Number(row.regular_pay_cents || 0) / 100).toFixed(2),
+      (Number(row.overtime_premium_cents || 0) / 100).toFixed(2),
+      (Number(row.adjustment_cents || 0) / 100).toFixed(2),
+      (Number(row.gross_pay_cents || 0) / 100).toFixed(2)
+    ].map(csvEscape).join(",")));
+    await pool.query(`UPDATE payroll_batches SET status = 'exported', exported_by = $1, exported_at = now(), updated_at = now() WHERE id = $2`, [req.user.id, batch.id]);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="shift-ahoy-payroll-${toDateOnly(period.period_start)}-${toDateOnly(period.period_end)}.csv"`);
+    res.send(lines.join("\n"));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to export payroll CSV." });
+  }
+});
+
+router.post("/approval-lock", requireAuth, requireScheduleManager, async (req, res) => {
+  try {
+    const period = await currentOrRequestedPeriod(req.user.businessId, req.body || {});
+    const settings = await settingsForBusiness(req.user.businessId);
+    const batch = await ensurePayrollBatch({ businessId: req.user.businessId, locationId: req.body.locationId || null, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end), provider: settings.payroll_provider || "csv" });
+    const status = req.body.finalize ? "finalized" : "approved";
+    const result = await pool.query(
+      `UPDATE payroll_batches
+       SET status = $1,
+           approved_by = COALESCE(approved_by, $2),
+           approved_at = COALESCE(approved_at, now()),
+           finalized_by = CASE WHEN $1 = 'finalized' THEN $2 ELSE finalized_by END,
+           finalized_at = CASE WHEN $1 = 'finalized' THEN now() ELSE finalized_at END,
+           notes = $3,
+           updated_at = now()
+       WHERE id = $4
+       RETURNING *`,
+      [status, req.user.id, String(req.body.notes || "").slice(0, 1000), batch.id]
+    );
+    await logAudit({ businessId: req.user.businessId, actorUserId: req.user.id, locationId: req.body.locationId || null, action: status === "finalized" ? "Payroll finalized" : "Payroll approved and locked", entityType: "payroll_batch", entityId: batch.id, details: `${toDateOnly(period.period_start)} to ${toDateOnly(period.period_end)}` });
+    res.json({ batch: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to lock payroll." });
+  }
+});
+
+router.post("/adjustments", requireAuth, requireScheduleManager, async (req, res) => {
+  const employeeId = req.body.employeeId;
+  const reason = String(req.body.reason || "").trim();
+  if (!employeeId || !reason) return res.status(400).json({ error: "Employee and reason are required." });
+  try {
+    const employee = await pool.query(`SELECT id, location_id FROM employees WHERE id = $1 AND business_id = $2 AND active = true`, [employeeId, req.user.businessId]);
+    if (!employee.rows[0]) return res.status(404).json({ error: "Employee not found." });
+    const result = await pool.query(
+      `INSERT INTO payroll_adjustments (business_id, location_id, employee_id, adjustment_type, amount_cents, taxable, reason, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [req.user.businessId, employee.rows[0].location_id, employeeId, String(req.body.adjustmentType || "other"), amountCents(req.body.amountDollars), req.body.taxable !== false, reason, req.user.id]
+    );
+    await logAudit({ businessId: req.user.businessId, actorUserId: req.user.id, locationId: employee.rows[0].location_id, action: "Payroll adjustment entered", entityType: "payroll_adjustment", entityId: result.rows[0].id, details: reason });
+    res.status(201).json({ adjustment: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create payroll adjustment." });
+  }
+});
+
+router.post("/punch-corrections", requireAuth, requireScheduleManager, async (req, res) => {
+  const employeeId = req.body.employeeId;
+  const reason = String(req.body.reason || "").trim();
+  if (!employeeId || !reason) return res.status(400).json({ error: "Employee and correction reason are required." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const employee = await client.query(`SELECT id, location_id, employee_code FROM employees WHERE id = $1 AND business_id = $2 AND active = true`, [employeeId, req.user.businessId]);
+    if (!employee.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Employee not found." });
+    }
+    const correction = await client.query(
+      `INSERT INTO punch_corrections (business_id, location_id, employee_id, time_clock_entry_id, requested_clock_in_at, requested_clock_out_at, status, reason, reviewed_by, reviewed_at, created_by)
+       VALUES ($1, $2, $3, $4::uuid, $5::timestamptz, $6::timestamptz, 'approved', $7, $8, now(), $8)
+       RETURNING *`,
+      [req.user.businessId, employee.rows[0].location_id, employeeId, req.body.timeClockEntryId || null, req.body.clockInAt || null, req.body.clockOutAt || null, reason, req.user.id]
+    );
+    if (req.body.timeClockEntryId && (req.body.clockInAt || req.body.clockOutAt)) {
+      await client.query(
+        `UPDATE time_clock_entries
+         SET clock_in_at = COALESCE($1::timestamptz, clock_in_at),
+             clock_out_at = COALESCE($2::timestamptz, clock_out_at),
+             updated_at = now()
+         WHERE id = $3
+           AND business_id = $4`,
+        [req.body.clockInAt || null, req.body.clockOutAt || null, req.body.timeClockEntryId, req.user.businessId]
+      );
+    }
+    await logAudit({ businessId: req.user.businessId, actorUserId: req.user.id, locationId: employee.rows[0].location_id, action: "Manual punch correction approved", entityType: "punch_correction", entityId: correction.rows[0].id, details: reason });
+    await client.query("COMMIT");
+    res.status(201).json({ correction: correction.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "Failed to save punch correction." });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/breaks/manual", requireAuth, requireScheduleManager, async (req, res) => {
+  if (!req.body.timeClockEntryId || !req.body.breakStartAt || !req.body.breakEndAt) return res.status(400).json({ error: "Clock entry, break start, and break end are required." });
+  try {
+    const entry = await pool.query(`SELECT employee_id, location_id FROM time_clock_entries WHERE id = $1 AND business_id = $2`, [req.body.timeClockEntryId, req.user.businessId]);
+    if (!entry.rows[0]) return res.status(404).json({ error: "Clock entry not found." });
+    const result = await pool.query(
+      `INSERT INTO time_clock_breaks (business_id, location_id, employee_id, time_clock_entry_id, break_start_at, break_end_at, break_type, paid, notes, created_by)
+       VALUES ($1,$2,$3,$4,$5::timestamptz,$6::timestamptz,$7,$8,$9,$10)
+       RETURNING *`,
+      [req.user.businessId, entry.rows[0].location_id, entry.rows[0].employee_id, req.body.timeClockEntryId, req.body.breakStartAt, req.body.breakEndAt, req.body.breakType || "meal", req.body.paid === true, String(req.body.notes || "").slice(0, 500), req.user.id]
+    );
+    res.status(201).json({ break: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to record break." });
+  }
+});
+
+router.put("/provider-settings", requireAuth, requireScheduleManager, async (req, res) => {
+  try {
+    const provider = ["csv", "adp", "gusto", "quickbooks", "custom"].includes(String(req.body.provider)) ? String(req.body.provider) : "csv";
+    const taxMode = ["provider", "external", "manual_reference_only"].includes(String(req.body.taxHandlingMode)) ? String(req.body.taxHandlingMode) : "provider";
+    const result = await pool.query(
+      `UPDATE payroll_settings
+       SET payroll_provider = $1,
+           provider_external_company_id = $2,
+           provider_notes = $3,
+           tax_handling_mode = $4,
+           overtime_policy = COALESCE($5, overtime_policy),
+           weekly_overtime_hours = COALESCE($6, weekly_overtime_hours),
+           daily_overtime_hours = $7,
+           default_unpaid_break_minutes = COALESCE($8, default_unpaid_break_minutes),
+           require_payroll_approval_lock = $9,
+           updated_by = $10,
+           updated_at = now()
+       WHERE business_id = $11
+       RETURNING *`,
+      [provider, String(req.body.providerExternalCompanyId || "").slice(0, 200) || null, String(req.body.providerNotes || "").slice(0, 1000) || null, taxMode, req.body.overtimePolicy || null, Number(req.body.weeklyOvertimeHours || 40), req.body.dailyOvertimeHours === "" ? null : req.body.dailyOvertimeHours || null, Number(req.body.defaultUnpaidBreakMinutes || 0), req.body.requirePayrollApprovalLock !== false, req.user.id, req.user.businessId]
+    );
+    res.json({ settings: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save provider settings." });
+  }
+});
+
+router.get("/final-report", requireAuth, requireScheduleManager, async (req, res) => {
+  try {
+    const period = await currentOrRequestedPeriod(req.user.businessId, req.query);
+    const locationId = req.query.locationId || null;
+    const rows = await payrollRows({ user: req.user, locationId, periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end) });
+    const grossPayCents = rows.reduce((sum, row) => sum + Number(row.gross_pay_cents || 0), 0);
+    const netMinutes = rows.reduce((sum, row) => sum + Number(row.net_minutes || 0), 0);
+    const overtimeMinutes = rows.reduce((sum, row) => sum + Number(row.overtime_minutes || 0), 0);
+    res.json({ periodStart: toDateOnly(period.period_start), periodEnd: toDateOnly(period.period_end), totals: { employeeCount: rows.length, netMinutes, overtimeMinutes, grossPayCents }, rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to build final payroll report." });
+  }
+});
+
+
 module.exports = router;
