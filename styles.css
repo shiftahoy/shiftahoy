@@ -4821,10 +4821,9 @@ body.theme-dark .clockStatusPreview--approved {
 .authCards.businessPendingActivation #ownerSignupCard > .fieldGroup,
 .authCards.businessPendingActivation #ownerSignupCard > .generatedIdNotice,
 .authCards.businessPendingActivation #ownerSignupCard > #signupButton {
-  transform: translateY(-6px);
+  transform: translateY(-12px);
 }
 
-.clockCard.clockPortalLocked #clockAccountNumber {
-  opacity: 1;
-  cursor: text;
+.clockCard.clockPortalLocked .clockPunchPanel {
+  display: none;
 }
