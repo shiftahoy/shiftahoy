@@ -280,3 +280,31 @@ This update expands Shift Ahoy from a live scheduling forecast into a fuller aut
 ## Validation
 
 All JavaScript files were checked with `node --check`.
+
+---
+# Shift Ahoy Location Duplication, Payroll Processor Suite, and Employee Calendar Update
+
+## Added
+
+- Owner location duplication workflow that copies shifts, shift-day rules, schedule rules, blocked dates, and holidays into a new location without copying employees or historical schedules.
+- Manager schedule forecast now shows a row for every active employee at the selected location, even when an employee has no forecasted shift that week.
+- Employee Portal schedule changed from a list-only view into a weekly calendar layout with working-day signifiers.
+- Employee calendar day clicks now show that date's shift details plus the rest of the week from the clicked day forward.
+- Payroll Suite provider handoff controls for universal CSV, ADP, Gusto, QuickBooks, and custom payroll workflows.
+- Payroll approval lock and finalization batch records.
+- Payroll export CSV with regular hours, overtime hours, unpaid break hours, adjustments, and gross pay columns.
+- Payroll adjustment entries for bonuses, reimbursements, deductions, retro pay, corrections, stipends, and other audit-friendly entries.
+- Manual punch correction records with audit logging and optional correction of clock-in/clock-out timestamps.
+- Break tracking data model with paid/unpaid meal/rest/other breaks.
+- Overtime policy settings for FLSA weekly 40+, state daily/weekly, company weekly, and custom/provider-managed policies.
+- Provider tax/deduction handoff mode so businesses can keep Shift Ahoy as the workforce/time source while ADP, Gusto, QuickBooks, or an existing payroll provider calculates tax, deduction, filing, and direct deposit compliance.
+
+## Updated
+
+- Payroll Manager Portal now has a legal payroll processor / provider handoff section consistent with the existing card, form, metric, and list design language.
+- Payroll summary preview now emphasizes approved time, break deductions, overtime premium, adjustments, and provider-ready gross payroll.
+- Desktop lockfile license metadata now matches the CC0-1.0 project license.
+
+## Validation
+
+- Updated JavaScript files were checked with `node --check`.
