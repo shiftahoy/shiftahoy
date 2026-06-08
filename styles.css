@@ -692,21 +692,30 @@ select:focus {
 
 #authView .formNotice {
   min-height: 32px;
-  max-height: 32px;
+  max-height: none;
   display: flex !important;
-  align-items: center;
-  overflow: hidden;
-  padding: 5px 10px;
+  align-items: flex-start;
+  overflow: visible;
+  padding: 7px 10px;
   border-radius: 12px;
   font-size: 0.72rem;
   font-weight: 800;
-  line-height: 1.18;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   opacity: 1;
 }
 
 #authView .formNotice.hidden {
   visibility: hidden;
   opacity: 0;
+}
+
+.formNotice {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .formNotice.error {
