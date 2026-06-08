@@ -451,18 +451,43 @@ function isValidEmailInput(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
-function setNotice(id, type, text) {
+const noticeDismissTimers = new Map();
+
+function setNotice(id, type, text, options = {}) {
   const notice = $(id);
   if (!notice) return;
+
+  if (noticeDismissTimers.has(id)) {
+    clearTimeout(noticeDismissTimers.get(id));
+    noticeDismissTimers.delete(id);
+  }
 
   if (!text) {
     notice.className = "formNotice hidden";
     notice.textContent = "";
+    notice.removeAttribute("title");
     return;
   }
 
-  notice.className = `formNotice ${type}`;
-  notice.textContent = text;
+  const safeType = type || "info";
+  const message = String(text);
+  notice.className = `formNotice ${safeType}`;
+  notice.textContent = message;
+  notice.title = message;
+
+  const shouldAutoDismiss = options.autoDismiss !== false && ["error", "warning", "success", "info"].includes(safeType);
+  if (shouldAutoDismiss) {
+    const durationMs = Number(options.durationMs) || (safeType === "error" ? 9000 : safeType === "warning" ? 8000 : 5500);
+    const timer = setTimeout(() => {
+      if (notice.textContent === message) {
+        notice.className = "formNotice hidden";
+        notice.textContent = "";
+        notice.removeAttribute("title");
+      }
+      noticeDismissTimers.delete(id);
+    }, durationMs);
+    noticeDismissTimers.set(id, timer);
+  }
 }
 
 function setFieldState(inputId, state, message) {
@@ -1060,6 +1085,23 @@ function clearAuthFieldStates() {
   loginFieldIds.forEach((id) => resetFieldState(id, "Required"));
 }
 
+function shortAuthErrorMessage(message, inputId = "") {
+  const text = String(message || "").toLowerCase();
+
+  if (text.includes("email") && (text.includes("used") || text.includes("taken") || text.includes("exists"))) return "Email Already Used";
+  if (text.includes("wrong password") || text.includes("invalid business") || text.includes("login") || text.includes("password")) {
+    return inputId === "loginValue" ? "Check ID or Email" : "Wrong Password";
+  }
+  if (text.includes("valid email")) return "Enter a valid email";
+  if (text.includes("password must") || text.includes("12")) return "12–128 characters";
+  if (text.includes("business")) return "Check Business";
+  if (text.includes("first name")) return "Required";
+  if (text.includes("last name")) return "Required";
+
+  const fallback = String(message || "Check field").trim();
+  return fallback.length > 28 ? "Check field" : fallback;
+}
+
 function setSignupApiError(err) {
   const message = err?.message || "Account creation failed.";
   const lowerMessage = message.toLowerCase();
@@ -1068,18 +1110,21 @@ function setSignupApiError(err) {
   if (lowerMessage.includes("first name")) inputId = "signupFirstName";
   else if (lowerMessage.includes("last name")) inputId = "signupLastName";
   else if (lowerMessage.includes("business")) inputId = "signupBusinessName";
-  else if (lowerMessage.includes("email")) inputId = "signupEmail";
+  else if (lowerMessage.includes("email") || lowerMessage.includes("already used") || lowerMessage.includes("taken")) inputId = "signupEmail";
   else if (lowerMessage.includes("password")) inputId = "signupPassword";
 
-  setFieldState(inputId, "invalid", message);
+  setNotice("signupFormMessage", "", "");
+  setFieldState(inputId, "invalid", shortAuthErrorMessage(message, inputId));
   $(inputId)?.focus?.();
 }
 
 function setLoginApiError(err) {
   const message = err?.message || "Login failed.";
-  setFieldState("loginValue", "invalid", message);
-  setFieldState("loginPassword", "invalid", "Check password");
-  $("loginValue")?.focus?.();
+  setNotice("loginFormMessage", "", "");
+  setFieldState("loginValue", "neutral", "Check ID or Email");
+  setFieldState("loginPassword", "invalid", shortAuthErrorMessage(message, "loginPassword"));
+  $("loginPassword")?.focus?.();
+  $("loginPassword")?.select?.();
 }
 
 function setAuthButtonBusy(buttonId, busy, busyText = "Working...") {
@@ -1103,7 +1148,7 @@ async function signup(event) {
   setNotice("loginFormMessage", "", "");
 
   if (!validateSignupForm(true)) {
-    setNotice("signupFormMessage", "error", "Please fix the highlighted fields before creating the account.");
+    setNotice("signupFormMessage", "", "");
     return;
   }
 
@@ -1146,7 +1191,6 @@ async function signup(event) {
     if ($("loginPassword")) $("loginPassword").value = "";
   } catch (err) {
     setSignupApiError(err);
-    setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
   } finally {
     setAuthButtonBusy("signupButton", false);
   }
@@ -1161,7 +1205,7 @@ async function login(event) {
   const password = normalizePasswordInput($("loginPassword")?.value || "");
 
   if (!validateLoginForm(true)) {
-    setNotice("loginFormMessage", "error", "Enter your Business ID#, Employee ID# or email, and password.");
+    setNotice("loginFormMessage", "", "");
     return;
   }
 
@@ -1205,7 +1249,6 @@ async function login(event) {
     accessToken = null;
     currentUser = null;
     setLoginApiError(err);
-    setNotice("loginFormMessage", "error", err.message || "Login failed.");
   } finally {
     setAuthButtonBusy("loginButton", false);
   }
@@ -3445,6 +3488,23 @@ function setupEvents() {
     }
   });
 
+  ["loginValue", "loginPassword"].forEach((id) => {
+    const input = $(id);
+    if (input) {
+      input.addEventListener("input", () => {
+        setNotice("loginFormMessage", "", "");
+        validateLoginForm(false);
+      });
+      input.addEventListener("blur", () => validateLoginForm(true));
+    }
+  });
+
+  $("clockManagerPassword")?.addEventListener("input", () => {
+    setNotice("clockFormMessage", "", "");
+    const password = normalizePasswordInput($("clockManagerPassword")?.value || "");
+    setFieldState("clockManagerPassword", password ? "valid" : "neutral", password ? "Password entered" : "Required");
+  });
+
   $("showLocationFormButton").addEventListener("click", () => showLocationForm());
   $("locationForm").addEventListener("submit", saveLocation);
   $("cancelLocationButton").addEventListener("click", () => {
@@ -4632,7 +4692,9 @@ async function unlockClockPortal() {
         audited: false
       }
     });
-    setNotice("clockFormMessage", "error", "Enter an owner or manager password to unlock the clock portal.");
+    setNotice("clockFormMessage", "", "");
+    setFieldState("clockManagerPassword", "invalid", "Required");
+    $("clockManagerPassword")?.focus?.();
     return;
   }
 
@@ -4659,6 +4721,7 @@ async function unlockClockPortal() {
       }
     });
     setNotice("clockFormMessage", "success", data.message || "Clock portal unlocked.");
+    setFieldState("clockManagerPassword", "valid", "Unlocked");
     $("clockAccountNumber")?.focus?.();
   } catch (err) {
     clockSessionToken = "";
@@ -4671,7 +4734,10 @@ async function unlockClockPortal() {
         audited: false
       }
     });
-    setNotice("clockFormMessage", "error", err.message || "Clock unlock failed.");
+    setNotice("clockFormMessage", "", "");
+    setFieldState("clockManagerPassword", "invalid", shortAuthErrorMessage(err.message || "Clock unlock failed.", "loginPassword"));
+    $("clockManagerPassword")?.focus?.();
+    $("clockManagerPassword")?.select?.();
   }
 }
 
@@ -4690,7 +4756,8 @@ async function lookupClockStatus() {
         audited: false
       }
     });
-    setNotice("clockFormMessage", "error", "Enter a 9 digit Employee Company ID#.");
+    setNotice("clockFormMessage", "", "");
+    setFieldState("clockAccountNumber", "invalid", "9 digits required");
     return null;
   }
 
