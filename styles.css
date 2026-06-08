@@ -4639,3 +4639,199 @@ body.theme-dark .clockStatusPreview {
 .authCards.businessActive .authMiniGrid > .card {
   min-height: 0;
 }
+
+/* Professional clock portal refinement: selected business banner, 01 field breathing room, and audited clock status colors. */
+#ownerSignupCard .authTransitionBanner {
+  order: 2;
+  margin: -6px 0 8px;
+  padding: 10px 13px;
+  min-height: 0;
+  max-height: none;
+  align-items: flex-start;
+}
+
+.authCards.businessActive #ownerSignupCard,
+.authCards.businessPendingActivation #ownerSignupCard {
+  gap: 10px;
+  padding-top: 12px !important;
+  padding-bottom: 14px !important;
+}
+
+.authCards.businessActive #ownerSignupCard .fieldGroup,
+.authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.authCards.businessActive #ownerSignupCard .fieldHelp,
+.authCards.businessPendingActivation #ownerSignupCard .fieldHelp {
+  display: block;
+}
+
+.authCards.businessActive #ownerSignupCard input,
+.authCards.businessPendingActivation #ownerSignupCard input {
+  min-height: 42px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.clockCard {
+  position: relative;
+  overflow: hidden;
+}
+
+.clockCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--brand);
+  opacity: 0.28;
+}
+
+.clockUnlockPanel,
+.clockPunchPanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.clockUnlockPanel {
+  align-self: start;
+}
+
+.clockPunchPanel {
+  padding-top: 3px;
+  border-top: 1px solid var(--line);
+}
+
+.clockUnlockButton,
+#loginButton {
+  width: 100%;
+  min-height: 44px;
+}
+
+.clockCard .clockUnlockButton {
+  align-self: end;
+  margin-top: 2px;
+}
+
+.clockStatusPreview {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.clockStatusPreview strong {
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
+}
+
+.clockStatusPreview span,
+.clockStatusPreview small,
+.clockStatusPreview em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.clockStatusPreview em {
+  justify-self: start;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.82;
+}
+
+.clockStatusPreview--approved {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.clockStatusPreview--rejected {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.clockStatusPreview--warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.clockStateApproved::before { background: var(--success); opacity: 1; }
+.clockStateRejected::before { background: var(--danger); opacity: 1; }
+.clockStateWarning::before { background: #f97316; opacity: 1; }
+.clockStateUnlocked::before { background: var(--brand); opacity: 1; }
+
+.clockStateApproved {
+  border-color: var(--success-border) !important;
+  box-shadow: 0 14px 34px rgba(21, 128, 61, 0.12) !important;
+}
+
+.clockStateRejected {
+  border-color: var(--danger-border) !important;
+  box-shadow: 0 14px 34px rgba(220, 38, 38, 0.12) !important;
+}
+
+.clockStateWarning {
+  border-color: #fed7aa !important;
+  box-shadow: 0 14px 34px rgba(249, 115, 22, 0.12) !important;
+}
+
+.clockActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.clockActions .button {
+  min-height: 42px;
+  white-space: normal;
+}
+
+.formNotice.warning {
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+body.theme-dark .clockPunchPanel {
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+body.theme-dark .clockStatusPreview--warning,
+body.theme-dark .formNotice.warning {
+  background: rgba(154, 52, 18, 0.22);
+  border-color: rgba(251, 146, 60, 0.28);
+  color: #fdba74;
+}
+
+body.theme-dark .clockStatusPreview--rejected {
+  background: rgba(127, 29, 29, 0.22);
+  border-color: rgba(252, 165, 165, 0.28);
+  color: #fecaca;
+}
+
+body.theme-dark .clockStatusPreview--approved {
+  background: rgba(22, 101, 52, 0.22);
+  border-color: rgba(134, 239, 172, 0.28);
+  color: #bbf7d0;
+}
+
+@media (max-width: 720px) {
+  .clockActions {
+    grid-template-columns: 1fr;
+  }
+}
