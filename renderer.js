@@ -942,7 +942,7 @@ function renderBusinessGate(options = {}) {
   const cards = $("authCards");
   cards?.classList.toggle("businessActive", hasBusiness);
 
-  $("ownerSignupCard")?.classList.toggle("hidden", hasBusiness);
+  $("ownerSignupCard")?.classList.remove("hidden");
   $("businessGateCard")?.classList.toggle("hidden", hasBusiness);
 
   const grid = $("authMiniGrid");
