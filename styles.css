@@ -4377,6 +4377,37 @@ body.theme-dark .clockStatusPreview {
   }
 }
 
+
+/* Smooth signup-to-login transition: once a Business ID# is selected, keep the auth area focused on the next two actions. */
+.authCards.businessActive {
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.authCards.businessActive #ownerSignupCard,
+.authCards.businessActive #businessGateCard {
+  display: none !important;
+}
+
+.authTransitionBanner {
+  margin: 0;
+  border-radius: 18px;
+  padding: 13px 15px;
+  font-weight: 850;
+  line-height: 1.35;
+  box-shadow: 0 10px 24px rgba(21, 128, 61, 0.08);
+}
+
+.authCards.businessActive .authMiniGrid {
+  min-height: 0;
+  align-self: stretch;
+}
+
+.authCards.businessActive .authMiniGrid > .card {
+  align-content: start;
+}
+
 /* Login panel shape polish: square off the right side of the 02 Login card so it connects cleanly with the 03 Clock In / Out panel. */
 .authMiniGrid > .compactCard:first-child {
   border-top-right-radius: 0 !important;
