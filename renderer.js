@@ -959,6 +959,7 @@ function renderBusinessGate(options = {}) {
   }
 
   setAuthTransition(hasActivatedBusiness ? options.message || "" : "");
+  updateClockPortalAccessState();
 }
 
 async function activateBusinessGate() {
@@ -985,6 +986,7 @@ async function activateBusinessGate() {
     setFieldState("businessAccountNumber", "valid", "Business selected");
     setNotice("businessGateMessage", "success", "Business selected. Login and Clock In / Out are now available.");
     renderBusinessGate();
+  updateClockPortalAccessState();
   } catch (err) {
     selectedBusinessAccountNumber = "";
     selectedBusinessName = "";
@@ -4438,6 +4440,43 @@ function clockStatusLabel(data = {}, fallback = "") {
   return decision.title || data.statusLabel || fallback || "Clock status";
 }
 
+function hasUnlockedClockPortal() {
+  return !!clockSessionToken && !!currentBusinessAccountNumber();
+}
+
+function updateClockPortalAccessState() {
+  const unlocked = hasUnlockedClockPortal();
+  const card = document.querySelector(".clockCard");
+  const input = $("clockAccountNumber");
+  const buttons = [$("clockLookupButton"), $("clockInButton"), $("clockOutButton")].filter(Boolean);
+
+  card?.classList.toggle("clockPortalLocked", !unlocked);
+  if (input) {
+    input.disabled = !unlocked;
+    input.setAttribute("aria-disabled", String(!unlocked));
+    input.placeholder = unlocked ? "Scan or enter 9 digit Employee ID#" : "Unlock Clock Portal first";
+  }
+
+  for (const button of buttons) {
+    button.disabled = !unlocked;
+    button.setAttribute("aria-disabled", String(!unlocked));
+  }
+}
+
+function requireUnlockedClockPortal() {
+  if (hasUnlockedClockPortal()) return true;
+  updateClockPortalAccessState();
+  setClockCardState("rejected", {
+    decision: {
+      title: "Locked",
+      reason: "A manager or owner must unlock the clock portal before employees can scan, clock in, or clock out.",
+      audited: false
+    }
+  });
+  setNotice("clockFormMessage", "error", "Unlock the Clock Portal with owner or manager credentials first.");
+  return false;
+}
+
 function setClockCardState(state = "idle", data = {}) {
   const card = document.querySelector(".clockCard");
   const preview = $("clockStatusPreview");
@@ -4475,6 +4514,7 @@ function setClockButtonsForLookup(data = {}) {
   const clockOutButton = $("clockOutButton");
   clockInButton?.classList.remove("hidden");
   clockOutButton?.classList.remove("hidden");
+  updateClockPortalAccessState();
 }
 
 function clearClockPunchState() {
@@ -4482,6 +4522,7 @@ function clearClockPunchState() {
   setClockCardState("idle");
   $("clockOutButton")?.classList.remove("hidden");
   $("clockInButton")?.classList.remove("hidden");
+  updateClockPortalAccessState();
 }
 
 function resetClockAfterDecision() {
@@ -4490,6 +4531,7 @@ function resetClockAfterDecision() {
   pendingClockAction = null;
   $("clockOutButton")?.classList.remove("hidden");
   $("clockInButton")?.classList.remove("hidden");
+  updateClockPortalAccessState();
 }
 
 async function unlockClockPortal() {
@@ -4529,6 +4571,7 @@ async function unlockClockPortal() {
     });
     clockSessionToken = data.clockSessionToken || "";
     sessionStorage.setItem("shiftAhoyClockSessionToken", clockSessionToken);
+    updateClockPortalAccessState();
     if ($("clockManagerPassword")) $("clockManagerPassword").value = "";
     setClockCardState("unlocked", {
       employee: { name: data.business?.businessName || selectedBusinessName || "Shift Ahoy" },
@@ -4543,6 +4586,7 @@ async function unlockClockPortal() {
   } catch (err) {
     clockSessionToken = "";
     sessionStorage.removeItem("shiftAhoyClockSessionToken");
+    updateClockPortalAccessState();
     setClockCardState("rejected", {
       decision: {
         title: "Rejected",
@@ -4555,6 +4599,7 @@ async function unlockClockPortal() {
 }
 
 async function lookupClockStatus() {
+  if (!requireUnlockedClockPortal()) return null;
   const input = $("clockAccountNumber");
   const number = normalizeIdInput(input?.value || "");
   if (input) input.value = number;
@@ -4605,6 +4650,7 @@ async function lookupClockStatus() {
 }
 
 async function submitClockAction(actionOverride = null) {
+  if (!requireUnlockedClockPortal()) return;
   const input = $("clockAccountNumber");
   const number = normalizeIdInput(input?.value || "");
   if (input) input.value = number;
@@ -4662,7 +4708,12 @@ function handleClockIdInput() {
   clearTimeout(clockScanTimer);
   clearClockPunchState();
 
-  if (input.value.length === 9 && clockSessionToken) {
+  if (!hasUnlockedClockPortal()) {
+    updateClockPortalAccessState();
+    return;
+  }
+
+  if (input.value.length === 9) {
     clockScanTimer = setTimeout(() => submitClockAction("clock_in"), 220);
   }
 }
@@ -4670,6 +4721,7 @@ function handleClockIdInput() {
 function handleClockIdKeydown(event) {
   if (event.key === "Enter") {
     event.preventDefault();
+    if (!requireUnlockedClockPortal()) return;
     submitClockAction("clock_in");
   }
 }
