@@ -98,14 +98,19 @@ function createClockSessionToken({ businessId, businessAccountNumber, actorUserI
   );
 }
 
-function verifyClockSessionToken(token, businessId) {
-  if (!token) return false;
+function clockSessionPayload(token, businessId) {
+  if (!token) return null;
   try {
     const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-    return payload.purpose === "shiftahoy_clock_portal" && payload.businessId === businessId;
+    if (payload.purpose !== "shiftahoy_clock_portal" || payload.businessId !== businessId) return null;
+    return payload;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function verifyClockSessionToken(token, businessId) {
+  return !!clockSessionPayload(token, businessId);
 }
 
 async function settingsForBusiness(businessId) {
@@ -216,6 +221,71 @@ function alertTypeFor(action, status) {
   return `clock_out_${status}`;
 }
 
+
+function employeeClockName(employee) {
+  return `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.employee_code || "Employee";
+}
+
+function scheduleTimeText(date) {
+  if (!date) return "no published schedule was found for today";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function clockDecision({ action, status, employee, scheduledAt = null, rejected = false }) {
+  const actionLabel = action === "clock_out" ? "Clock Out" : "Clock In";
+  const name = employeeClockName(employee);
+
+  if (rejected || status === "early") {
+    return {
+      title: "Rejected",
+      reason: `${name} was not clocked in because the attempt was before the scheduled start window. Scheduled start: ${scheduleTimeText(scheduledAt)}.`,
+      audited: true
+    };
+  }
+
+  if (status === "on_time") {
+    return {
+      title: "Approved",
+      reason: `${name} ${actionLabel.toLowerCase()} matched the published schedule window. Scheduled time: ${scheduleTimeText(scheduledAt)}.`,
+      audited: true
+    };
+  }
+
+  if (status === "late") {
+    return {
+      title: "Approved with Warning",
+      reason: `${name} ${actionLabel.toLowerCase()} was accepted but occurred after the allowed schedule window. Scheduled time: ${scheduleTimeText(scheduledAt)}.`,
+      audited: true
+    };
+  }
+
+  return {
+    title: "Approved with Warning",
+    reason: `${name} ${actionLabel.toLowerCase()} was accepted, but no published schedule was found for today.`,
+    audited: true
+  };
+}
+
+async function logClockAudit(client, { employee, actorUserId, action, status, rejected = false, reason, entryId = null, scheduledAt = null, attemptedAt = new Date() }) {
+  await logAudit({
+    businessId: employee.business_id,
+    actorUserId: actorUserId || employee.user_id,
+    locationId: employee.location_id,
+    action: rejected ? `${action}_rejected` : `${action}_${status}`,
+    entityType: "time_clock_entry",
+    entityId: entryId,
+    details: JSON.stringify({
+      employeeId: employee.employee_id,
+      employeeCode: employee.employee_code,
+      status,
+      result: rejected ? "rejected" : status === "on_time" ? "approved" : "approved_with_warning",
+      reason,
+      scheduledAt,
+      attemptedAt
+    })
+  });
+}
+
 async function createPayrollAlert(client, { employee, entryId, action, status, scheduledAt }) {
   const alertType = alertTypeFor(action, status);
   if (!alertType) return;
@@ -267,15 +337,31 @@ async function requireClockBusiness(req, res) {
 
 async function enforceClockPortalAccess(req, res, business, settings) {
   if (settings.in_app_clock_enabled === false) {
-    res.status(403).json({ error: "In-app clock in/out is turned off for this business." });
+    res.status(403).json({
+      error: "In-app clock in/out is turned off for this business.",
+      decision: {
+        title: "Rejected",
+        reason: "In-app clock in/out is disabled in payroll settings.",
+        audited: false
+      }
+    });
     return false;
   }
 
-  if (settings.require_clock_session !== false && !verifyClockSessionToken(req.body.clockSessionToken, business.id)) {
-    res.status(403).json({ error: "A manager or owner must unlock the clock portal first." });
+  const payload = clockSessionPayload(req.body.clockSessionToken, business.id);
+  if (settings.require_clock_session !== false && !payload) {
+    res.status(403).json({
+      error: "A manager or owner must unlock the clock portal first.",
+      decision: {
+        title: "Rejected",
+        reason: "Owner or manager credentials must unlock the employee clock station before employees can scan or enter an ID#.",
+        audited: false
+      }
+    });
     return false;
   }
 
+  req.clockSessionPayload = payload;
   return true;
 }
 
@@ -362,9 +448,17 @@ router.post("/clock", async (req, res) => {
     const employee = await findEmployeeForClock(business.id, employeeCode, client);
     if (!employee) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "No active employee was found for that Employee Company ID#." });
+      return res.status(404).json({
+        error: "No active employee was found for that Employee Company ID#.",
+        decision: {
+          title: "Rejected",
+          reason: "No active employee record matched that Employee Company ID# for this business.",
+          audited: false
+        }
+      });
     }
 
+    const actorUserId = req.clockSessionPayload?.actorUserId || employee.user_id;
     const now = new Date();
     const window = await scheduledWindow(employee);
     const openEntry = await openClockEntry(employee.employee_id, client);
@@ -372,7 +466,19 @@ router.post("/clock", async (req, res) => {
     if (action === "clock_in") {
       if (openEntry) {
         await client.query("ROLLBACK");
-        return res.status(409).json({ error: "This employee is already clocked in." });
+        return res.status(409).json({
+          error: "This employee is already clocked in.",
+          employee: {
+            id: employee.employee_id,
+            employeeCode: employee.employee_code,
+            name: employeeClockName(employee)
+          },
+          decision: {
+            title: "Rejected",
+            reason: `${employeeClockName(employee)} already has an open clock entry.`,
+            audited: false
+          }
+        });
       }
 
       const status = clockInStatus(now, window?.startAt, settings);
@@ -386,8 +492,30 @@ router.post("/clock", async (req, res) => {
           scheduledAt: window?.startAt || null,
           attemptedAt: now
         });
+        const decision = clockDecision({ action, status, employee, scheduledAt: window?.startAt || null, rejected: true });
+        await logClockAudit(client, {
+          employee,
+          actorUserId,
+          action,
+          status: "early",
+          rejected: true,
+          reason: decision.reason,
+          scheduledAt: window?.startAt || null,
+          attemptedAt: now
+        });
         await client.query("COMMIT");
-        return res.status(409).json({ error: "Too early to clock in. This attempt was logged as a violation." });
+        return res.status(409).json({
+          error: "Too early to clock in. This attempt was rejected and audited.",
+          status: "early",
+          employee: {
+            id: employee.employee_id,
+            employeeCode: employee.employee_code,
+            name: employeeClockName(employee),
+            title: employee.title
+          },
+          decision,
+          audited: true
+        });
       }
 
       const insert = await client.query(
@@ -411,14 +539,49 @@ router.post("/clock", async (req, res) => {
         });
       }
 
+      const decision = clockDecision({ action, status, employee, scheduledAt: window?.startAt || null });
       await createPayrollAlert(client, { employee, entryId: insert.rows[0].id, action, status, scheduledAt: window?.startAt });
+      await logClockAudit(client, {
+        employee,
+        actorUserId,
+        action,
+        status,
+        reason: decision.reason,
+        entryId: insert.rows[0].id,
+        scheduledAt: window?.startAt || null,
+        attemptedAt: now
+      });
       await client.query("COMMIT");
-      return res.json({ message: "Clock in successful.", status, entry: insert.rows[0] });
+      return res.json({
+        message: status === "on_time" ? "Clock in approved." : "Clock in recorded with a warning.",
+        status,
+        employee: {
+          id: employee.employee_id,
+          employeeCode: employee.employee_code,
+          name: employeeClockName(employee),
+          title: employee.title
+        },
+        decision,
+        audited: true,
+        entry: insert.rows[0]
+      });
     }
 
     if (!openEntry) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ error: "This employee is not currently clocked in." });
+      return res.status(409).json({
+        error: "This employee is not currently clocked in.",
+        employee: {
+          id: employee.employee_id,
+          employeeCode: employee.employee_code,
+          name: employeeClockName(employee)
+        },
+        decision: {
+          title: "Rejected",
+          reason: `${employeeClockName(employee)} does not have an open clock entry to clock out of.`,
+          audited: false
+        }
+      });
     }
 
     const status = clockOutStatus(now, window?.endAt, settings);
@@ -444,11 +607,34 @@ router.post("/clock", async (req, res) => {
       });
     }
 
+    const decision = clockDecision({ action, status, employee, scheduledAt: window?.endAt || null });
     await createPayrollAlert(client, { employee, entryId: openEntry.id, action, status, scheduledAt: window?.endAt });
+    await logClockAudit(client, {
+      employee,
+      actorUserId,
+      action,
+      status,
+      reason: decision.reason,
+      entryId: openEntry.id,
+      scheduledAt: window?.endAt || null,
+      attemptedAt: now
+    });
     await runAutomaticLeaveAccrualForClockOut(client, employee.business_id, employee.employee_id, update.rows[0], null);
-    await runAutomaticBonusAwards(client, employee.business_id, employee.employee_id, req.user?.id || null);
+    await runAutomaticBonusAwards(client, employee.business_id, employee.employee_id, actorUserId || null);
     await client.query("COMMIT");
-    return res.json({ message: "Clock out successful.", status, entry: update.rows[0] });
+    return res.json({
+      message: status === "on_time" ? "Clock out approved." : "Clock out recorded with a warning.",
+      status,
+      employee: {
+        id: employee.employee_id,
+        employeeCode: employee.employee_code,
+        name: employeeClockName(employee),
+        title: employee.title
+      },
+      decision,
+      audited: true,
+      entry: update.rows[0]
+    });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     console.error(err);
