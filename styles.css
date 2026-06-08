@@ -4378,16 +4378,19 @@ body.theme-dark .clockStatusPreview {
 }
 
 
-/* Smooth signup-to-login transition: once a Business ID# is selected, keep the auth area focused on the next two actions. */
+/* Smooth signup-to-login transition: once a Business ID# is selected, hide only the 00 Business ID# gate and keep account creation visible. */
 .authCards.businessActive {
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   gap: 12px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
-.authCards.businessActive #ownerSignupCard,
 .authCards.businessActive #businessGateCard {
   display: none !important;
+}
+
+.authCards.businessActive #ownerSignupCard {
+  display: grid;
 }
 
 .authTransitionBanner {
