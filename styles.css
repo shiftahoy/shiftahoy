@@ -4872,3 +4872,110 @@ body.theme-dark .clockStatusPreview--approved {
     flex-direction: column;
   }
 }
+
+/* Shift Ahoy final 01 alignment pass:
+   - keep the 01 title/subtitle aligned like 02 and 03
+   - reserve the same field-start space whether the selected-business notice is hidden or visible
+   - stretch the selected-business notice to the same usable width as the fields
+   - do not change the 01 card size */
+.authCards.businessActive #ownerSignupCard,
+.authCards.businessPendingActivation #ownerSignupCard {
+  position: relative;
+  grid-auto-rows: auto;
+  gap: 6px;
+}
+
+.authCards.businessActive #ownerSignupCard .cardTitle,
+.authCards.businessPendingActivation #ownerSignupCard .cardTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.authCards.businessActive #ownerSignupCard .cardTitle > div,
+.authCards.businessPendingActivation #ownerSignupCard .cardTitle > div {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.authCards.businessActive #ownerSignupCard #authTransitionBanner,
+.authCards.businessPendingActivation #ownerSignupCard #authTransitionBanner {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -42px;
+  width: calc(100% + 42px);
+  min-height: 34px;
+  height: 34px;
+  max-height: 34px;
+  margin: 0;
+  padding: 7px 10px;
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  line-height: 1.15;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.authCards.businessActive #ownerSignupCard #authTransitionBanner.hidden,
+.authCards.businessPendingActivation #ownerSignupCard #authTransitionBanner.hidden {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.authCards.businessActive #ownerSignupCard .businessSelectedBanner,
+.authCards.businessPendingActivation #ownerSignupCard .businessSelectedBanner {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.authCards.businessActive #ownerSignupCard .businessSelectedBanner span,
+.authCards.businessPendingActivation #ownerSignupCard .businessSelectedBanner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authCards.businessActive #ownerSignupCard .changeBusinessButton,
+.authCards.businessPendingActivation #ownerSignupCard .changeBusinessButton {
+  flex: 0 0 auto;
+}
+
+/* The selected-business banner now overlays the same reserved message row that 02/03 already use,
+   so the fields should not need transform hacks that leave uneven spacing. */
+.authCards.businessActive #ownerSignupCard > .formGrid,
+.authCards.businessActive #ownerSignupCard > .fieldGroup,
+.authCards.businessActive #ownerSignupCard > .generatedIdNotice,
+.authCards.businessActive #ownerSignupCard > #signupButton,
+.authCards.businessPendingActivation #ownerSignupCard > .formGrid,
+.authCards.businessPendingActivation #ownerSignupCard > .fieldGroup,
+.authCards.businessPendingActivation #ownerSignupCard > .generatedIdNotice,
+.authCards.businessPendingActivation #ownerSignupCard > #signupButton {
+  transform: none !important;
+}
+
+@media (max-width: 720px) {
+  .authCards.businessActive #ownerSignupCard #authTransitionBanner,
+  .authCards.businessPendingActivation #ownerSignupCard #authTransitionBanner {
+    left: 0;
+    width: 100%;
+    height: auto;
+    min-height: 34px;
+    max-height: none;
+  }
+
+  .authCards.businessActive #ownerSignupCard .businessSelectedBanner,
+  .authCards.businessPendingActivation #ownerSignupCard .businessSelectedBanner {
+    align-items: flex-start;
+  }
+
+  .authCards.businessActive #ownerSignupCard .businessSelectedBanner span,
+  .authCards.businessPendingActivation #ownerSignupCard .businessSelectedBanner span {
+    white-space: normal;
+  }
+}
