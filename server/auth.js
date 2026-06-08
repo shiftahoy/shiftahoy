@@ -905,6 +905,61 @@ router.put("/profile/2fa", requireAuth, async (req, res) => {
   res.json({ settings: { twoFactorEnabled: enabled } });
 });
 
+router.delete("/account", requireAuth, async (req, res) => {
+  const currentPassword = req.body.currentPassword;
+
+  if (!currentPassword) {
+    return res.status(400).json({ error: "Current password is required." });
+  }
+
+  const passwordOk = await verifyActorPassword(req.user.id, currentPassword);
+  if (!passwordOk) {
+    return res.status(403).json({ error: "Wrong password." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(`DELETE FROM refresh_tokens WHERE user_id = $1`, [req.user.id]);
+
+    if (req.user.role === "owner") {
+      await client.query(`DELETE FROM businesses WHERE id = $1`, [req.user.businessId]);
+      await client.query("COMMIT");
+      res.clearCookie("shiftahoy_refresh");
+      return res.json({ message: "Owner account and business workspace deleted." });
+    }
+
+    await client.query(
+      `UPDATE employees
+       SET active = false,
+           updated_at = now()
+       WHERE business_id = $1
+         AND user_id = $2`,
+      [req.user.businessId, req.user.id]
+    );
+
+    await client.query(
+      `UPDATE users
+       SET active = false,
+           updated_at = now()
+       WHERE business_id = $1
+         AND id = $2`,
+      [req.user.businessId, req.user.id]
+    );
+
+    await client.query("COMMIT");
+    res.clearCookie("shiftahoy_refresh");
+    res.json({ message: "Account deleted." });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete account." });
+  } finally {
+    client.release();
+  }
+});
+
 router.post("/logout", async (req, res) => {
   const refreshToken = req.cookies.shiftahoy_refresh;
 
