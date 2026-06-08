@@ -266,16 +266,16 @@ function publicUser(user) {
 router.post("/signup", async (req, res) => {
   const { firstName, lastName, businessName, email, password } = req.body;
 
-  if (!firstName || !lastName || !businessName || !email || !password) {
-    return res.status(400).json({
-      error: "First name, last name, business, email, and password are required."
-    });
-  }
+  if (!firstName) return res.status(400).json({ error: "First name is required.", field: "signupFirstName" });
+  if (!lastName) return res.status(400).json({ error: "Last name is required.", field: "signupLastName" });
+  if (!businessName) return res.status(400).json({ error: "Business is required.", field: "signupBusinessName" });
+  if (!email) return res.status(400).json({ error: "Email is required.", field: "signupEmail" });
+  if (!password) return res.status(400).json({ error: "Password is required.", field: "signupPassword" });
 
   const normalizedPassword = normalizePassword(password);
 
   if (!isValidPassword(normalizedPassword)) {
-    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE, field: "signupPassword" });
   }
 
   const normalizedEmail = String(email).toLowerCase().trim();
@@ -294,7 +294,8 @@ router.post("/signup", async (req, res) => {
     if (!businessSlug) {
       await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "Business must contain letters or numbers."
+        error: "Business must contain letters or numbers.",
+        field: "signupBusinessName"
       });
     }
 
@@ -393,9 +394,16 @@ router.post("/signup", async (req, res) => {
     await client.query("ROLLBACK");
 
     if (err.code === "23505") {
+      const constraint = String(err.constraint || "").toLowerCase();
+      if (constraint.includes("email")) {
+        return res.status(409).json({ error: "Email Already Used", field: "signupEmail" });
+      }
+      if (constraint.includes("business")) {
+        return res.status(409).json({ error: "Business name already used", field: "signupBusinessName" });
+      }
       return res.status(409).json({
-        error:
-          "That email, ID#, or business login slug was just taken. Please try signing up again."
+        error: "Email Already Used",
+        field: "signupEmail"
       });
     }
 
@@ -465,14 +473,14 @@ router.post("/login", async (req, res) => {
   const user = await findUserForLogin(login, businessAccountNumber);
 
   if (!user) {
-    return res.status(401).json({ error: "Invalid Business ID#, login, or password." });
+    return res.status(401).json({ error: "Wrong Password", field: "loginPassword" });
   }
 
   const normalizedPassword = normalizePassword(password);
   const valid = await argon2.verify(user.password_hash, normalizedPassword);
 
   if (!valid) {
-    return res.status(401).json({ error: "Invalid Business ID#, login, or password." });
+    return res.status(401).json({ error: "Wrong Password", field: "loginPassword" });
   }
 
   if (user.two_factor_enabled === true) {
@@ -778,7 +786,7 @@ router.post("/reset-password", async (req, res) => {
   const normalizedPassword = normalizePassword(newPassword);
 
   if (!isValidPassword(normalizedPassword)) {
-    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE, field: "signupPassword" });
   }
 
   const tokenHash = hashToken(token);
@@ -864,7 +872,7 @@ router.put("/profile/password", requireAuth, async (req, res) => {
 
   const normalizedPassword = normalizePassword(newPassword);
   if (!isValidPassword(normalizedPassword)) {
-    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE });
+    return res.status(400).json({ error: PASSWORD_RULE_MESSAGE, field: "signupPassword" });
   }
 
   const passwordOk = await verifyActorPassword(req.user.id, currentPassword);
