@@ -58,6 +58,7 @@ let lastSchedulePayload = { cells: [], coverage: [], warnings: [], health: null 
 let pendingClockAction = null;
 let selectedBusinessAccountNumber = localStorage.getItem("shiftAhoyBusinessAccountNumber") || "";
 let selectedBusinessName = localStorage.getItem("shiftAhoyBusinessName") || "";
+let businessGatePendingActivation = false;
 let clockSessionToken = sessionStorage.getItem("shiftAhoyClockSessionToken") || "";
 
 const message = document.getElementById("message");
@@ -936,25 +937,28 @@ function setAuthTransition(message = "") {
 
 function renderBusinessGate(options = {}) {
   const input = $("businessAccountNumber");
-  const hasBusiness = !!selectedBusinessAccountNumber;
-  if (input && hasBusiness) input.value = selectedBusinessAccountNumber;
+  const hasSelectedBusiness = !!selectedBusinessAccountNumber;
+  const hasActivatedBusiness = hasSelectedBusiness && !businessGatePendingActivation;
+
+  if (input && hasSelectedBusiness) input.value = selectedBusinessAccountNumber;
 
   const cards = $("authCards");
-  cards?.classList.toggle("businessActive", hasBusiness);
+  cards?.classList.toggle("businessActive", hasActivatedBusiness);
+  cards?.classList.toggle("businessPendingActivation", hasSelectedBusiness && businessGatePendingActivation);
 
   $("ownerSignupCard")?.classList.remove("hidden");
-  $("businessGateCard")?.classList.toggle("hidden", hasBusiness);
+  $("businessGateCard")?.classList.toggle("hidden", hasActivatedBusiness);
 
   const grid = $("authMiniGrid");
-  if (grid) grid.classList.toggle("hidden", !hasBusiness);
+  if (grid) grid.classList.toggle("hidden", !hasActivatedBusiness);
 
   const active = $("businessGateActive");
   if (active) {
-    active.classList.toggle("hidden", !hasBusiness);
-    active.textContent = hasBusiness ? `Business active: ${businessActiveLabel()}` : "";
+    active.classList.add("hidden");
+    active.textContent = "";
   }
 
-  setAuthTransition(options.message || "");
+  setAuthTransition(hasActivatedBusiness ? options.message || "" : "");
 }
 
 async function activateBusinessGate() {
@@ -975,14 +979,16 @@ async function activateBusinessGate() {
 
     selectedBusinessAccountNumber = data.business?.businessAccountNumber || businessAccountNumber;
     selectedBusinessName = data.business?.businessName || "";
+    businessGatePendingActivation = false;
     localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
     localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
-    setFieldState("businessAccountNumber", "valid", "Business found");
-    setNotice("businessGateMessage", "success", "Business found. Login and Clock In / Out are now available.");
+    setFieldState("businessAccountNumber", "valid", "Business selected");
+    setNotice("businessGateMessage", "success", "Business selected. Login and Clock In / Out are now available.");
     renderBusinessGate();
   } catch (err) {
     selectedBusinessAccountNumber = "";
     selectedBusinessName = "";
+    businessGatePendingActivation = false;
     localStorage.removeItem("shiftAhoyBusinessAccountNumber");
     localStorage.removeItem("shiftAhoyBusinessName");
     renderBusinessGate();
@@ -1091,19 +1097,20 @@ async function signup(event) {
     if (data.businessAccountNumber) {
       selectedBusinessAccountNumber = data.businessAccountNumber;
       selectedBusinessName = data.businessName || payload.businessName;
+      businessGatePendingActivation = true;
       localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
       localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
-      renderBusinessGate({
-        message: `${successMessage} Your permanent Business ID# is ${selectedBusinessAccountNumber}. Check your email for verification, then login below.`
-      });
+      renderBusinessGate();
+      setNotice("signupFormMessage", "success", `${successMessage} Your permanent Business ID# is ${selectedBusinessAccountNumber}. Check your email for verification, then press Continue in Business ID# to reveal Login and Clock In / Out.`);
+      setNotice("businessGateMessage", "success", "Business ID# filled in. Press Continue to continue.");
+      setFieldState("businessAccountNumber", "valid", "Ready");
+      $("businessGateButton")?.focus?.();
     } else {
       setNotice("signupFormMessage", "success", successMessage);
     }
 
     if ($("loginValue")) $("loginValue").value = payload.email;
     if ($("loginPassword")) $("loginPassword").value = "";
-    setNotice("loginFormMessage", "success", "Email filled in. Enter your password after email verification to open the dashboard.");
-    window.setTimeout(() => $("loginPassword")?.focus(), 80);
   } catch (err) {
     setSignupApiError(err);
     setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
