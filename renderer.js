@@ -3346,9 +3346,11 @@ function setupEvents() {
   $("businessGateButton")?.addEventListener("click", activateBusinessGate);
   $("businessAccountNumber")?.addEventListener("input", () => { const input = $("businessAccountNumber"); if (input) input.value = normalizeIdInput(input.value); });
   $("clockUnlockButton")?.addEventListener("click", unlockClockPortal);
-  $("clockLookupButton")?.addEventListener("click", lookupClockStatus);
-  $("clockActionButton")?.addEventListener("click", submitClockAction);
-  $("clockAccountNumber")?.addEventListener("input", () => { const input = $("clockAccountNumber"); if (input) input.value = normalizeIdInput(input.value); pendingClockAction = null; $("clockActionButton")?.classList.add("hidden"); });
+  $("clockLookupButton")?.addEventListener("click", () => submitClockAction("clock_in"));
+  $("clockInButton")?.addEventListener("click", () => submitClockAction("clock_in"));
+  $("clockOutButton")?.addEventListener("click", () => submitClockAction("clock_out"));
+  $("clockAccountNumber")?.addEventListener("input", handleClockIdInput);
+  $("clockAccountNumber")?.addEventListener("keydown", handleClockIdKeydown);
   $("employeeCode")?.addEventListener("input", () => { const input = $("employeeCode"); if (input) input.value = normalizeIdInput(input.value); });
   $("showEmployeePasswordButton")?.addEventListener("click", toggleEmployeePasswordVisibility);
   $("copyEmployeePasswordButton")?.addEventListener("click", copyEmployeePassword);
@@ -4426,16 +4428,94 @@ function formatHoursFromMinutes(minutes) {
   return (Math.max(0, Number(minutes || 0)) / 60).toFixed(2);
 }
 
+function clockDecisionText(data = {}, fallback = "") {
+  const decision = data.decision || {};
+  return decision.reason || data.reason || data.error || data.message || fallback;
+}
+
+function clockStatusLabel(data = {}, fallback = "") {
+  const decision = data.decision || {};
+  return decision.title || data.statusLabel || fallback || "Clock status";
+}
+
+function setClockCardState(state = "idle", data = {}) {
+  const card = document.querySelector(".clockCard");
+  const preview = $("clockStatusPreview");
+  const employeeName = data.employee?.name || data.entry?.employeeName || "Employee";
+  const label = clockStatusLabel(data, state === "approved" ? "Approved" : state === "rejected" ? "Rejected" : "Clock status");
+  const reason = clockDecisionText(data, "Ready for the next employee scan or entry.");
+  const auditText = data.decision?.audited || data.audited ? "Audited" : "Audit record pending";
+
+  card?.classList.remove("clockStateApproved", "clockStateRejected", "clockStateWarning", "clockStateUnlocked");
+
+  if (state === "approved") card?.classList.add("clockStateApproved");
+  if (state === "rejected") card?.classList.add("clockStateRejected");
+  if (state === "warning") card?.classList.add("clockStateWarning");
+  if (state === "unlocked") card?.classList.add("clockStateUnlocked");
+
+  if (!preview) return;
+
+  if (state === "idle") {
+    preview.className = "clockStatusPreview hidden";
+    preview.innerHTML = "";
+    return;
+  }
+
+  preview.className = `clockStatusPreview clockStatusPreview--${state}`;
+  preview.innerHTML = `
+    <strong>${escapeHtml(label)}</strong>
+    <span>${escapeHtml(employeeName)}</span>
+    <small>${escapeHtml(reason)}</small>
+    <em>${escapeHtml(auditText)}</em>
+  `;
+}
+
+function setClockButtonsForLookup(data = {}) {
+  const clockInButton = $("clockInButton");
+  const clockOutButton = $("clockOutButton");
+  clockInButton?.classList.remove("hidden");
+  clockOutButton?.classList.remove("hidden");
+}
+
+function clearClockPunchState() {
+  pendingClockAction = null;
+  setClockCardState("idle");
+  $("clockOutButton")?.classList.remove("hidden");
+  $("clockInButton")?.classList.remove("hidden");
+}
+
+function resetClockAfterDecision() {
+  const input = $("clockAccountNumber");
+  if (input) input.value = "";
+  pendingClockAction = null;
+  $("clockOutButton")?.classList.remove("hidden");
+  $("clockInButton")?.classList.remove("hidden");
+}
+
 async function unlockClockPortal() {
   const businessAccountNumber = currentBusinessAccountNumber();
   const password = normalizePasswordInput($("clockManagerPassword")?.value || "");
 
   if (!isValidIdInput(businessAccountNumber)) {
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: "Activate a valid Business ID# before unlocking the clock portal.",
+        audited: false
+      }
+    });
     setNotice("clockFormMessage", "error", "Enter and activate a valid Business ID# first.");
     return;
   }
 
   if (!password) {
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: "Owner or manager password is required to unlock the employee clock station.",
+        audited: false
+      }
+    });
     setNotice("clockFormMessage", "error", "Enter an owner or manager password to unlock the clock portal.");
     return;
   }
@@ -4450,10 +4530,26 @@ async function unlockClockPortal() {
     clockSessionToken = data.clockSessionToken || "";
     sessionStorage.setItem("shiftAhoyClockSessionToken", clockSessionToken);
     if ($("clockManagerPassword")) $("clockManagerPassword").value = "";
+    setClockCardState("unlocked", {
+      employee: { name: data.business?.businessName || selectedBusinessName || "Shift Ahoy" },
+      decision: {
+        title: "Clock Portal Unlocked",
+        reason: "Employees may now scan or enter their Employee Company ID# to clock in or out.",
+        audited: true
+      }
+    });
     setNotice("clockFormMessage", "success", data.message || "Clock portal unlocked.");
+    $("clockAccountNumber")?.focus?.();
   } catch (err) {
     clockSessionToken = "";
     sessionStorage.removeItem("shiftAhoyClockSessionToken");
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: err.message || "Clock unlock failed.",
+        audited: false
+      }
+    });
     setNotice("clockFormMessage", "error", err.message || "Clock unlock failed.");
   }
 }
@@ -4462,13 +4558,18 @@ async function lookupClockStatus() {
   const input = $("clockAccountNumber");
   const number = normalizeIdInput(input?.value || "");
   if (input) input.value = number;
-  pendingClockAction = null;
-  $("clockActionButton")?.classList.add("hidden");
-  $("clockStatusPreview")?.classList.add("hidden");
+  clearClockPunchState();
 
   if (number.length !== 9) {
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: "Enter or scan a complete 9 digit Employee Company ID#.",
+        audited: false
+      }
+    });
     setNotice("clockFormMessage", "error", "Enter a 9 digit Employee Company ID#.");
-    return;
+    return null;
   }
 
   try {
@@ -4479,27 +4580,46 @@ async function lookupClockStatus() {
       body: JSON.stringify({ businessAccountNumber: currentBusinessAccountNumber(), employeeCode: number, accountNumber: number, clockSessionToken })
     });
     pendingClockAction = data.clockedIn ? "clock_out" : "clock_in";
-    const actionButton = $("clockActionButton");
-    if (actionButton) {
-      actionButton.textContent = data.clockedIn ? "Clock Out" : "Clock In";
-      actionButton.classList.remove("hidden");
-    }
-    const preview = $("clockStatusPreview");
-    if (preview) {
-      preview.classList.remove("hidden");
-      preview.innerHTML = `<strong>${escapeHtml(data.employee?.name || "Employee")}</strong><span>${data.clockedIn ? "Currently clocked in" : "Currently clocked out"}</span>`;
-    }
-    setNotice("clockFormMessage", "success", "ID# found. Confirm the action below.");
+    setClockButtonsForLookup(data);
+    setClockCardState("unlocked", {
+      employee: data.employee,
+      decision: {
+        title: data.clockedIn ? "Ready to Clock Out" : "Ready to Clock In",
+        reason: data.clockedIn ? "This employee currently has an open clock entry." : "Employee ID# found. Press Clock In or scan again to clock in automatically.",
+        audited: false
+      }
+    });
+    setNotice("clockFormMessage", "success", data.clockedIn ? "ID# found. Employee is currently clocked in." : "ID# found. Ready to clock in.");
+    return data;
   } catch (err) {
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: err.message || "Clock lookup failed.",
+        audited: false
+      }
+    });
     setNotice("clockFormMessage", "error", err.message || "Clock lookup failed.");
+    return null;
   }
 }
 
-async function submitClockAction() {
+async function submitClockAction(actionOverride = null) {
   const input = $("clockAccountNumber");
   const number = normalizeIdInput(input?.value || "");
-  if (!pendingClockAction || number.length !== 9) {
-    await lookupClockStatus();
+  if (input) input.value = number;
+
+  const action = actionOverride || pendingClockAction || "clock_in";
+
+  if (number.length !== 9) {
+    setClockCardState("rejected", {
+      decision: {
+        title: "Rejected",
+        reason: "Enter or scan a complete 9 digit Employee Company ID#.",
+        audited: false
+      }
+    });
+    setNotice("clockFormMessage", "error", "Enter a 9 digit Employee Company ID#.");
     return;
   }
 
@@ -4508,18 +4628,49 @@ async function submitClockAction() {
       method: "POST",
       skipRefresh: true,
       headers: desktopClockHeaders(),
-      body: JSON.stringify({ businessAccountNumber: currentBusinessAccountNumber(), employeeCode: number, accountNumber: number, action: pendingClockAction, clockSessionToken })
+      body: JSON.stringify({ businessAccountNumber: currentBusinessAccountNumber(), employeeCode: number, accountNumber: number, action, clockSessionToken })
     });
-    setNotice("clockFormMessage", "success", `${data.message || "Clock action successful."} Status: ${String(data.status || "on_time").replaceAll("_", " ")}.`);
-    if (input) input.value = "";
-    pendingClockAction = null;
-    $("clockActionButton")?.classList.add("hidden");
-    $("clockStatusPreview")?.classList.add("hidden");
+
+    const normalizedStatus = String(data.status || "on_time").toLowerCase();
+    const visualState = normalizedStatus === "on_time" ? "approved" : "warning";
+    setClockCardState(visualState, data);
+    setNotice("clockFormMessage", visualState === "approved" ? "success" : "warning", clockDecisionText(data, data.message || "Clock action recorded."));
+    resetClockAfterDecision();
+
     if (accessToken) {
       loadPayrollPanels().catch(() => {});
     }
   } catch (err) {
-    setNotice("clockFormMessage", "error", err.message || "Clock action failed.");
+    const data = err.data || {};
+    setClockCardState("rejected", data.decision ? data : {
+      employee: data.employee,
+      decision: {
+        title: "Rejected",
+        reason: err.message || "Clock action failed.",
+        audited: !!data.audited
+      }
+    });
+    setNotice("clockFormMessage", "error", clockDecisionText(data, err.message || "Clock action failed."));
+  }
+}
+
+let clockScanTimer = null;
+function handleClockIdInput() {
+  const input = $("clockAccountNumber");
+  if (!input) return;
+  input.value = normalizeIdInput(input.value);
+  clearTimeout(clockScanTimer);
+  clearClockPunchState();
+
+  if (input.value.length === 9 && clockSessionToken) {
+    clockScanTimer = setTimeout(() => submitClockAction("clock_in"), 220);
+  }
+}
+
+function handleClockIdKeydown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitClockAction("clock_in");
   }
 }
 
