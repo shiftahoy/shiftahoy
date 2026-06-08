@@ -1101,7 +1101,8 @@ async function signup(event) {
       localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
       localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
       renderBusinessGate();
-      setNotice("signupFormMessage", "success", `${successMessage} Your permanent Business ID# is ${selectedBusinessAccountNumber}. Check your email for verification, then press Continue in Business ID# to reveal Login and Clock In / Out.`);
+      setNotice("signupFormMessage", "success", `${successMessage} Your permanent Business ID# is ${selectedBusinessAccountNumber}. Check your email for verification.`);
+      setAuthTransition(`Business ID# ready: ${selectedBusinessName || "Shift Ahoy"} · Business ID# ${selectedBusinessAccountNumber}. Press Continue in 00 to reveal Login and Clock In / Out.`);
       setNotice("businessGateMessage", "success", "Business ID# filled in. Press Continue to continue.");
       setFieldState("businessAccountNumber", "valid", "Ready");
       $("businessGateButton")?.focus?.();
