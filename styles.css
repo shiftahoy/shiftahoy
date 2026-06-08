@@ -4408,3 +4408,80 @@ body.theme-dark .clockStatusPreview {
 .theme-dark .passwordFieldRow input {
   color: inherit;
 }
+
+/* Shift Ahoy suite expansion: location duplication, employee calendar, and payroll processor handoff */
+.employeeCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(86px, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.employeeCalendarDay {
+  min-height: 104px;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.05);
+}
+
+.employeeCalendarDay strong {
+  color: var(--brand);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.employeeCalendarDay span {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.employeeCalendarDay em,
+.employeeCalendarDay small {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.employeeCalendarDay.working {
+  border-color: var(--brand-border);
+  background: var(--brand-soft);
+}
+
+.employeeCalendarDay.working em {
+  color: var(--brand);
+  border-color: var(--brand-border);
+}
+
+.employeeCalendarDay.selected {
+  outline: 3px solid rgba(0, 93, 170, 0.16);
+  border-color: var(--brand);
+}
+
+.payrollSuiteBox {
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #ffffff, var(--surface-soft));
+}
+
+@media (max-width: 900px) {
+  .employeeCalendarGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
