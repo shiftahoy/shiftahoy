@@ -174,13 +174,13 @@
                 <div id="loginFormMessage" class="formNotice hidden" role="status" aria-live="polite"></div>
 
                 <div class="fieldGroup loginFieldGroup">
-                  <label class="fieldLabel" for="loginValue">Employee ID# or Email</label>
+                  <label class="fieldLabel" for="loginValue">Employee ID# or Email <span id="loginValueStatus" class="fieldStatus">Required</span></label>
                   <input id="loginValue" autocomplete="username" placeholder="Employee ID# or Email" />
                   <button id="forgotIdButton" class="linkButton fieldUtilityLink" type="button">Forgot ID#</button>
                 </div>
 
                 <div class="fieldGroup loginFieldGroup">
-                  <label class="fieldLabel" for="loginPassword">Password</label>
+                  <label class="fieldLabel" for="loginPassword">Password <span id="loginPasswordStatus" class="fieldStatus">Required</span></label>
                   <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" maxlength="128" />
                   <button id="forgotPasswordButton" class="linkButton fieldUtilityLink" type="button">Forgot password</button>
                 </div>
@@ -200,7 +200,7 @@
 
                 <div class="clockUnlockPanel" aria-label="Manager clock portal unlock">
                   <div class="fieldGroup loginFieldGroup">
-                    <label class="fieldLabel" for="clockManagerPassword">Owner / Manager Password</label>
+                    <label class="fieldLabel" for="clockManagerPassword">Owner / Manager Password <span id="clockManagerPasswordStatus" class="fieldStatus">Required</span></label>
                     <input id="clockManagerPassword" type="password" autocomplete="current-password" placeholder="Enter owner or manager password" />
                     <small class="fieldHelp">Owner or manager credentials unlock the employee clock station. No ID scan is required for this unlock.</small>
                   </div>
@@ -209,7 +209,7 @@
 
                 <div class="clockPunchPanel" aria-label="Employee clock in and out">
                   <div class="fieldGroup loginFieldGroup">
-                    <label class="fieldLabel" for="clockAccountNumber">Employee Company ID#</label>
+                    <label class="fieldLabel" for="clockAccountNumber">Employee Company ID# <span id="clockAccountNumberStatus" class="fieldStatus">Required</span></label>
                     <input id="clockAccountNumber" inputmode="numeric" maxlength="9" placeholder="Scan or enter 9 digit Employee ID#" autocomplete="off" />
                     <small class="fieldHelp">Scanning a 9 digit ID# automatically attempts Clock In. Manual entry can use the buttons below.</small>
                   </div>
