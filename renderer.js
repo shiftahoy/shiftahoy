@@ -986,7 +986,7 @@ async function activateBusinessGate() {
     setFieldState("businessAccountNumber", "valid", "Business selected");
     setNotice("businessGateMessage", "success", "Business selected. Login and Clock In / Out are now available.");
     renderBusinessGate();
-  updateClockPortalAccessState();
+    updateClockPortalAccessState();
   } catch (err) {
     selectedBusinessAccountNumber = "";
     selectedBusinessName = "";
@@ -4448,16 +4448,19 @@ function updateClockPortalAccessState() {
   const unlocked = hasUnlockedClockPortal();
   const card = document.querySelector(".clockCard");
   const input = $("clockAccountNumber");
-  const buttons = [$("clockLookupButton"), $("clockInButton"), $("clockOutButton")].filter(Boolean);
+  const actionButtons = [$("clockLookupButton"), $("clockInButton"), $("clockOutButton")].filter(Boolean);
 
   card?.classList.toggle("clockPortalLocked", !unlocked);
+
   if (input) {
-    input.disabled = !unlocked;
-    input.setAttribute("aria-disabled", String(!unlocked));
-    input.placeholder = unlocked ? "Scan or enter 9 digit Employee ID#" : "Unlock Clock Portal first";
+    input.disabled = false;
+    input.removeAttribute("aria-disabled");
+    input.placeholder = unlocked
+      ? "Scan or enter 9 digit Employee ID#"
+      : "Scan or enter Employee Company ID# — unlock required to clock";
   }
 
-  for (const button of buttons) {
+  for (const button of actionButtons) {
     button.disabled = !unlocked;
     button.setAttribute("aria-disabled", String(!unlocked));
   }
@@ -4469,11 +4472,11 @@ function requireUnlockedClockPortal() {
   setClockCardState("rejected", {
     decision: {
       title: "Locked",
-      reason: "A manager or owner must unlock the clock portal before employees can scan, clock in, or clock out.",
+      reason: "A manager or owner must unlock the clock portal before employees can clock in or clock out.",
       audited: false
     }
   });
-  setNotice("clockFormMessage", "error", "Unlock the Clock Portal with owner or manager credentials first.");
+  setNotice("clockFormMessage", "error", "Unlock the Clock Portal with owner or manager credentials before clocking employees in or out.");
   return false;
 }
 
