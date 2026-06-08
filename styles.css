@@ -4540,13 +4540,13 @@ body.theme-dark .clockStatusPreview {
 }
 
 #ownerSignupCard .authTransitionBanner {
-  margin: 5px 0 0;
-  padding: 6px 10px;
-  min-height: 28px;
-  max-height: 36px;
+  margin: 3px 0 0;
+  padding: 5px 9px;
+  min-height: 26px;
+  max-height: 34px;
   border-radius: 12px;
-  font-size: 0.74rem;
-  line-height: 1.18;
+  font-size: 0.73rem;
+  line-height: 1.16;
   box-shadow: none;
 }
 
@@ -4571,9 +4571,9 @@ body.theme-dark .clockStatusPreview {
 .authCards.businessActive #ownerSignupCard,
 .authCards.businessPendingActivation #ownerSignupCard {
   display: grid;
-  gap: 6px;
-  padding-top: 10px !important;
-  padding-bottom: 12px !important;
+  gap: 4px;
+  padding-top: 7px !important;
+  padding-bottom: 10px !important;
 }
 
 .authCards.businessPendingActivation #businessGateCard {
@@ -4597,8 +4597,9 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard .cardTitle,
 .authCards.businessPendingActivation #ownerSignupCard .cardTitle {
-  gap: 8px;
+  gap: 7px;
   align-items: flex-start;
+  margin-bottom: -2px;
 }
 
 .authCards.businessActive #ownerSignupCard .cardTitle h2,
@@ -4614,8 +4615,8 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard .fieldGroup,
 .authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
-  gap: 3px;
-  margin-bottom: 0;
+  gap: 2px;
+  margin-bottom: -1px;
 }
 
 .authCards.businessActive #ownerSignupCard .fieldHelp,
@@ -4625,9 +4626,9 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard input,
 .authCards.businessPendingActivation #ownerSignupCard input {
-  min-height: 36px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  min-height: 34px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 
 .authCards.businessActive #ownerSignupCard .generatedIdNotice,
@@ -4645,9 +4646,9 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard #signupButton,
 .authCards.businessPendingActivation #ownerSignupCard #signupButton {
-  min-height: 36px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  min-height: 34px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 
 /* Professional clock portal refinement: audited clock status colors and aligned clock actions. */
@@ -4804,6 +4805,20 @@ body.theme-dark .clockStatusPreview--approved {
   background: rgba(22, 101, 52, 0.22);
   border-color: rgba(134, 239, 172, 0.28);
   color: #bbf7d0;
+}
+
+.clockPortalLocked #clockAccountNumber,
+.clockPortalLocked .clockPunchPanel button {
+  pointer-events: none;
+}
+
+.clockPortalLocked .clockPunchPanel {
+  opacity: 0.68;
+}
+
+.clockPortalLocked .clockPunchPanel input,
+.clockPortalLocked .clockPunchPanel button {
+  cursor: not-allowed;
 }
 
 @media (max-width: 720px) {
