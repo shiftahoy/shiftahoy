@@ -4827,3 +4827,39 @@ body.theme-dark .clockStatusPreview--approved {
 .clockCard.clockPortalLocked .clockPunchPanel {
   display: none;
 }
+
+/* Shift Ahoy business switching and account deletion polish. */
+.businessSelectedBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.businessSelectedBanner span {
+  min-width: 0;
+}
+
+.changeBusinessButton {
+  flex: 0 0 auto;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.accountSettingsCard {
+  gap: 10px;
+}
+
+.dangerHint {
+  color: var(--danger) !important;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .businessSelectedBanner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
