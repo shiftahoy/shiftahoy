@@ -4540,13 +4540,13 @@ body.theme-dark .clockStatusPreview {
 }
 
 #ownerSignupCard .authTransitionBanner {
-  margin: 3px 0 0;
-  padding: 5px 9px;
-  min-height: 26px;
-  max-height: 34px;
+  margin: 5px 0 0;
+  padding: 6px 10px;
+  min-height: 28px;
+  max-height: 36px;
   border-radius: 12px;
-  font-size: 0.73rem;
-  line-height: 1.16;
+  font-size: 0.74rem;
+  line-height: 1.18;
   box-shadow: none;
 }
 
@@ -4571,9 +4571,9 @@ body.theme-dark .clockStatusPreview {
 .authCards.businessActive #ownerSignupCard,
 .authCards.businessPendingActivation #ownerSignupCard {
   display: grid;
-  gap: 4px;
-  padding-top: 7px !important;
-  padding-bottom: 10px !important;
+  gap: 6px;
+  padding-top: 10px !important;
+  padding-bottom: 12px !important;
 }
 
 .authCards.businessPendingActivation #businessGateCard {
@@ -4597,9 +4597,8 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard .cardTitle,
 .authCards.businessPendingActivation #ownerSignupCard .cardTitle {
-  gap: 7px;
+  gap: 8px;
   align-items: flex-start;
-  margin-bottom: -2px;
 }
 
 .authCards.businessActive #ownerSignupCard .cardTitle h2,
@@ -4615,8 +4614,8 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard .fieldGroup,
 .authCards.businessPendingActivation #ownerSignupCard .fieldGroup {
-  gap: 2px;
-  margin-bottom: -1px;
+  gap: 3px;
+  margin-bottom: 0;
 }
 
 .authCards.businessActive #ownerSignupCard .fieldHelp,
@@ -4626,9 +4625,9 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard input,
 .authCards.businessPendingActivation #ownerSignupCard input {
-  min-height: 34px;
-  padding-top: 7px;
-  padding-bottom: 7px;
+  min-height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .authCards.businessActive #ownerSignupCard .generatedIdNotice,
@@ -4646,9 +4645,9 @@ body.theme-dark .clockStatusPreview {
 
 .authCards.businessActive #ownerSignupCard #signupButton,
 .authCards.businessPendingActivation #ownerSignupCard #signupButton {
-  min-height: 34px;
-  padding-top: 7px;
-  padding-bottom: 7px;
+  min-height: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 /* Professional clock portal refinement: audited clock status colors and aligned clock actions. */
@@ -4807,22 +4806,25 @@ body.theme-dark .clockStatusPreview--approved {
   color: #bbf7d0;
 }
 
-.clockPortalLocked #clockAccountNumber,
-.clockPortalLocked .clockPunchPanel button {
-  pointer-events: none;
-}
-
-.clockPortalLocked .clockPunchPanel {
-  opacity: 0.68;
-}
-
-.clockPortalLocked .clockPunchPanel input,
-.clockPortalLocked .clockPunchPanel button {
-  cursor: not-allowed;
-}
-
 @media (max-width: 720px) {
   .clockActions {
     grid-template-columns: 1fr;
   }
+}
+
+/* Shift Ahoy correction: visually scoot only the fields inside 01 upward without changing the card size or pushing 02/03. */
+.authCards.businessActive #ownerSignupCard > .formGrid,
+.authCards.businessActive #ownerSignupCard > .fieldGroup,
+.authCards.businessActive #ownerSignupCard > .generatedIdNotice,
+.authCards.businessActive #ownerSignupCard > #signupButton,
+.authCards.businessPendingActivation #ownerSignupCard > .formGrid,
+.authCards.businessPendingActivation #ownerSignupCard > .fieldGroup,
+.authCards.businessPendingActivation #ownerSignupCard > .generatedIdNotice,
+.authCards.businessPendingActivation #ownerSignupCard > #signupButton {
+  transform: translateY(-6px);
+}
+
+.clockCard.clockPortalLocked #clockAccountNumber {
+  opacity: 1;
+  cursor: text;
 }
