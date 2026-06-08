@@ -403,3 +403,35 @@ This project currently uses the CC0 1.0 Universal license. See `LICENSE.md` for 
 ## Changelog
 
 See `CHANGELOG.md` for the latest update history.
+
+## Payroll Processor Suite and Provider Handoff
+
+Shift Ahoy now treats payroll as a locked, auditable workflow instead of a loose estimate. Managers can review time, unpaid breaks, overtime, corrections, and adjustments, then approve and lock the pay period before export. The universal CSV export is designed for businesses that already use a payroll provider, while provider settings prepare the app for ADP, Gusto, QuickBooks, or custom integrations.
+
+Recommended operating model:
+
+1. Shift Ahoy remains the system of record for schedules, clock entries, breaks, PTO/sick records, corrections, and approval history.
+2. The payroll provider or the business's existing payroll system remains the system of record for tax calculation, deductions, filings, direct deposit, and jurisdiction-specific payroll compliance.
+3. The Manager Portal exports approved payroll CSV rows or prepares provider-specific handoff settings.
+4. Owners/managers finalize payroll reports after reviewing totals, overtime, adjustments, and corrections.
+
+Payroll Suite features include:
+
+- payroll export CSV;
+- payroll approval lock and finalization reports;
+- manual punch correction system;
+- overtime policy settings by federal baseline, state/company policy, or provider-managed custom policy;
+- break tracking, including unpaid break deductions;
+- payroll adjustment entries;
+- provider handoff controls for CSV, ADP, Gusto, QuickBooks, or custom payroll providers;
+- tax/deduction handling mode that clearly documents whether taxes and deductions are handled by the connected provider, an external system, or manual reference-only workflows.
+
+> Shift Ahoy can prepare payroll-ready operational records, but final legal payroll, payroll tax, deduction, filing, withholding, direct deposit, and jurisdiction-specific compliance should be performed or verified through the business's payroll provider and professional advisors.
+
+## Location Duplication
+
+Owners can duplicate a location from the Location panel. Duplication copies location setup that is useful for a new branch: shifts, shift-day requirements, schedule rules, blocked dates, and holiday dates. Employees, time punches, payroll history, and published schedules are intentionally not copied so the new location starts clean while preserving the operating template.
+
+## Employee Calendar Schedule
+
+The Employee Portal now displays the employee's schedule as a weekly calendar. Days with published shifts are marked inside the calendar. Selecting a day shows that day's shift details and a rolling view from that day through the rest of the week. For example, selecting Monday shows Monday through Sunday; selecting Tuesday shows Tuesday through Sunday.
