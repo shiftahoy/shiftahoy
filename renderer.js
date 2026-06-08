@@ -914,20 +914,47 @@ function currentBusinessAccountNumber() {
   return normalizeIdInput(selectedBusinessAccountNumber || $("businessAccountNumber")?.value || currentUser?.businessAccountNumber || "");
 }
 
-function renderBusinessGate() {
+function businessActiveLabel() {
+  if (!selectedBusinessAccountNumber) return "";
+  const name = selectedBusinessName || "Shift Ahoy";
+  return `${name} · Business ID# ${selectedBusinessAccountNumber}`;
+}
+
+function setAuthTransition(message = "") {
+  const banner = $("authTransitionBanner");
+  if (!banner) return;
+
+  if (!selectedBusinessAccountNumber) {
+    banner.className = "formNotice success authTransitionBanner hidden";
+    banner.textContent = "";
+    return;
+  }
+
+  banner.className = "formNotice success authTransitionBanner";
+  banner.textContent = message || `Business selected: ${businessActiveLabel()}. Login or use Clock In / Out below.`;
+}
+
+function renderBusinessGate(options = {}) {
   const input = $("businessAccountNumber");
-  if (input && selectedBusinessAccountNumber) input.value = selectedBusinessAccountNumber;
+  const hasBusiness = !!selectedBusinessAccountNumber;
+  if (input && hasBusiness) input.value = selectedBusinessAccountNumber;
+
+  const cards = $("authCards");
+  cards?.classList.toggle("businessActive", hasBusiness);
+
+  $("ownerSignupCard")?.classList.toggle("hidden", hasBusiness);
+  $("businessGateCard")?.classList.toggle("hidden", hasBusiness);
 
   const grid = $("authMiniGrid");
-  if (grid) grid.classList.toggle("hidden", !selectedBusinessAccountNumber);
+  if (grid) grid.classList.toggle("hidden", !hasBusiness);
 
   const active = $("businessGateActive");
   if (active) {
-    active.classList.toggle("hidden", !selectedBusinessAccountNumber);
-    active.textContent = selectedBusinessAccountNumber
-      ? `Business active: ${selectedBusinessName || "Shift Ahoy"} · Business ID# ${selectedBusinessAccountNumber}`
-      : "";
+    active.classList.toggle("hidden", !hasBusiness);
+    active.textContent = hasBusiness ? `Business active: ${businessActiveLabel()}` : "";
   }
+
+  setAuthTransition(options.message || "");
 }
 
 async function activateBusinessGate() {
@@ -1059,18 +1086,24 @@ async function signup(event) {
       body: JSON.stringify(payload)
     });
 
-    setNotice("signupFormMessage", "success", data.message || "Owner account created.");
+    const successMessage = data.message || "Owner account created.";
 
     if (data.businessAccountNumber) {
       selectedBusinessAccountNumber = data.businessAccountNumber;
       selectedBusinessName = data.businessName || payload.businessName;
       localStorage.setItem("shiftAhoyBusinessAccountNumber", selectedBusinessAccountNumber);
       localStorage.setItem("shiftAhoyBusinessName", selectedBusinessName);
-      renderBusinessGate();
+      renderBusinessGate({
+        message: `${successMessage} Your permanent Business ID# is ${selectedBusinessAccountNumber}. Check your email for verification, then login below.`
+      });
+    } else {
+      setNotice("signupFormMessage", "success", successMessage);
     }
+
     if ($("loginValue")) $("loginValue").value = payload.email;
     if ($("loginPassword")) $("loginPassword").value = "";
-    setNotice("loginFormMessage", "success", "Your Business ID# has been filled in. Enter your email and password to open the dashboard.");
+    setNotice("loginFormMessage", "success", "Email filled in. Enter your password after email verification to open the dashboard.");
+    window.setTimeout(() => $("loginPassword")?.focus(), 80);
   } catch (err) {
     setSignupApiError(err);
     setNotice("signupFormMessage", "error", err.message || "Account creation failed.");
