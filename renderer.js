@@ -4447,17 +4447,19 @@ function hasUnlockedClockPortal() {
 function updateClockPortalAccessState() {
   const unlocked = hasUnlockedClockPortal();
   const card = document.querySelector(".clockCard");
+  const punchPanel = document.querySelector(".clockPunchPanel");
   const input = $("clockAccountNumber");
   const actionButtons = [$("clockLookupButton"), $("clockInButton"), $("clockOutButton")].filter(Boolean);
 
   card?.classList.toggle("clockPortalLocked", !unlocked);
+  punchPanel?.classList.toggle("hidden", !unlocked);
+  punchPanel?.setAttribute("aria-hidden", String(!unlocked));
 
   if (input) {
-    input.disabled = false;
-    input.removeAttribute("aria-disabled");
-    input.placeholder = unlocked
-      ? "Scan or enter 9 digit Employee ID#"
-      : "Scan or enter Employee Company ID# — unlock required to clock";
+    input.disabled = !unlocked;
+    input.setAttribute("aria-disabled", String(!unlocked));
+    input.placeholder = "Scan or enter 9 digit Employee ID#";
+    if (!unlocked) input.value = "";
   }
 
   for (const button of actionButtons) {
