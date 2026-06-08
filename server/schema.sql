@@ -869,3 +869,91 @@ INSERT INTO leave_accrual_rules (business_id, leave_type, enabled, years_of_serv
 SELECT b.id, 'sick', false, 0, 'worked_hours', 0.000000, 0, NULL, NULL, NULL, false, 'Default sick leave rule. Enable and edit from Payroll / Leave settings.'
 FROM businesses b
 ON CONFLICT (business_id, leave_type, years_of_service_min) DO NOTHING;
+
+
+-- Shift Ahoy Payroll Suite expansion: payroll-ready exports, locks, corrections, breaks, adjustments, and provider handoff.
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS overtime_policy TEXT NOT NULL DEFAULT 'flsa_40' CHECK (overtime_policy IN ('flsa_40','state_daily_weekly','company_weekly','custom'));
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS workweek_start_day INTEGER NOT NULL DEFAULT 1 CHECK (workweek_start_day BETWEEN 0 AND 6);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS daily_overtime_hours NUMERIC(5,2) DEFAULT NULL;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS weekly_overtime_hours NUMERIC(5,2) NOT NULL DEFAULT 40;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS doubletime_after_hours NUMERIC(5,2) DEFAULT NULL;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS break_minutes_unpaid_after_hours INTEGER NOT NULL DEFAULT 0 CHECK (break_minutes_unpaid_after_hours >= 0);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS default_unpaid_break_minutes INTEGER NOT NULL DEFAULT 0 CHECK (default_unpaid_break_minutes >= 0);
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS payroll_provider TEXT NOT NULL DEFAULT 'csv' CHECK (payroll_provider IN ('csv','adp','gusto','quickbooks','custom'));
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS provider_external_company_id TEXT;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS provider_notes TEXT;
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS tax_handling_mode TEXT NOT NULL DEFAULT 'provider' CHECK (tax_handling_mode IN ('provider','external','manual_reference_only'));
+ALTER TABLE payroll_settings ADD COLUMN IF NOT EXISTS require_payroll_approval_lock BOOLEAN NOT NULL DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS payroll_batches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','approved','finalized','exported','reopened')),
+  approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at TIMESTAMPTZ,
+  finalized_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  finalized_at TIMESTAMPTZ,
+  exported_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  exported_at TIMESTAMPTZ,
+  provider TEXT NOT NULL DEFAULT 'csv',
+  provider_reference TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (business_id, location_id, period_start, period_end)
+);
+
+CREATE INDEX IF NOT EXISTS payroll_batches_business_period_idx
+ON payroll_batches (business_id, period_start, period_end);
+
+CREATE TABLE IF NOT EXISTS payroll_adjustments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  payroll_batch_id UUID REFERENCES payroll_batches(id) ON DELETE SET NULL,
+  adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('bonus','reimbursement','deduction','retro_pay','stipend','correction','other')),
+  amount_cents INTEGER NOT NULL,
+  taxable BOOLEAN NOT NULL DEFAULT true,
+  reason TEXT NOT NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS punch_corrections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  time_clock_entry_id UUID REFERENCES time_clock_entries(id) ON DELETE SET NULL,
+  requested_clock_in_at TIMESTAMPTZ,
+  requested_clock_out_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending','approved','denied')),
+  reason TEXT NOT NULL,
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS time_clock_breaks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+  time_clock_entry_id UUID REFERENCES time_clock_entries(id) ON DELETE CASCADE,
+  break_start_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  break_end_at TIMESTAMPTZ,
+  break_type TEXT NOT NULL DEFAULT 'meal' CHECK (break_type IN ('meal','rest','other')),
+  paid BOOLEAN NOT NULL DEFAULT false,
+  notes TEXT,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS time_clock_breaks_entry_idx ON time_clock_breaks (time_clock_entry_id);
+CREATE INDEX IF NOT EXISTS payroll_adjustments_employee_idx ON payroll_adjustments (business_id, employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS punch_corrections_employee_idx ON punch_corrections (business_id, employee_id, created_at DESC);
