@@ -409,7 +409,7 @@ function setupEnterToSubmit() {
     }
     const fallbackMap = {
       signupFirstName: "signupButton", signupLastName: "signupButton", signupBusinessName: "signupButton", signupEmail: "signupButton", signupPassword: "signupButton",
-      loginValue: "loginButton", loginPassword: "loginButton", employeeFilter: null, locationFilter: null, shiftFilter: null
+      loginValue: "loginButton", loginPassword: "loginButton", clockManagerPassword: "clockUnlockButton", employeeFilter: null, locationFilter: null, shiftFilter: null
     };
     const buttonId = fallbackMap[control.id];
     if (buttonId && $(buttonId)) {
@@ -4575,6 +4575,9 @@ async function unlockClockPortal() {
       body: JSON.stringify({ businessAccountNumber, password })
     });
     clockSessionToken = data.clockSessionToken || "";
+    if (!clockSessionToken) {
+      throw new Error("Clock unlock succeeded, but the server did not return a clock-session token.");
+    }
     sessionStorage.setItem("shiftAhoyClockSessionToken", clockSessionToken);
     updateClockPortalAccessState();
     if ($("clockManagerPassword")) $("clockManagerPassword").value = "";
