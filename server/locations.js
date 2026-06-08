@@ -172,6 +172,156 @@ router.post("/", requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+
+
+router.post("/:id/duplicate", requireAuth, requireOwner, async (req, res) => {
+  const { id } = req.params;
+  const requestedName = String(req.body.name || "").trim();
+  const copyShifts = req.body.copyShifts !== false;
+  const copyScheduleRules = req.body.copyScheduleRules !== false;
+  const copyTimeOffRules = req.body.copyTimeOffRules !== false;
+  const actorPassword = req.body.actorPassword;
+
+  const verified = await verifyActorPassword(req.user.id, actorPassword);
+  if (!verified) {
+    return res.status(403).json({ error: "Wrong password." });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const limitResult = await client.query(
+      `SELECT COALESCE(b.plan_location_limit, p.location_limit) AS location_limit, count(l.id)::int AS location_count
+       FROM businesses b
+       LEFT JOIN plans p ON p.code = b.plan_code
+       LEFT JOIN locations l ON l.business_id = b.id
+       WHERE b.id = $1
+       GROUP BY b.id, p.location_limit`,
+      [req.user.businessId]
+    );
+
+    const limit = limitResult.rows[0]?.location_limit;
+    const count = Number(limitResult.rows[0]?.location_count || 0);
+    if (limit !== null && limit !== undefined && count >= Number(limit)) {
+      await client.query("ROLLBACK");
+      return res.status(402).json({ error: "Location limit reached for your current plan. Upgrade to duplicate this location." });
+    }
+
+    const sourceResult = await client.query(
+      `SELECT id, name, address
+       FROM locations
+       WHERE id = $1
+         AND business_id = $2
+       FOR UPDATE`,
+      [id, req.user.businessId]
+    );
+
+    const source = sourceResult.rows[0];
+    if (!source) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Location not found." });
+    }
+
+    const newName = requestedName || `${source.name} Copy`;
+    const locationResult = await client.query(
+      `INSERT INTO locations (business_id, name, address)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, address`,
+      [req.user.businessId, newName, source.address]
+    );
+    const newLocation = locationResult.rows[0];
+
+    const copiedShiftIds = new Map();
+    if (copyShifts) {
+      const shifts = await client.query(
+        `SELECT id, name, sort_order
+         FROM shifts
+         WHERE business_id = $1
+           AND location_id = $2
+         ORDER BY sort_order, name`,
+        [req.user.businessId, source.id]
+      );
+
+      for (const shift of shifts.rows) {
+        const insertedShift = await client.query(
+          `INSERT INTO shifts (business_id, location_id, name, sort_order)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [req.user.businessId, newLocation.id, shift.name, shift.sort_order]
+        );
+        copiedShiftIds.set(shift.id, insertedShift.rows[0].id);
+
+        await client.query(
+          `INSERT INTO shift_days (shift_id, day_of_week, enabled, start_time, end_time, required_staff, max_staff)
+           SELECT $1, day_of_week, enabled, start_time, end_time, required_staff, max_staff
+           FROM shift_days
+           WHERE shift_id = $2`,
+          [insertedShift.rows[0].id, shift.id]
+        );
+      }
+    }
+
+    if (copyScheduleRules) {
+      await client.query(
+        `INSERT INTO location_schedule_rules (
+           business_id, location_id, open_days, operating_start, operating_end,
+           default_required_staff, min_employees_per_day, max_employees_per_day, labor_budget_cents
+         )
+         SELECT business_id, $3, open_days, operating_start, operating_end,
+                default_required_staff, min_employees_per_day, max_employees_per_day, labor_budget_cents
+         FROM location_schedule_rules
+         WHERE business_id = $1
+           AND location_id = $2
+         ON CONFLICT (location_id) DO NOTHING`,
+        [req.user.businessId, source.id, newLocation.id]
+      );
+    }
+
+    if (copyTimeOffRules) {
+      await client.query(
+        `INSERT INTO time_off_blocked_dates (business_id, location_id, blocked_date, reason, recurs_yearly)
+         SELECT business_id, $3, blocked_date, reason, recurs_yearly
+         FROM time_off_blocked_dates
+         WHERE business_id = $1
+           AND location_id = $2
+         ON CONFLICT DO NOTHING`,
+        [req.user.businessId, source.id, newLocation.id]
+      );
+
+      await client.query(
+        `INSERT INTO time_off_holiday_dates (business_id, location_id, holiday_date, name, recurs_yearly)
+         SELECT business_id, $3, holiday_date, name, recurs_yearly
+         FROM time_off_holiday_dates
+         WHERE business_id = $1
+           AND location_id = $2
+         ON CONFLICT DO NOTHING`,
+        [req.user.businessId, source.id, newLocation.id]
+      );
+    }
+
+    await logAudit({
+      businessId: req.user.businessId,
+      actorUserId: req.user.id,
+      locationId: newLocation.id,
+      action: "Location duplicated",
+      entityType: "location",
+      entityId: newLocation.id,
+      details: `${source.name} duplicated into ${newLocation.name}. Shifts: ${copyShifts ? copiedShiftIds.size : 0}.`
+    });
+
+    await client.query("COMMIT");
+    res.status(201).json({ location: newLocation, copiedShifts: copiedShiftIds.size });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "Location duplication failed." });
+  } finally {
+    client.release();
+  }
+});
+
 router.put("/:id", requireAuth, requireOwner, async (req, res) => {
   const { id } = req.params;
   const { name, address } = req.body;
