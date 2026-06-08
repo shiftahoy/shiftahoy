@@ -4378,11 +4378,17 @@ body.theme-dark .clockStatusPreview {
 }
 
 
-/* Smooth signup-to-login transition: once a Business ID# is selected, hide only the 00 Business ID# gate and keep account creation visible. */
+/* Smooth signup-to-login transition: keep 01 visible; 00 stays until the user confirms the filled Business ID#, then 02/03 appear. */
 .authCards.businessActive {
-  grid-template-rows: auto auto 1fr;
-  gap: 12px;
-  overflow-y: auto;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.authCards.businessPendingActivation {
+  grid-template-rows: auto auto;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .authCards.businessActive #businessGateCard {
@@ -4393,10 +4399,18 @@ body.theme-dark .clockStatusPreview {
   display: grid;
 }
 
+.authCards.businessPendingActivation #businessGateCard {
+  display: grid;
+}
+
+.authCards.businessPendingActivation .authMiniGrid {
+  display: none !important;
+}
+
 .authTransitionBanner {
-  margin: 0;
-  border-radius: 18px;
-  padding: 13px 15px;
+  margin: 2px 0 0;
+  border-radius: 16px;
+  padding: 11px 13px;
   font-weight: 850;
   line-height: 1.35;
   box-shadow: 0 10px 24px rgba(21, 128, 61, 0.08);
