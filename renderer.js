@@ -1346,6 +1346,7 @@ function renderLocations() {
       ? `
         <div class="rowActions">
           <button class="button ghost" data-action="edit-location" data-id="${escapeHtml(location.id)}">Edit</button>
+          <button class="button secondary" data-action="duplicate-location" data-id="${escapeHtml(location.id)}">Duplicate</button>
           <button class="button danger" data-action="delete-location" data-id="${escapeHtml(location.id)}">Delete</button>
         </div>
       `
@@ -1435,6 +1436,36 @@ function editLocation(locationId) {
   showLocationForm(location);
 }
 
+
+async function duplicateLocation(locationId) {
+  const source = locations.find((location) => location.id === locationId) || selectedLocationRecord;
+  if (!source) return;
+
+  const copied = await runOwnerCredentialAction({
+    title: "Duplicate Location",
+    message: `Enter your password to duplicate ${source.name}. Shifts, schedule rules, blocked dates, and holidays will be copied. Employees and historical schedules are not copied.`,
+    confirmLabel: "Duplicate Location",
+    onConfirm: (actorPassword) =>
+      api(`/locations/${encodeURIComponent(locationId)}/duplicate`, {
+        method: "POST",
+        skipRefresh: true,
+        body: JSON.stringify({
+          actorPassword,
+          name: `${source.name} Copy`,
+          copyShifts: true,
+          copyScheduleRules: true,
+          copyTimeOffRules: true
+        })
+      })
+  });
+
+  if (!copied?.location) return;
+  selectedLocationId = copied.location.id;
+  selectedLocationRecord = copied.location;
+  await loadLocations();
+  showMessage(`${copied.location.name} duplicated.`, "success");
+}
+
 async function deleteLocation(locationId) {
   const location = locations.find((item) => item.id === locationId);
   if (!location) return;
@@ -1481,7 +1512,7 @@ async function loadSchedule() {
     health: data.health || null,
     skipped: data.skipped || []
   };
-  renderSchedule(lastSchedulePayload.cells);
+  renderSchedule(lastSchedulePayload.cells, data.employees || []);
   renderScheduleHealth(lastSchedulePayload.health, lastSchedulePayload.coverage, lastSchedulePayload.warnings);
   renderUltimateAutomationPanels();
 }
@@ -1555,9 +1586,19 @@ function renderScheduleWarnings(warnings) {
   renderScheduleHealth(null, [], warnings);
 }
 
-function renderSchedule(cells) {
+function renderSchedule(cells, employeesForRows = []) {
   const table = $("scheduleTable");
   const grouped = new Map();
+
+  for (const employee of employeesForRows || []) {
+    grouped.set(employee.employee_id, {
+      priority: Number(employee.priority || 0),
+      employeeCode: employee.account_number || employee.employee_code || "—",
+      employee: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.account_number || "Employee",
+      title: employee.title || "—",
+      days: {}
+    });
+  }
 
   for (const cell of cells) {
     if (!grouped.has(cell.employee_id)) {
@@ -1581,12 +1622,12 @@ function renderSchedule(cells) {
 
   const weekEnd = addDays(currentWeekStart, 6);
   const totalCells = Array.isArray(cells) ? cells.length : 0;
-  const scheduledEmployees = rows.length;
+  const scheduledEmployees = Array.isArray(cells) ? new Set(cells.map((cell) => cell.employee_id)).size : 0;
 
   table.innerHTML = `
     <caption class="scheduleCaption">
       <strong>Schedule Forecast</strong>
-      <span>${escapeHtml(selectedLocationName())} · ${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))} · ${escapeHtml(totalCells)} shift assignment${totalCells === 1 ? "" : "s"} across ${escapeHtml(scheduledEmployees)} employee${scheduledEmployees === 1 ? "" : "s"}</span>
+      <span>${escapeHtml(selectedLocationName())} · ${escapeHtml(formatDateForLabel(currentWeekStart))} – ${escapeHtml(formatDateForLabel(weekEnd))} · ${escapeHtml(totalCells)} shift assignment${totalCells === 1 ? "" : "s"} across ${escapeHtml(scheduledEmployees)} scheduled employee${scheduledEmployees === 1 ? "" : "s"}; ${escapeHtml(rows.length)} employee row${rows.length === 1 ? "" : "s"} shown</span>
     </caption>
     <thead>
       <tr>
@@ -3329,6 +3370,11 @@ function setupEvents() {
       editLocation(id);
     }
 
+    if (action === "duplicate-location") {
+      event.stopPropagation();
+      await duplicateLocation(id);
+    }
+
     if (action === "delete-location") {
       event.stopPropagation();
       await deleteLocation(id);
@@ -3875,6 +3921,34 @@ function ensureUltimateAutomationLayout() {
           </div>
           <div class="formActions"><button class="button primary" type="submit">Save Payroll / Leave Settings</button><button id="runLeaveAccrualButton" class="button secondary" type="button">Run Accrual Now</button><button id="evaluateBonusRulesButton" class="button ghost" type="button">Evaluate Bonuses</button></div>
         </form>
+        <section class="payrollSuiteBox ownerOnly">
+          <div class="automationDivider">Legal Payroll Processor / Provider Handoff</div>
+          <div class="formGrid twoColumn">
+            <div class="fieldGroup"><label class="fieldLabel" for="payrollProvider">Payroll Provider</label><select id="payrollProvider"><option value="csv">Universal CSV export</option><option value="adp">ADP Workforce Now</option><option value="gusto">Gusto Embedded/App Integration</option><option value="quickbooks">QuickBooks Payroll/Time</option><option value="custom">Custom provider</option></select><small class="fieldHelp">Use CSV for businesses with an existing payroll system; connect providers when API approval is available.</small></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="providerExternalCompanyId">Provider Company ID</label><input id="providerExternalCompanyId" placeholder="Optional provider/company code" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="taxHandlingMode">Tax & Deduction Handling</label><select id="taxHandlingMode"><option value="provider">Provider calculates taxes/deductions</option><option value="external">External payroll system calculates</option><option value="manual_reference_only">Manual reference only</option></select></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="overtimePolicy">Overtime Policy</label><select id="overtimePolicy"><option value="flsa_40">FLSA weekly 40+</option><option value="state_daily_weekly">State daily + weekly</option><option value="company_weekly">Company weekly threshold</option><option value="custom">Custom / provider-managed</option></select></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="weeklyOvertimeHours">Weekly OT After Hours</label><input id="weeklyOvertimeHours" type="number" min="1" max="168" step="0.25" value="40" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="dailyOvertimeHours">Daily OT After Hours</label><input id="dailyOvertimeHours" type="number" min="1" max="24" step="0.25" placeholder="State/company rule" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="defaultUnpaidBreakMinutes">Default Unpaid Break Minutes</label><input id="defaultUnpaidBreakMinutes" type="number" min="0" max="240" value="0" /></div>
+            <label class="checkRow"><input id="requirePayrollApprovalLock" type="checkbox" checked /> Require payroll approval lock before export</label>
+          </div>
+          <div class="fieldGroup"><label class="fieldLabel" for="providerNotes">Provider Notes</label><input id="providerNotes" placeholder="CSV column mapping, ADP/Gusto/QuickBooks notes, tax/deduction notes" /></div>
+          <div class="formActions"><button id="saveProviderSettingsButton" class="button primary" type="button">Save Provider Settings</button><button id="approvePayrollButton" class="button secondary" type="button">Approve & Lock Payroll</button><button id="finalizePayrollButton" class="button secondary" type="button">Finalize Report</button><button id="exportPayrollCsvButton" class="button ghost" type="button">Export CSV</button></div>
+          <div class="automationDivider">Manual Payroll Entries</div>
+          <div class="formGrid twoColumn">
+            <div class="fieldGroup"><label class="fieldLabel" for="manualPayrollEmployeeId">Employee UUID</label><input id="manualPayrollEmployeeId" placeholder="Paste employee ID from payroll row" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualAdjustmentAmount">Adjustment Amount</label><input id="manualAdjustmentAmount" type="number" step="0.01" placeholder="Example: 25.00 or -10.00" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualAdjustmentType">Adjustment Type</label><select id="manualAdjustmentType"><option value="bonus">Bonus</option><option value="reimbursement">Reimbursement</option><option value="deduction">Deduction</option><option value="retro_pay">Retro Pay</option><option value="correction">Correction</option><option value="other">Other</option></select></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualAdjustmentReason">Adjustment Reason</label><input id="manualAdjustmentReason" placeholder="Required audit reason" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualPunchEntryId">Clock Entry UUID</label><input id="manualPunchEntryId" placeholder="Optional existing clock entry ID" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualPunchInAt">Correct Clock In</label><input id="manualPunchInAt" type="datetime-local" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualPunchOutAt">Correct Clock Out</label><input id="manualPunchOutAt" type="datetime-local" /></div>
+            <div class="fieldGroup"><label class="fieldLabel" for="manualPunchReason">Punch Correction Reason</label><input id="manualPunchReason" placeholder="Required audit reason" /></div>
+          </div>
+          <div class="formActions"><button id="savePayrollAdjustmentButton" class="button secondary" type="button">Save Adjustment</button><button id="savePunchCorrectionButton" class="button ghost" type="button">Save Punch Correction</button></div>
+          <div id="payrollSuiteList" class="listStack"></div>
+        </section>
         <div id="managerPayrollList" class="listStack"></div>
       </section>
     `);
@@ -3882,6 +3956,12 @@ function ensureUltimateAutomationLayout() {
     $("payrollSettingsForm")?.addEventListener("submit", savePayrollSettings);
     $("runLeaveAccrualButton")?.addEventListener("click", runLeaveAccrualNow);
     $("evaluateBonusRulesButton")?.addEventListener("click", evaluateBonusRulesNow);
+    $("saveProviderSettingsButton")?.addEventListener("click", saveProviderSettings);
+    $("approvePayrollButton")?.addEventListener("click", () => lockPayroll(false));
+    $("finalizePayrollButton")?.addEventListener("click", () => lockPayroll(true));
+    $("exportPayrollCsvButton")?.addEventListener("click", exportPayrollCsv);
+    $("savePayrollAdjustmentButton")?.addEventListener("click", savePayrollAdjustment);
+    $("savePunchCorrectionButton")?.addEventListener("click", savePunchCorrection);
   } else if (managerPortalContent && $("managerPayrollPanel") && $("managerPayrollPanel").parentElement !== managerPortalContent) {
     managerPortalContent.appendChild($("managerPayrollPanel"));
   }
@@ -4130,11 +4210,48 @@ async function loadEmployeeSchedule() {
     const cells = data.cells || [];
     const timeOff = data.timeOff || [];
     const openShifts = data.openShifts || [];
+    const cellByDate = new Map();
+    for (const cell of cells) {
+      const key = String(cell.work_date || "").slice(0, 10);
+      if (!cellByDate.has(key)) cellByDate.set(key, []);
+      cellByDate.get(key).push(cell);
+    }
+
+    const todayKey = dateOnly(new Date());
+    const defaultSelected = [...cellByDate.keys()].sort().find((date) => date >= todayKey) || dateOnly(currentWeekStart);
+    const selectedDate = list.dataset.selectedDate || defaultSelected;
+    const selectedDateObj = parseDateOnly(selectedDate) || currentWeekStart;
+    const selectedDay = selectedDateObj.getDay() === 0 ? 7 : selectedDateObj.getDay();
+    const weekRemainder = DAYS.map((day, index) => dateOnly(addDays(currentWeekStart, index)))
+      .filter((date) => {
+        const parsed = parseDateOnly(date);
+        const day = parsed.getDay() === 0 ? 7 : parsed.getDay();
+        return day >= selectedDay;
+      });
+    const selectedCells = cellByDate.get(selectedDate) || [];
+
     list.innerHTML = `
       <article class="automationSummary healthMetricCard"><strong>${cells.length}</strong><span>published shifts this week</span></article>
-      ${cells.length ? cells.map((cell) => `
+      <div class="employeeCalendarGrid" role="grid" aria-label="Employee schedule calendar">
+        ${DAYS.map((day, index) => {
+          const date = dateOnly(addDays(currentWeekStart, index));
+          const dayCells = cellByDate.get(date) || [];
+          return `<button class="employeeCalendarDay ${date === selectedDate ? "selected" : ""} ${dayCells.length ? "working" : ""}" data-action="employee-calendar-day" data-date="${escapeHtml(date)}" type="button">
+            <strong>${escapeHtml(day.short)}</strong>
+            <span>${escapeHtml(String((parseDateOnly(date) || new Date()).getDate()))}</span>
+            ${dayCells.length ? `<em>${escapeHtml(dayCells.length)} shift${dayCells.length === 1 ? "" : "s"}</em>` : `<small>Off</small>`}
+          </button>`;
+        }).join("")}
+      </div>
+      <div class="automationDivider">Selected day</div>
+      ${selectedCells.length ? selectedCells.map((cell) => `
         <article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(cell.work_date))} — ${escapeHtml(cell.shift_name || "Shift")}</strong><span>${escapeHtml(String(cell.start_time || "").slice(0,5))}–${escapeHtml(String(cell.end_time || "").slice(0,5))} · ${escapeHtml(cell.location_name || "")}</span></div></article>
-      `).join("") : `<div class="emptyState compactEmpty">No published shifts for you this week.</div>`}
+      `).join("") : `<div class="emptyState compactEmpty">No published shift on ${escapeHtml(formatRequestDate(selectedDate))}.</div>`}
+      <div class="automationDivider">Rest of week from ${escapeHtml(formatRequestDate(selectedDate))}</div>
+      ${weekRemainder.map((date) => {
+        const dayCells = cellByDate.get(date) || [];
+        return `<article class="listItem"><div><strong>${escapeHtml(formatRequestDate(date))}</strong><span>${dayCells.length ? dayCells.map((cell) => `${cell.shift_name || "Shift"} ${String(cell.start_time || "").slice(0,5)}–${String(cell.end_time || "").slice(0,5)}`).join(" · ") : "Off"}</span></div></article>`;
+      }).join("")}
       <div class="automationDivider">Request status</div>
       ${timeOff.length ? timeOff.map((request) => `<article class="listItem personalizedListItem"><span data-profile-avatar>${profileAvatarHtml("embeddedAvatar")}</span><div><strong>${escapeHtml(formatRequestDate(request.start_date))}–${escapeHtml(formatRequestDate(request.end_date))}</strong><span>${escapeHtml(request.status)} · ${escapeHtml(request.reason || "")}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No upcoming time off requests.</div>`}
       <div class="automationDivider">Open shifts at your location</div>
@@ -4552,6 +4669,150 @@ function bonusAwardsHtml(bonusAwards = []) {
 }
 
 
+
+function hydrateProviderSettings(settings = {}) {
+  if ($("payrollProvider")) $("payrollProvider").value = settings.payroll_provider || "csv";
+  if ($("providerExternalCompanyId")) $("providerExternalCompanyId").value = settings.provider_external_company_id || "";
+  if ($("providerNotes")) $("providerNotes").value = settings.provider_notes || "";
+  if ($("taxHandlingMode")) $("taxHandlingMode").value = settings.tax_handling_mode || "provider";
+  if ($("overtimePolicy")) $("overtimePolicy").value = settings.overtime_policy || "flsa_40";
+  if ($("weeklyOvertimeHours")) $("weeklyOvertimeHours").value = settings.weekly_overtime_hours || 40;
+  if ($("dailyOvertimeHours")) $("dailyOvertimeHours").value = settings.daily_overtime_hours || "";
+  if ($("defaultUnpaidBreakMinutes")) $("defaultUnpaidBreakMinutes").value = settings.default_unpaid_break_minutes || 0;
+  if ($("requirePayrollApprovalLock")) $("requirePayrollApprovalLock").checked = settings.require_payroll_approval_lock !== false;
+}
+
+async function saveProviderSettings() {
+  try {
+    const data = await api("/payroll/provider-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        provider: $("payrollProvider")?.value || "csv",
+        providerExternalCompanyId: $("providerExternalCompanyId")?.value || "",
+        providerNotes: $("providerNotes")?.value || "",
+        taxHandlingMode: $("taxHandlingMode")?.value || "provider",
+        overtimePolicy: $("overtimePolicy")?.value || "flsa_40",
+        weeklyOvertimeHours: $("weeklyOvertimeHours")?.value || 40,
+        dailyOvertimeHours: $("dailyOvertimeHours")?.value || "",
+        defaultUnpaidBreakMinutes: $("defaultUnpaidBreakMinutes")?.value || 0,
+        requirePayrollApprovalLock: $("requirePayrollApprovalLock")?.checked !== false
+      })
+    });
+    hydrateProviderSettings(data.settings || {});
+    setNotice("payrollSettingsNotice", "success", "Payroll provider, overtime, break, and tax/deduction handoff settings saved.");
+    await loadPayrollSuite();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to save provider settings.");
+  }
+}
+
+
+async function savePayrollAdjustment() {
+  try {
+    await api("/payroll/adjustments", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeId: $("manualPayrollEmployeeId")?.value || "",
+        amountDollars: $("manualAdjustmentAmount")?.value || 0,
+        adjustmentType: $("manualAdjustmentType")?.value || "other",
+        reason: $("manualAdjustmentReason")?.value || ""
+      })
+    });
+    setNotice("payrollSettingsNotice", "success", "Payroll adjustment saved.");
+    await loadPayrollSuite();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to save payroll adjustment.");
+  }
+}
+
+async function savePunchCorrection() {
+  try {
+    await api("/payroll/punch-corrections", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeId: $("manualPayrollEmployeeId")?.value || "",
+        timeClockEntryId: $("manualPunchEntryId")?.value || null,
+        clockInAt: $("manualPunchInAt")?.value || null,
+        clockOutAt: $("manualPunchOutAt")?.value || null,
+        reason: $("manualPunchReason")?.value || ""
+      })
+    });
+    setNotice("payrollSettingsNotice", "success", "Manual punch correction saved and audited.");
+    await loadPayrollSuite();
+    await loadManagerPayrollSummary();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to save punch correction.");
+  }
+}
+
+async function loadPayrollSuite() {
+  const target = $("payrollSuiteList");
+  if (!target || !canManageSchedule()) return;
+  try {
+    const query = selectedLocationId ? `?locationId=${encodeURIComponent(selectedLocationId)}` : "";
+    const data = await api(`/payroll/suite${query}`);
+    hydrateProviderSettings(data.settings || {});
+    const rows = data.rows || [];
+    const batch = data.batch || {};
+    const gross = rows.reduce((sum, row) => sum + Number(row.gross_pay_cents || 0), 0);
+    const hours = rows.reduce((sum, row) => sum + Number(row.net_minutes || 0), 0);
+    target.innerHTML = `
+      <section class="automationMetrics healthMetricGrid">
+        <article><strong>${escapeHtml(String(batch.status || "open").toUpperCase())}</strong><span>approval status</span></article>
+        <article><strong>${escapeHtml(formatHoursFromMinutes(hours))}</strong><span>net payable hours</span></article>
+        <article><strong>${moneyFromCents(gross)}</strong><span>gross payroll before provider taxes/deductions</span></article>
+        <article><strong>${escapeHtml((data.settings?.payroll_provider || "csv").toUpperCase())}</strong><span>provider handoff</span></article>
+      </section>
+      <div class="scheduleWarningsList success">Payroll taxes, deductions, filings, and direct deposit should be calculated by the connected payroll provider or existing business payroll system. Shift Ahoy prepares the locked time, overtime, break, adjustment, and export record.</div>
+      <div class="automationDivider">Export Preview</div>
+      ${rows.length ? rows.slice(0, 15).map((row) => `<article class="listItem"><div><strong>${escapeHtml(`${row.first_name || ""} ${row.last_name || ""}`.trim() || row.employee_code)}</strong><span>${escapeHtml(row.location_name || "")} · ${escapeHtml(formatHoursFromMinutes(row.net_minutes))} net hours · ${escapeHtml(formatHoursFromMinutes(row.overtime_minutes))} OT · ${moneyFromCents(row.gross_pay_cents || 0)} gross</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No payable payroll rows for this period yet.</div>`}
+      <div class="automationDivider">Recent Corrections & Adjustments</div>
+      ${(data.corrections || []).length || (data.adjustments || []).length ? [...(data.corrections || []), ...(data.adjustments || [])].slice(0, 12).map((item) => `<article class="listItem"><div><strong>${escapeHtml(`${item.first_name || ""} ${item.last_name || ""}`.trim() || item.employee_code || "Entry")}</strong><span>${escapeHtml(item.reason || item.adjustment_type || "Payroll item")} · ${escapeHtml(new Date(item.created_at).toLocaleString())}</span></div></article>`).join("") : `<div class="emptyState compactEmpty">No manual punch corrections or payroll adjustments this period.</div>`}
+    `;
+  } catch (err) {
+    target.innerHTML = `<div class="emptyState compactEmpty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function lockPayroll(finalize = false) {
+  try {
+    const body = selectedLocationId ? { locationId: selectedLocationId, finalize } : { finalize };
+    const data = await api("/payroll/approval-lock", { method: "POST", body: JSON.stringify(body) });
+    setNotice("payrollSettingsNotice", "success", finalize ? "Payroll finalized." : "Payroll approved and locked.");
+    await loadPayrollSuite();
+    return data;
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to lock payroll.");
+  }
+}
+
+async function exportPayrollCsv() {
+  try {
+    const query = selectedLocationId ? `?locationId=${encodeURIComponent(selectedLocationId)}` : "";
+    const res = await fetch(`${API_URL}/payroll/export.csv${query}`, {
+      credentials: "include",
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to export payroll CSV.");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `shift-ahoy-payroll-${dateOnly(new Date())}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice("payrollSettingsNotice", "success", "Payroll CSV exported.");
+    await loadPayrollSuite();
+  } catch (err) {
+    setNotice("payrollSettingsNotice", "error", err.message || "Failed to export payroll CSV.");
+  }
+}
+
 async function loadPayrollPanels() {
   if (!accessToken) return;
   if (currentUser?.role === "employee") {
@@ -4600,7 +4861,9 @@ async function loadManagerPayrollSummary() {
     if ($("payrollStartDate") && settings.first_pay_period_start) $("payrollStartDate").value = String(settings.first_pay_period_start).slice(0, 10);
     if ($("payPeriodWeeks") && settings.pay_period_weeks) $("payPeriodWeeks").value = settings.pay_period_weeks;
     hydrateLeaveSettings(settings, [], []);
+    hydrateProviderSettings(settings);
     await loadLeaveSettingsForForm();
+    await loadPayrollSuite();
     const employees = data.employees || [];
     const alerts = data.alerts || [];
     const violations = data.violations || [];
@@ -4671,6 +4934,12 @@ function setupUltimateAutomationEvents() {
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
+    if (button.dataset.action === "employee-calendar-day") {
+      const list = $("employeeScheduleList");
+      if (list) list.dataset.selectedDate = button.dataset.date || "";
+      await loadEmployeeSchedule();
+      return;
+    }
     if (button.dataset.action === "claim-open-shift") await claimOpenShift(button.dataset.id);
     if (button.dataset.action === "accept-swap") await decideSwap(button.dataset.id, "accept");
     if (button.dataset.action === "approve-swap") await decideSwap(button.dataset.id, "approve");
