@@ -349,7 +349,7 @@ async function enforceClockPortalAccess(req, res, business, settings) {
   }
 
   const payload = clockSessionPayload(req.body.clockSessionToken, business.id);
-  if (settings.require_clock_session !== false && !payload) {
+  if (!payload) {
     res.status(403).json({
       error: "A manager or owner must unlock the clock portal first.",
       decision: {
