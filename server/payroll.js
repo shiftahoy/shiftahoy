@@ -367,28 +367,39 @@ async function enforceClockPortalAccess(req, res, business, settings) {
 
 router.post("/clock/session", async (req, res) => {
   if (!requireDesktopClockRequest(req, res)) return;
-  const business = await businessByAccountNumber(req.body.businessAccountNumber || req.body.businessId);
-  if (!business) return res.status(404).json({ error: "No business was found for that Business ID#." });
 
-  const actor = await verifyBusinessManagerPassword(business.id, req.body.password);
-  if (!actor) return res.status(403).json({ error: "Wrong owner or manager password for that business." });
+  try {
+    const business = await businessByAccountNumber(req.body.businessAccountNumber || req.body.businessId);
+    if (!business) return res.status(404).json({ error: "No business was found for that Business ID#." });
 
-  const settings = await settingsForBusiness(business.id);
-  if (settings.in_app_clock_enabled === false) {
-    return res.status(403).json({ error: "In-app clock in/out is turned off for this business." });
+    const actor = await verifyBusinessManagerPassword(business.id, req.body.password);
+    if (!actor) {
+      return res.status(403).json({
+        error: "Clock portal unlock failed. Enter the password for an active owner or a manager with schedule-management permission for this Business ID#."
+      });
+    }
+
+    const settings = await settingsForBusiness(business.id);
+    if (settings.in_app_clock_enabled === false) {
+      return res.status(403).json({ error: "In-app clock in/out is turned off for this business." });
+    }
+
+    const token = createClockSessionToken({
+      businessId: business.id,
+      businessAccountNumber: business.account_number,
+      actorUserId: actor.id
+    });
+
+    res.json({
+      clockSessionToken: token,
+      business: { businessName: business.business_name, businessAccountNumber: business.account_number },
+      actor: { id: actor.id, role: actor.role },
+      message: "Clock portal unlocked."
+    });
+  } catch (err) {
+    console.error("Clock session unlock failed:", err);
+    res.status(500).json({ error: "Clock portal unlock failed on the server. Check the server console for details." });
   }
-
-  const token = createClockSessionToken({
-    businessId: business.id,
-    businessAccountNumber: business.account_number,
-    actorUserId: actor.id
-  });
-
-  res.json({
-    clockSessionToken: token,
-    business: { businessName: business.business_name, businessAccountNumber: business.account_number },
-    message: "Clock portal unlocked."
-  });
 });
 
 router.post("/clock/lookup", async (req, res) => {
